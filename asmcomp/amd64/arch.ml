@@ -41,6 +41,9 @@ type specific_operation =
   | Ibswap of int                      (* endiannes conversion *)
   | Isqrtf                             (* floating-point square root *)
   | Ifloatsqrtf of addressing_mode     (* floating-point square root from memory *)
+  | Ifloatpack_get of int
+  | Ifloatpack of int
+
 and float_operation =
     Ifloatadd | Ifloatsub | Ifloatmul | Ifloatdiv
 
@@ -122,3 +125,9 @@ let print_specific_operation printreg op ppf arg =
                    (Array.sub arg 1 (Array.length arg - 1))
   | Ibswap i ->
       fprintf ppf "bswap_%i %a" i printreg arg.(0)
+
+  | Ifloatpack_get i ->
+      fprintf ppf "floatpack_get%i %a" i printreg arg.(0)
+
+  | Ifloatpack i ->
+      fprintf ppf "floatpack%i %a %a" i printreg arg.(0) printreg arg.(1)

@@ -15,7 +15,7 @@
 type machtype_component =
     Addr
   | Int
-  | Float
+  | Float of int
 
 type machtype = machtype_component array
 
@@ -23,6 +23,8 @@ val typ_void: machtype
 val typ_addr: machtype
 val typ_int: machtype
 val typ_float: machtype
+val typ_float_pack: machtype
+val typ_float_n: int -> machtype
 
 val size_component: machtype_component -> int
 val size_machtype: machtype -> int
@@ -49,6 +51,7 @@ type memory_chunk =
   | Single
   | Double                              (* 64-bit-aligned 64-bit float *)
   | Double_u                            (* word-aligned 64-bit float *)
+  | Pack of int
 
 type operation =
     Capply of machtype * Debuginfo.t
@@ -61,12 +64,15 @@ type operation =
   | Ccmpi of comparison
   | Cadda | Csuba
   | Ccmpa of comparison
-  | Cnegf | Cabsf
-  | Caddf | Csubf | Cmulf | Cdivf
+  | Cnegf of int | Cabsf of int
+  | Caddf of int | Csubf of int
+  | Cmulf of int | Cdivf of int
   | Cfloatofint | Cintoffloat
   | Ccmpf of comparison
   | Craise of Debuginfo.t
   | Ccheckbound of Debuginfo.t
+  | Cfloatpack_get of int
+  | Cfloatpack of int
 
 type expression =
     Cconst_int of int

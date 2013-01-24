@@ -80,11 +80,11 @@ let rdx = phys_reg 4
 let pseudoregs_for_operation op arg res =
   match op with
   (* Two-address binary operations: arg.(0) and res.(0) must be the same *)
-    Iintop(Iadd|Isub|Imul|Iand|Ior|Ixor) | Iaddf|Isubf|Imulf|Idivf ->
+    Iintop(Iadd|Isub|Imul|Iand|Ior|Ixor) | Iaddf _|Isubf _|Imulf _|Idivf _->
       ([|res.(0); arg.(1)|], res)
   (* One-address unary operations: arg.(0) and res.(0) must be the same *)
   | Iintop_imm((Iadd|Isub|Imul|Iand|Ior|Ixor|Ilsl|Ilsr|Iasr), _)
-  | Iabsf | Inegf
+  | Iabsf _ | Inegf _
   | Ispecific(Ibswap (32|64)) ->
       (res, res)
   (* For xchg, args must be a register allowing access to high 8 bit register
@@ -109,6 +109,10 @@ let pseudoregs_for_operation op arg res =
      Keep it simple, force it in rdx. *)
   | Iintop_imm((Idiv|Imod), _) ->
       ([| rdx |], [| rdx |])
+  | Ispecific(Ifloatpack 2) ->
+      ([|res.(0); arg.(1)|], res)
+  | Ispecific(Ifloatpack 4) ->
+      ([|res.(0); arg.(1); arg.(2); arg.(3)|], res)
   (* Other instructions are regular *)
   | _ -> raise Use_default
 
@@ -192,14 +196,15 @@ method! select_operation op args =
       | _ -> (Iintop Imod, args)
       end
   (* Recognize float arithmetic with memory. *)
-  | Caddf ->
-      self#select_floatarith true Iaddf Ifloatadd args
-  | Csubf ->
-      self#select_floatarith false Isubf Ifloatsub args
-  | Cmulf ->
-      self#select_floatarith true Imulf Ifloatmul args
-  | Cdivf ->
-      self#select_floatarith false Idivf Ifloatdiv args
+  (* we only do with simple float now *)
+  | Caddf 1 ->
+      self#select_floatarith true (Iaddf 1) Ifloatadd args
+  | Csubf 1 ->
+      self#select_floatarith false (Isubf 1) Ifloatsub args
+  | Cmulf 1 ->
+      self#select_floatarith true (Imulf 1) Ifloatmul args
+  | Cdivf 1 ->
+      self#select_floatarith false (Idivf 1) Ifloatdiv args
   | Cextcall("sqrt", _, false, _) ->
      begin match args with
        [Cop(Cload (Double|Double_u as chunk), [loc])] ->
@@ -227,6 +232,10 @@ method! select_operation op args =
   | Cextcall("caml_int64_direct_bswap", _, _, _)
   | Cextcall("caml_nativeint_direct_bswap", _, _, _) ->
       (Ispecific (Ibswap 64), args)
+  | Cfloatpack_get n ->
+      (Ispecific (Ifloatpack_get n), args)
+  | Cfloatpack n ->
+      (Ispecific (Ifloatpack n), args)
   | _ -> super#select_operation op args
 
 (* Recognize float arithmetic with mem *)

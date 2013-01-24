@@ -237,10 +237,15 @@ let instr_for_intop = function
   | _ -> assert false
 
 let instr_for_floatop = function
-    Iaddf -> "addsd"
-  | Isubf -> "subsd"
-  | Imulf -> "mulsd"
-  | Idivf -> "divsd"
+    Iaddf 1 -> "addsd"
+  | Isubf 1 -> "subsd"
+  | Imulf 1 -> "mulsd"
+  | Idivf 1 -> "divsd"
+
+  | Iaddf 2 -> "addpd"
+  | Isubf 2 -> "subpd"
+  | Imulf 2 -> "mulpd"
+  | Idivf 2 -> "divpd"
   | _ -> assert false
 
 let instr_for_floatarithmem = function
@@ -359,10 +364,14 @@ let emit_instr fallthrough i =
         let src = i.arg.(0) and dst = i.res.(0) in
         if src.loc <> dst.loc then begin
           match src.typ, src.loc, dst.loc with
-            Float, Reg _, Reg _ ->
+            Float _, Reg _, Reg _ ->
               `	movapd	{emit_reg src}, {emit_reg dst}\n`
-          | Float, _, _ ->
+          | Float 1, _, _ ->
               `	movsd	{emit_reg src}, {emit_reg dst}\n`
+          | Float 2, _, _ ->
+              `	movupd	{emit_reg src}, {emit_reg dst}\n`
+          | Float i, _, _ ->
+              failwith (Printf.sprintf "move/spill/reload Float %i" i)
           | _ ->
               `	movq	{emit_reg src}, {emit_reg dst}\n`
         end
@@ -440,6 +449,12 @@ let emit_instr fallthrough i =
             `	cvtss2sd {emit_addressing addr i.arg 0}, {emit_reg dest}\n`
           | Double | Double_u ->
             `	movsd	{emit_addressing addr i.arg 0}, {emit_reg dest}\n`
+          | Pack n ->
+             begin match n with
+             | 2 ->
+            `	movupd	{emit_addressing addr i.arg 0}, {emit_reg dest}\n`
+             | _ -> failwith (Printf.sprintf "ILoad (Pack %i)" n)
+             end
         end
     | Lop(Istore(chunk, addr)) ->
         begin match chunk with
@@ -456,6 +471,12 @@ let emit_instr fallthrough i =
             `	movss	%xmm15, {emit_addressing addr i.arg 1}\n`
           | Double | Double_u ->
             `	movsd	{emit_reg i.arg.(0)}, {emit_addressing addr i.arg 1}\n`
+          | Pack n ->
+             begin match n with
+             | 2 ->
+            `	movupd	{emit_reg i.arg.(0)}, {emit_addressing addr i.arg 1}\n`
+             | _ -> failwith (Printf.sprintf "ILoad (Pack %i)" n)
+             end
         end
     | Lop(Ialloc n) ->
         if !fastcode_flag then begin
@@ -536,11 +557,15 @@ let emit_instr fallthrough i =
     | Lop(Iintop_imm(op, n)) ->
         (* We have i.arg.(0) = i.res.(0) *)
         `	{emit_string(instr_for_intop op)}	${emit_int n}, {emit_reg i.res.(0)}\n`
-    | Lop(Inegf) ->
+    | Lop(Inegf 1) ->
         `	xorpd	{emit_symbol "caml_negf_mask"}(%rip), {emit_reg i.res.(0)}\n`
-    | Lop(Iabsf) ->
+    | Lop(Inegf _) ->
+        failwith "TODO: Inegf _"
+    | Lop(Iabsf 1) ->
         `	andpd	{emit_symbol "caml_absf_mask"}(%rip), {emit_reg i.res.(0)}\n`
-    | Lop(Iaddf | Isubf | Imulf | Idivf as floatop) ->
+    | Lop(Iabsf _) ->
+        failwith "TODO: Iabsf _"
+    | Lop(Iaddf _| Isubf _| Imulf _| Idivf _ as floatop) ->
         `	{emit_string(instr_for_floatop floatop)}	{emit_reg i.arg.(1)}, {emit_reg i.res.(0)}\n`
     | Lop(Ifloatofint) ->
         `	cvtsi2sdq	{emit_reg i.arg.(0)}, {emit_reg i.res.(0)}\n`
@@ -573,6 +598,34 @@ let emit_instr fallthrough i =
         `	sqrtsd	{emit_reg i.arg.(0)}, {emit_reg i.res.(0)}\n`
     | Lop(Ispecific(Ifloatsqrtf addr)) ->
         `	sqrtsd	{emit_addressing addr i.arg 0}, {emit_reg i.res.(0)}\n`
+    | Lop(Ispecific(Ifloatpack_get n)) ->
+       let src = i.arg.(0) and dst = i.res.(0) in
+       begin match n with
+       | 0 ->
+        `	movsd	{emit_reg src}, {emit_reg dst}\n`
+       | 1 ->
+        `	movhlps	{emit_reg src}, {emit_reg dst}\n`
+       | _ ->
+          failwith (Printf.sprintf "Ifloatpack_get %i" n)
+       end
+    | Lop(Ispecific(Ifloatpack 2)) ->
+       (* i.arg.(0) is i.res.(0) so no need to move *)
+       let src2 = i.arg.(1)
+       and dst = i.res.(0) in
+        `	movlhps	{emit_reg src2}, {emit_reg dst}\n`;
+(*
+    | Lop(Ispecific(Ifloatpack 4)) ->
+       let src1 = i.arg.(0)
+       and src2 = i.arg.(1)
+       and src3 = i.arg.(2)
+       and src4 = i.arg.(3)
+       and dst = i.res.(0) in
+        `	movlhps	{emit_reg src2}, {emit_reg dst}\n`;
+        (* should be ok if src1 or src2 are equal to dst *)
+        `	movsd	{emit_reg src1}, {emit_reg dst}\n`
+*)
+    | Lop(Ispecific(Ifloatpack n)) ->
+        failwith (Printf.sprintf "floatpack %n" n)
     | Lreloadretaddr ->
         ()
     | Lreturn ->

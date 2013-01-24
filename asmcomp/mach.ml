@@ -49,7 +49,12 @@ type operation =
   | Ialloc of int
   | Iintop of integer_operation
   | Iintop_imm of integer_operation * int
-  | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
+  | Inegf of int
+  | Iabsf of int
+  | Iaddf of int
+  | Isubf of int
+  | Imulf of int
+  | Idivf of int
   | Ifloatofint | Iintoffloat
   | Ispecific of Arch.specific_operation
 

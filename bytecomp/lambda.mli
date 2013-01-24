@@ -53,8 +53,9 @@ type primitive =
   | Poffsetref of int
   (* Float operations *)
   | Pintoffloat | Pfloatofint
-  | Pnegfloat | Pabsfloat
-  | Paddfloat | Psubfloat | Pmulfloat | Pdivfloat
+  | Pnegfloat of int | Pabsfloat of int
+  | Paddfloat of int | Psubfloat of int
+  | Pmulfloat of int | Pdivfloat of int
   | Pfloatcomp of comparison
   (* String operations *)
   | Pstringlength | Pstringrefu | Pstringsetu | Pstringrefs | Pstringsets
@@ -113,6 +114,8 @@ type primitive =
   (* byte swap *)
   | Pbswap16
   | Pbbswap of boxed_integer
+  | Pfloatpack_get of int
+  | Pfloatpack of int
 
 and comparison =
     Ceq | Cneq | Clt | Cgt | Cle | Cge

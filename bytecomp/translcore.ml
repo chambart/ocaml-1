@@ -179,12 +179,12 @@ let primitives_table = create_hashtable 57 [
   "%decr", Poffsetref(-1);
   "%intoffloat", Pintoffloat;
   "%floatofint", Pfloatofint;
-  "%negfloat", Pnegfloat;
-  "%absfloat", Pabsfloat;
-  "%addfloat", Paddfloat;
-  "%subfloat", Psubfloat;
-  "%mulfloat", Pmulfloat;
-  "%divfloat", Pdivfloat;
+  "%negfloat", Pnegfloat 1;
+  "%absfloat", Pabsfloat 1;
+  "%addfloat", Paddfloat 1;
+  "%subfloat", Psubfloat 1;
+  "%mulfloat", Pmulfloat 1;
+  "%divfloat", Pdivfloat 1;
   "%eqfloat", Pfloatcomp Ceq;
   "%noteqfloat", Pfloatcomp Cneq;
   "%ltfloat", Pfloatcomp Clt;
@@ -309,6 +309,27 @@ let primitives_table = create_hashtable 57 [
   "%bswap_int32", Pbbswap(Pint32);
   "%bswap_int64", Pbbswap(Pint64);
   "%bswap_native", Pbbswap(Pnativeint);
+
+  "%floatpack_get0", Pfloatpack_get(0);
+  "%floatpack_get1", Pfloatpack_get(1);
+  "%floatpack_get2", Pfloatpack_get(2);
+  "%floatpack_get3", Pfloatpack_get(3);
+
+  "%floatpack2", Pfloatpack 2;
+  "%negfloat2", Pnegfloat 2;
+  "%absfloat2", Pabsfloat 2;
+  "%addfloat2", Paddfloat 2;
+  "%subfloat2", Psubfloat 2;
+  "%mulfloat2", Pmulfloat 2;
+  "%divfloat2", Pdivfloat 2;
+
+  "%floatpack4", Pfloatpack 4;
+  "%negfloat4", Pnegfloat 4;
+  "%absfloat4", Pabsfloat 4;
+  "%addfloat4", Paddfloat 4;
+  "%subfloat4", Psubfloat 4;
+  "%mulfloat4", Pmulfloat 4;
+  "%divfloat4", Pdivfloat 4;
 ]
 
 let prim_makearray =

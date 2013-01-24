@@ -242,6 +242,30 @@ let rec unbox_float = function
   | Ctrywith(e1, id, e2) -> Ctrywith(unbox_float e1, id, unbox_float e2)
   | c -> Cop(Cload Double_u, [c])
 
+let box_float_n n c =
+  if n = 1
+  then box_float c
+  else Cop(Calloc, [alloc_floatarray_header n; c])
+
+let rec unbox_float_n n = function
+    Cop(Calloc, [header; c]) -> c
+  | Clet(id, exp, body) -> Clet(id, exp, unbox_float_n n body)
+  | Cifthenelse(cond, e1, e2) ->
+     Cifthenelse(cond, unbox_float_n n e1, unbox_float_n n e2)
+  | Csequence(e1, e2) -> Csequence(e1, unbox_float_n n e2)
+  | Cswitch(e, tbl, el) -> Cswitch(e, tbl, Array.map (unbox_float_n n) el)
+  | Ccatch(n, ids, e1, e2) ->
+     Ccatch(n, ids, unbox_float_n n e1, unbox_float_n n e2)
+  | Ctrywith(e1, id, e2) -> Ctrywith(unbox_float_n n e1, id, unbox_float_n n e2)
+  | c -> Cop(Cload Double_u, [c])
+
+let unbox_float_pack = function
+    Cop(Calloc, [header; c]) -> c
+  | c -> Cop(Cload (Pack 2), [c])
+
+let box_float_pack c_pack =
+  Cop(Calloc, [alloc_floatarray_header 2; c_pack])
+
 (* Complex *)
 
 let box_complex c_re c_im =
@@ -933,25 +957,25 @@ module SwitcherBlocks = Switch.Make(SArgBlocks)
 
 type unboxed_number_kind =
     No_unboxing
-  | Boxed_float
+  | Boxed_float of int
   | Boxed_integer of boxed_integer
 
 let is_unboxed_number = function
     Uconst(Const_base(Const_float f), _) ->
-      Boxed_float
+      Boxed_float 1
   | Uprim(p, _, _) ->
       begin match simplif_primitive p with
-          Pccall p -> if p.prim_native_float then Boxed_float else No_unboxing
-        | Pfloatfield _ -> Boxed_float
-        | Pfloatofint -> Boxed_float
-        | Pnegfloat -> Boxed_float
-        | Pabsfloat -> Boxed_float
-        | Paddfloat -> Boxed_float
-        | Psubfloat -> Boxed_float
-        | Pmulfloat -> Boxed_float
-        | Pdivfloat -> Boxed_float
-        | Parrayrefu Pfloatarray -> Boxed_float
-        | Parrayrefs Pfloatarray -> Boxed_float
+          Pccall p -> if p.prim_native_float then Boxed_float 1 else No_unboxing
+        | Pfloatfield _ -> Boxed_float 1
+        | Pfloatofint -> Boxed_float 1
+        | Pnegfloat n -> Boxed_float n
+        | Pabsfloat n -> Boxed_float n
+        | Paddfloat n -> Boxed_float n
+        | Psubfloat n -> Boxed_float n
+        | Pmulfloat n -> Boxed_float n
+        | Pdivfloat n -> Boxed_float n
+        | Parrayrefu Pfloatarray -> Boxed_float 1
+        | Parrayrefs Pfloatarray -> Boxed_float 1
         | Pbintofint bi -> Boxed_integer bi
         | Pcvtbint(src, dst) -> Boxed_integer dst
         | Pnegbint bi -> Boxed_integer bi
@@ -967,7 +991,7 @@ let is_unboxed_number = function
         | Plsrbint bi -> Boxed_integer bi
         | Pasrbint bi -> Boxed_integer bi
         | Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64), _) ->
-            Boxed_float
+            Boxed_float 1
         | Pbigarrayref(_, _, Pbigarray_int32, _) -> Boxed_integer Pint32
         | Pbigarrayref(_, _, Pbigarray_int64, _) -> Boxed_integer Pint64
         | Pbigarrayref(_, _, Pbigarray_native_int, _) -> Boxed_integer Pnativeint
@@ -976,6 +1000,10 @@ let is_unboxed_number = function
         | Pbigstring_load_32(_) -> Boxed_integer Pint32
         | Pbigstring_load_64(_) -> Boxed_integer Pint64
         | Pbbswap bi -> Boxed_integer bi
+
+        | Pfloatpack_get(_) -> Boxed_float 1
+        | Pfloatpack n -> Boxed_float n
+
         | _ -> No_unboxing
       end
   | _ -> No_unboxing
@@ -1086,8 +1114,8 @@ let rec transl = function
       begin match is_unboxed_number exp with
         No_unboxing ->
           Clet(id, transl exp, transl body)
-      | Boxed_float ->
-          transl_unbox_let box_float unbox_float transl_unbox_float
+      | Boxed_float n ->
+          transl_unbox_let (box_float_n n) (unbox_float_n n) (transl_unbox_float_n n)
                            id exp body
       | Boxed_integer bi ->
           transl_unbox_let (box_int bi) (unbox_int bi) (transl_unbox_int bi)
@@ -1105,6 +1133,10 @@ let rec transl = function
           transl_constant(Const_block(tag, []))
       | (Pmakeblock(tag, mut), args) ->
           make_alloc tag (List.map transl args)
+      | (Pfloatpack n, args) ->
+         let args = List.map transl_unbox_float args in
+         assert(List.length args = n);
+         box_float_n n (Cop (Cfloatpack n, args))
       | (Pccall prim, args) ->
           if prim.prim_native_float then
             box_float
@@ -1278,6 +1310,10 @@ and transl_prim_1 p arg dbg =
         Cop(Cload Double_u,
             [if n = 0 then ptr
                        else Cop(Cadda, [ptr; Cconst_int(n * size_float)])]))
+
+  | Pfloatpack_get n ->
+      box_float (Cop (Cfloatpack_get n, [unbox_float_pack (transl arg)]))
+
   (* Exceptions *)
   | Praise ->
       Cop(Craise dbg, [transl arg])
@@ -1309,10 +1345,10 @@ and transl_prim_1 p arg dbg =
       box_float(Cop(Cfloatofint, [untag_int(transl arg)]))
   | Pintoffloat ->
      tag_int(Cop(Cintoffloat, [transl_unbox_float arg]))
-  | Pnegfloat ->
-      box_float(Cop(Cnegf, [transl_unbox_float arg]))
-  | Pabsfloat ->
-      box_float(Cop(Cabsf, [transl_unbox_float arg]))
+  | Pnegfloat n ->
+      box_float_n n (Cop(Cnegf n, [transl_unbox_float_n n arg]))
+  | Pabsfloat n ->
+      box_float_n n (Cop(Cabsf n, [transl_unbox_float_n n arg]))
   (* String operations *)
   | Pstringlength ->
       tag_int(string_length (transl arg))
@@ -1421,18 +1457,22 @@ and transl_prim_2 p arg1 arg2 dbg =
   | Pisout ->
       transl_isout (transl arg1) (transl arg2)
   (* Float operations *)
-  | Paddfloat ->
-      box_float(Cop(Caddf,
-                    [transl_unbox_float arg1; transl_unbox_float arg2]))
-  | Psubfloat ->
-      box_float(Cop(Csubf,
-                    [transl_unbox_float arg1; transl_unbox_float arg2]))
-  | Pmulfloat ->
-      box_float(Cop(Cmulf,
-                    [transl_unbox_float arg1; transl_unbox_float arg2]))
-  | Pdivfloat ->
-      box_float(Cop(Cdivf,
-                    [transl_unbox_float arg1; transl_unbox_float arg2]))
+  | Paddfloat n ->
+      box_float_n n (Cop(Caddf n,
+                         [transl_unbox_float_n n arg1;
+                          transl_unbox_float_n n arg2]))
+  | Psubfloat n ->
+      box_float_n n (Cop(Csubf n,
+                         [transl_unbox_float_n n arg1;
+                          transl_unbox_float_n n arg2]))
+  | Pmulfloat n ->
+      box_float_n n (Cop(Cmulf n,
+                         [transl_unbox_float_n n arg1;
+                          transl_unbox_float_n n arg2]))
+  | Pdivfloat n ->
+      box_float_n n (Cop(Cdivf n,
+                         [transl_unbox_float_n n arg1;
+                          transl_unbox_float_n n arg2]))
   | Pfloatcomp cmp ->
       tag_int(Cop(Ccmpf(transl_comparison cmp),
                   [transl_unbox_float arg1; transl_unbox_float arg2]))
@@ -1727,6 +1767,13 @@ and transl_prim_3 p arg1 arg2 arg3 dbg =
 and transl_unbox_float = function
     Uconst(Const_base(Const_float f), _) -> Cconst_float f
   | exp -> unbox_float(transl exp)
+
+and transl_unbox_float_n n = function
+    Uconst(Const_base(Const_float f), _) ->
+    if n = 1
+    then Cconst_float f
+    else assert false (* pack constants ? *)
+  | exp -> unbox_float_n n (transl exp)
 
 and transl_unbox_int bi = function
     Uconst(Const_base(Const_int32 n), _) ->

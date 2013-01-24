@@ -77,7 +77,8 @@ method! reload_operation op arg res =
       (* Note: Idiv, Imod: arg(0) and res(0) already forced in regs
                Ilsl, Ilsr, Iasr: arg(1) already forced in regs *)
       (arg, res)
-  | Iintop(Imul) | Iaddf | Isubf | Imulf | Idivf ->
+  | Iintop(Imul) | Iaddf 1 | Isubf 1 | Imulf 1 | Idivf 1 ->
+      (* now only simple float operations can reload *)
       (* First argument (= result) must be in register, second arg
          can reside in the stack *)
       if stackp arg.(0)

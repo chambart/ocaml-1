@@ -18,6 +18,7 @@ val type_int: type_expr
 val type_char: type_expr
 val type_string: type_expr
 val type_float: type_expr
+val type_float_pack: type_expr
 val type_bool: type_expr
 val type_unit: type_expr
 val type_exn: type_expr
@@ -33,6 +34,7 @@ val path_int: Path.t
 val path_char: Path.t
 val path_string: Path.t
 val path_float: Path.t
+val path_float_pack: Path.t
 val path_bool: Path.t
 val path_unit: Path.t
 val path_exn: Path.t

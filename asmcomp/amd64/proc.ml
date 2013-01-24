@@ -99,7 +99,7 @@ let register_class r =
   match r.typ with
     Int -> 0
   | Addr -> 0
-  | Float -> 1
+  | Float _ -> 1
 
 let num_available_registers = [| 13; 16 |]
 
@@ -121,7 +121,7 @@ let hard_int_reg =
 
 let hard_float_reg =
   let v = Array.create 16 Reg.dummy in
-  for i = 0 to 15 do v.(i) <- Reg.at_location Float (Reg (100 + i)) done;
+  for i = 0 to 15 do v.(i) <- Reg.at_location (Float 0) (Reg (100 + i)) done;
   v
 
 let all_phys_regs =
@@ -160,13 +160,13 @@ let calling_conventions first_int last_int first_float last_float make_stack
           loc.(i) <- stack_slot (make_stack !ofs) ty;
           ofs := !ofs + size_int
         end
-    | Float ->
+    | Float n ->
         if !float <= last_float then begin
           loc.(i) <- phys_reg !float;
           incr float
         end else begin
-          loc.(i) <- stack_slot (make_stack !ofs) Float;
-          ofs := !ofs + size_float
+          loc.(i) <- stack_slot (make_stack !ofs) (Float n);
+          ofs := !ofs + (size_float * n)
         end
   done;
   (loc, Misc.align !ofs 16)  (* keep stack 16-aligned *)
@@ -220,13 +220,13 @@ let win64_loc_external_arguments arg =
           loc.(i) <- stack_slot (Outgoing !ofs) ty;
           ofs := !ofs + size_int
         end
-    | Float ->
+    | Float n ->
         if !reg < 4 then begin
           loc.(i) <- phys_reg win64_float_external_arguments.(!reg);
           incr reg
         end else begin
-          loc.(i) <- stack_slot (Outgoing !ofs) Float;
-          ofs := !ofs + size_float
+          loc.(i) <- stack_slot (Outgoing !ofs) (Float n);
+          ofs := !ofs + (n * size_float)
         end
   done;
   (loc, Misc.align !ofs 16)  (* keep stack 16-aligned *)

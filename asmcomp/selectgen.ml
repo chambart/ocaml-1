@@ -29,6 +29,7 @@ let oper_result_type = function
       begin match c with
         Word -> typ_addr
       | Single | Double | Double_u -> typ_float
+      | Pack n -> typ_float_n n
       | _ -> typ_int
       end
   | Calloc -> typ_addr
@@ -37,11 +38,13 @@ let oper_result_type = function
     Cand | Cor | Cxor | Clsl | Clsr | Casr |
     Ccmpi _ | Ccmpa _ | Ccmpf _ -> typ_int
   | Cadda | Csuba -> typ_addr
-  | Cnegf | Cabsf | Caddf | Csubf | Cmulf | Cdivf -> typ_float
+  | Cnegf n | Cabsf n | Caddf n | Csubf n | Cmulf n | Cdivf n -> typ_float_n n
   | Cfloatofint -> typ_float
   | Cintoffloat -> typ_int
   | Craise _ -> typ_void
   | Ccheckbound _ -> typ_void
+  | Cfloatpack_get n -> typ_float
+  | Cfloatpack n -> typ_float_n n
 
 (* Infer the size in bytes of the result of a simple expression *)
 
@@ -254,12 +257,12 @@ method select_operation op args =
   | (Cadda, _) -> self#select_arith_comm Iadd args
   | (Csuba, _) -> self#select_arith Isub args
   | (Ccmpa comp, _) -> self#select_arith_comp (Iunsigned comp) args
-  | (Cnegf, _) -> (Inegf, args)
-  | (Cabsf, _) -> (Iabsf, args)
-  | (Caddf, _) -> (Iaddf, args)
-  | (Csubf, _) -> (Isubf, args)
-  | (Cmulf, _) -> (Imulf, args)
-  | (Cdivf, _) -> (Idivf, args)
+  | (Cnegf n, _) -> (Inegf n, args)
+  | (Cabsf n, _) -> (Iabsf n, args)
+  | (Caddf n, _) -> (Iaddf n, args)
+  | (Csubf n, _) -> (Isubf n, args)
+  | (Cmulf n, _) -> (Imulf n, args)
+  | (Cdivf n, _) -> (Idivf n, args)
   | (Cfloatofint, _) -> (Ifloatofint, args)
   | (Cintoffloat, _) -> (Iintoffloat, args)
   | (Ccheckbound _, _) -> self#select_arith Icheckbound args
@@ -662,7 +665,11 @@ method emit_stores env data regs_addr =
             Istore(_, _) ->
               for i = 0 to Array.length regs - 1 do
                 let r = regs.(i) in
-                let kind = if r.typ = Float then Double_u else Word in
+                let kind =
+                  match r.typ with
+                  | Float 1 -> Double_u
+                  | Float n -> Pack n
+                  | _ -> Word in
                 self#insert (Iop(Istore(kind, !a)))
                             (Array.append [|r|] regs_addr) [||];
                 a := Arch.offset_addressing !a (size_component r.typ)

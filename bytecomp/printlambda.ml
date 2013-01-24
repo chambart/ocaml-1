@@ -131,12 +131,18 @@ let primitive ppf = function
   | Poffsetref n -> fprintf ppf "+:=%i"n
   | Pintoffloat -> fprintf ppf "int_of_float"
   | Pfloatofint -> fprintf ppf "float_of_int"
-  | Pnegfloat -> fprintf ppf "~."
-  | Pabsfloat -> fprintf ppf "abs."
-  | Paddfloat -> fprintf ppf "+."
-  | Psubfloat -> fprintf ppf "-."
-  | Pmulfloat -> fprintf ppf "*."
-  | Pdivfloat -> fprintf ppf "/."
+  | Pnegfloat 1 -> fprintf ppf "~."
+  | Pabsfloat 1 -> fprintf ppf "abs."
+  | Paddfloat 1 -> fprintf ppf "+."
+  | Psubfloat 1 -> fprintf ppf "-."
+  | Pmulfloat 1 -> fprintf ppf "*."
+  | Pdivfloat 1 -> fprintf ppf "/."
+  | Pnegfloat n -> fprintf ppf "~.%i" n
+  | Pabsfloat n -> fprintf ppf "abs.%i" n
+  | Paddfloat n -> fprintf ppf "+.%i" n
+  | Psubfloat n -> fprintf ppf "-.%i" n
+  | Pmulfloat n -> fprintf ppf "*.%i" n
+  | Pdivfloat n -> fprintf ppf "/.%i" n
   | Pfloatcomp(Ceq) -> fprintf ppf "==."
   | Pfloatcomp(Cneq) -> fprintf ppf "!=."
   | Pfloatcomp(Clt) -> fprintf ppf "<."
@@ -229,6 +235,8 @@ let primitive ppf = function
      else fprintf ppf "bigarray.array1.set64"
   | Pbswap16 -> fprintf ppf "bswap16"
   | Pbbswap(bi) -> print_boxed_integer "bswap" ppf bi
+  | Pfloatpack_get n -> fprintf ppf "floatpack_get %i" n
+  | Pfloatpack n -> fprintf ppf "floatpack %i" n
 
 let rec lam ppf = function
   | Lvar id ->

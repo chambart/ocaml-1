@@ -18,7 +18,8 @@ open Cmm
 let machtype_component ppf = function
   | Addr -> fprintf ppf "addr"
   | Int -> fprintf ppf "int"
-  | Float -> fprintf ppf "float"
+  | Float 1 -> fprintf ppf "float"
+  | Float n -> fprintf ppf "float_pack_%i" n
 
 let machtype ppf mty =
   match Array.length mty with
@@ -47,6 +48,7 @@ let chunk = function
   | Single -> "float32"
   | Double -> "float64"
   | Double_u -> "float64u"
+  | Pack i -> Printf.sprintf "pack_%i" i
 
 let operation = function
   | Capply(ty, d) -> "app" ^ Debuginfo.to_string d
@@ -72,17 +74,19 @@ let operation = function
   | Cadda -> "+a"
   | Csuba -> "-a"
   | Ccmpa c -> Printf.sprintf "%sa" (comparison c)
-  | Cnegf -> "~f"
-  | Cabsf -> "absf"
-  | Caddf -> "+f"
-  | Csubf -> "-f"
-  | Cmulf -> "*f"
-  | Cdivf -> "/f"
+  | Cnegf n -> Printf.sprintf "~f%s" (if n = 0 then "" else string_of_int n)
+  | Cabsf n -> Printf.sprintf "absf%s" (if n = 0 then "" else string_of_int n)
+  | Caddf n -> Printf.sprintf "+f%s" (if n = 0 then "" else string_of_int n)
+  | Csubf n -> Printf.sprintf "-f%s" (if n = 0 then "" else string_of_int n)
+  | Cmulf n -> Printf.sprintf "*f%s" (if n = 0 then "" else string_of_int n)
+  | Cdivf n -> Printf.sprintf "/f%s" (if n = 0 then "" else string_of_int n)
   | Cfloatofint -> "floatofint"
   | Cintoffloat -> "intoffloat"
   | Ccmpf c -> Printf.sprintf "%sf" (comparison c)
   | Craise d -> "raise" ^ Debuginfo.to_string d
   | Ccheckbound d -> "checkbound" ^ Debuginfo.to_string d
+  | Cfloatpack_get i -> Printf.sprintf "floatpack_get %i" i
+  | Cfloatpack i -> Printf.sprintf "floatpack %i" i
 
 let rec expr ppf = function
   | Cconst_int n -> fprintf ppf "%i" n

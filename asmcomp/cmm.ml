@@ -13,19 +13,22 @@
 type machtype_component =
     Addr
   | Int
-  | Float
+  | Float of int
 
 type machtype = machtype_component array
 
 let typ_void = ([||] : machtype_component array)
 let typ_addr = [|Addr|]
 let typ_int = [|Int|]
-let typ_float = [|Float|]
+let typ_float = [|Float 1|]
+let typ_float_pack = [|Float 2|]
+
+let typ_float_n n = [|Float n|]
 
 let size_component = function
     Addr -> Arch.size_addr
   | Int -> Arch.size_int
-  | Float -> Arch.size_float
+  | Float i -> i * Arch.size_float
 
 let size_machtype mty =
   let size = ref 0 in
@@ -63,6 +66,7 @@ type memory_chunk =
   | Single
   | Double
   | Double_u
+  | Pack of int
 
 type operation =
     Capply of machtype * Debuginfo.t
@@ -75,12 +79,15 @@ type operation =
   | Ccmpi of comparison
   | Cadda | Csuba
   | Ccmpa of comparison
-  | Cnegf | Cabsf
-  | Caddf | Csubf | Cmulf | Cdivf
+  | Cnegf of int | Cabsf of int
+  | Caddf of int | Csubf of int
+  | Cmulf of int | Cdivf of int
   | Cfloatofint | Cintoffloat
   | Ccmpf of comparison
   | Craise of Debuginfo.t
   | Ccheckbound of Debuginfo.t
+  | Cfloatpack_get of int
+  | Cfloatpack of int
 
 type expression =
     Cconst_int of int

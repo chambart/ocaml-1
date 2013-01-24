@@ -21,7 +21,10 @@ let reg ppf r =
   if String.length r.name > 0 then
     fprintf ppf "%s" r.name
   else
-    fprintf ppf "%s" (match r.typ with Addr -> "A" | Int -> "I" | Float -> "F");
+    fprintf ppf "%s" (match r.typ with Addr -> "A"
+                                     | Int -> "I"
+                                     | Float 1 -> "F"
+                                     | Float n -> Printf.sprintf "F%i" n);
   fprintf ppf "/%i" r.stamp;
   begin match r.loc with
   | Unknown -> ()
@@ -96,6 +99,8 @@ let test tst ppf arg =
 
 let print_live = ref false
 
+let pack_n n = if n = 1 then "" else string_of_int n
+
 let operation op arg ppf res =
   if Array.length res > 0 then fprintf ppf "%a := " regs res;
   match op with
@@ -126,12 +131,12 @@ let operation op arg ppf res =
   | Ialloc n -> fprintf ppf "alloc %i" n
   | Iintop(op) -> fprintf ppf "%a%s%a" reg arg.(0) (intop op) reg arg.(1)
   | Iintop_imm(op, n) -> fprintf ppf "%a%s%i" reg arg.(0) (intop op) n
-  | Inegf -> fprintf ppf "-f %a" reg arg.(0)
-  | Iabsf -> fprintf ppf "absf %a" reg arg.(0)
-  | Iaddf -> fprintf ppf "%a +f %a" reg arg.(0) reg arg.(1)
-  | Isubf -> fprintf ppf "%a -f %a" reg arg.(0) reg arg.(1)
-  | Imulf -> fprintf ppf "%a *f %a" reg arg.(0) reg arg.(1)
-  | Idivf -> fprintf ppf "%a /f %a" reg arg.(0) reg arg.(1)
+  | Inegf n -> fprintf ppf "-f%s %a" (pack_n n) reg arg.(0)
+  | Iabsf n -> fprintf ppf "absf%s %a" (pack_n n) reg arg.(0)
+  | Iaddf n -> fprintf ppf "%a +f%s %a" reg arg.(0) (pack_n n) reg arg.(1)
+  | Isubf n -> fprintf ppf "%a -f%s %a" reg arg.(0) (pack_n n) reg arg.(1)
+  | Imulf n -> fprintf ppf "%a *f%s %a" reg arg.(0) (pack_n n) reg arg.(1)
+  | Idivf n -> fprintf ppf "%a /f%s %a" reg arg.(0) (pack_n n) reg arg.(1)
   | Ifloatofint -> fprintf ppf "floatofint %a" reg arg.(0)
   | Iintoffloat -> fprintf ppf "intoffloat %a" reg arg.(0)
   | Ispecific op ->
