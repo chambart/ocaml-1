@@ -41,6 +41,8 @@ val destroyed_at_oper: Mach.instruction_desc -> Reg.t array
 val destroyed_at_raise: Reg.t array
 
 (* Info for laying out the stack frame *)
+val num_register_kinds: int
+val register_kind: Reg.t -> int
 val num_stack_slots: int array
 val contains_calls: bool ref
 

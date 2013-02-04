@@ -257,14 +257,7 @@ let rec unbox_float_n n = function
   | Ccatch(n, ids, e1, e2) ->
      Ccatch(n, ids, unbox_float_n n e1, unbox_float_n n e2)
   | Ctrywith(e1, id, e2) -> Ctrywith(unbox_float_n n e1, id, unbox_float_n n e2)
-  | c -> Cop(Cload Double_u, [c])
-
-let unbox_float_pack = function
-    Cop(Calloc, [header; c]) -> c
-  | c -> Cop(Cload (Pack 2), [c])
-
-let box_float_pack c_pack =
-  Cop(Calloc, [alloc_floatarray_header 2; c_pack])
+  | c -> Cop(Cload (Pack n), [c])
 
 (* Complex *)
 
@@ -960,7 +953,7 @@ type unboxed_number_kind =
   | Boxed_float of int
   | Boxed_integer of boxed_integer
 
-let is_unboxed_number = function
+let rec is_unboxed_number = function
     Uconst(Const_base(Const_float f), _) ->
       Boxed_float 1
   | Uprim(p, _, _) ->
@@ -1006,6 +999,8 @@ let is_unboxed_number = function
 
         | _ -> No_unboxing
       end
+  | Ulet(id, exp, body) ->
+     is_unboxed_number body
   | _ -> No_unboxing
 
 let subst_boxed_number unbox_fn boxed_id unboxed_id exp =
@@ -1312,7 +1307,7 @@ and transl_prim_1 p arg dbg =
                        else Cop(Cadda, [ptr; Cconst_int(n * size_float)])]))
 
   | Pfloatpack_get n ->
-      box_float (Cop (Cfloatpack_get n, [unbox_float_pack (transl arg)]))
+      box_float (Cop (Cfloatpack_get n, [unbox_float_n n (transl arg)]))
 
   (* Exceptions *)
   | Praise ->

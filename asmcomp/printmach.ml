@@ -19,7 +19,9 @@ open Mach
 
 let reg ppf r =
   if String.length r.name > 0 then
-    fprintf ppf "%s" r.name
+    let name = (match r.typ with Float n when n>1 -> Printf.sprintf "%s_%i" r.name n
+                               | _ -> r.name) in
+    fprintf ppf "%s" name
   else
     fprintf ppf "%s" (match r.typ with Addr -> "A"
                                      | Int -> "I"

@@ -32,12 +32,12 @@ let stack_offset = ref 0
 (* Layout of the stack frame *)
 
 let frame_required () =
-  !contains_calls || num_stack_slots.(0) > 0 || num_stack_slots.(1) > 0
+  !contains_calls || num_stack_slots.(0) > 0 || num_stack_slots.(1) > 0 || num_stack_slots.(2) > 0
 
 let frame_size () =                     (* includes return address *)
   if frame_required() then begin
     let sz =
-      (!stack_offset + 8 * (num_stack_slots.(0) + num_stack_slots.(1)) + 8)
+      (!stack_offset + 8 * (num_stack_slots.(0) + num_stack_slots.(1)) + 8 + num_stack_slots.(2) * 16)
     in Misc.align sz 16
   end else
     !stack_offset + 8
@@ -46,9 +46,12 @@ let slot_offset loc cl =
   match loc with
     Incoming n -> frame_size() + n
   | Local n ->
-      if cl = 0
-      then !stack_offset + n * 8
-      else !stack_offset + (num_stack_slots.(0) + n) * 8
+     begin match cl with
+           (* we put float packs first to ensure 16 byte alignment *)
+     | 2 -> !stack_offset + n * 16
+     | 0 -> !stack_offset + num_stack_slots.(2) * 16 + n * 8
+     | 1 -> !stack_offset + num_stack_slots.(2) * 16 + num_stack_slots.(0) * 8 + n * 8
+     | _ -> assert false end
   | Outgoing n -> n
 
 (* Symbols *)
@@ -98,7 +101,7 @@ let emit_reg = function
     { loc = Reg r } ->
       emit_string (register_name r)
   | { loc = Stack s } as r ->
-      let ofs = slot_offset s (register_class r) in
+      let ofs = slot_offset s (register_kind r) in
       `{emit_int ofs}(%rsp)`
   | { loc = Unknown } ->
       assert false
@@ -120,7 +123,7 @@ let emit_subreg tbl r =
     Reg r when r < 13 ->
       emit_string tbl.(r)
   | Stack s ->
-      let ofs = slot_offset s (register_class r) in
+      let ofs = slot_offset s (register_kind r) in
       `{emit_int ofs}(%rsp)`
   | _ ->
       assert false
@@ -164,7 +167,7 @@ let record_frame_label live dbg =
         {typ = Addr; loc = Reg r} ->
           live_offset := ((r lsl 1) + 1) :: !live_offset
       | {typ = Addr; loc = Stack s} as reg ->
-          live_offset := slot_offset s (register_class reg) :: !live_offset
+          live_offset := slot_offset s (register_kind reg) :: !live_offset
       | _ -> ())
     live;
   frame_descriptors :=
@@ -360,7 +363,7 @@ let emit_instr fallthrough i =
     emit_debug_info i.dbg;
     match i.desc with
       Lend -> ()
-    | Lop(Imove | Ispill | Ireload) ->
+    | Lop(Imove | Ispill | Ireload as op) ->
         let src = i.arg.(0) and dst = i.res.(0) in
         if src.loc <> dst.loc then begin
           match src.typ, src.loc, dst.loc with
@@ -369,7 +372,13 @@ let emit_instr fallthrough i =
           | Float 1, _, _ ->
               `	movsd	{emit_reg src}, {emit_reg dst}\n`
           | Float 2, _, _ ->
+             begin match op with
+             | Ispill | Ireload ->
+              (* spilled values are 16 byte aligned *)
+              `	movapd	{emit_reg src}, {emit_reg dst}\n`
+             | _ ->
               `	movupd	{emit_reg src}, {emit_reg dst}\n`
+             end
           | Float i, _, _ ->
               failwith (Printf.sprintf "move/spill/reload Float %i" i)
           | _ ->

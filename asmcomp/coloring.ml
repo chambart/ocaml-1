@@ -44,21 +44,35 @@ let allocate_registers() =
      Split the remaining registers into constrained and unconstrained. *)
   let remove_reg reg =
     let cl = Proc.register_class reg in
+    let kind = Proc.register_kind reg in
     if reg.spill then begin
       (* Preallocate the registers in the stack *)
-      let nslots = Proc.num_stack_slots.(cl) in
+      let nslots = Proc.num_stack_slots.(kind) in
       let conflict = Array.create nslots false in
       List.iter
         (fun r ->
           match r.loc with
             Stack(Local n) ->
-              if Proc.register_class r = cl then conflict.(n) <- true
+              if Proc.register_kind r = kind then
+                begin
+                  if n >= Array.length conflict
+                  then
+                    (Printf.printf "conflict: %i %i kind: %i\n%!"
+                                   (Array.length conflict)
+                                   n
+                                   kind;
+                     for i = 0 to Proc.num_register_kinds - 1 do
+                       Printf.printf "class: %i %i\n%!" i
+                         Proc.num_stack_slots.(i);
+                     done);
+                  conflict.(n) <- true;
+                end
           | _ -> ())
         reg.interf;
       let slot = ref 0 in
       while !slot < nslots && conflict.(!slot) do incr slot done;
       reg.loc <- Stack(Local !slot);
-      if !slot >= nslots then Proc.num_stack_slots.(cl) <- !slot + 1
+      if !slot >= nslots then Proc.num_stack_slots.(kind) <- !slot + 1
     end else if reg.degree < Proc.num_available_registers.(cl) then
       unconstrained := reg :: !unconstrained
     else begin
@@ -89,6 +103,7 @@ let allocate_registers() =
   (* Assign a location to a register, the best we can. *)
   let assign_location reg =
     let cl = Proc.register_class reg in
+    let kind = Proc.register_kind reg in
     let first_reg = Proc.first_available_register.(cl) in
     let num_regs = Proc.num_available_registers.(cl) in
     let score = Array.create num_regs 0 in
@@ -160,7 +175,7 @@ let allocate_registers() =
                                 if start >= num_regs then 0 else start)
     end else begin
       (* Sorry, we must put the pseudoreg in a stack location *)
-      let nslots = Proc.num_stack_slots.(cl) in
+      let nslots = Proc.num_stack_slots.(kind) in
       let score = Array.create nslots 0 in
       (* Compute the scores as for registers *)
       List.iter
@@ -203,7 +218,7 @@ let allocate_registers() =
       else begin
         (* Allocate a new stack slot *)
         reg.loc <- Stack(Local nslots);
-        Proc.num_stack_slots.(cl) <- nslots + 1
+        Proc.num_stack_slots.(kind) <- nslots + 1
       end
     end;
     (* Cancel the preferences of this register so that they don't influence
@@ -211,7 +226,7 @@ let allocate_registers() =
     reg.prefer <- [] in
 
   (* Reset the stack slot counts *)
-  for i = 0 to Proc.num_register_classes - 1 do
+  for i = 0 to Proc.num_register_kinds - 1 do
     Proc.num_stack_slots.(i) <- 0;
   done;
 

@@ -101,6 +101,16 @@ let register_class r =
   | Addr -> 0
   | Float _ -> 1
 
+let num_register_kinds = 3
+
+let register_kind r =
+  match r.typ with
+    Int -> 0
+  | Addr -> 0
+  | Float 1 -> 1
+  | Float 2 -> 2
+  | Float i -> failwith (Printf.sprintf "register_kind Float %i" i)
+
 let num_available_registers = [| 13; 16 |]
 
 let first_available_register = [| 0; 100 |]
@@ -160,12 +170,13 @@ let calling_conventions first_int last_int first_float last_float make_stack
           loc.(i) <- stack_slot (make_stack !ofs) ty;
           ofs := !ofs + size_int
         end
-    | Float n ->
+    | Float n as typ ->
+        assert(n = 1 || n = 2);
         if !float <= last_float then begin
-          loc.(i) <- phys_reg !float;
+          loc.(i) <- { (phys_reg !float) with typ };
           incr float
         end else begin
-          loc.(i) <- stack_slot (make_stack !ofs) (Float n);
+          loc.(i) <- stack_slot (make_stack !ofs) typ;
           ofs := !ofs + (size_float * n)
         end
   done;
@@ -220,12 +231,12 @@ let win64_loc_external_arguments arg =
           loc.(i) <- stack_slot (Outgoing !ofs) ty;
           ofs := !ofs + size_int
         end
-    | Float n ->
+    | Float n as typ ->
         if !reg < 4 then begin
-          loc.(i) <- phys_reg win64_float_external_arguments.(!reg);
+          loc.(i) <- { (phys_reg win64_float_external_arguments.(!reg)) with typ };
           incr reg
         end else begin
-          loc.(i) <- stack_slot (Outgoing !ofs) (Float n);
+          loc.(i) <- stack_slot (Outgoing !ofs) typ;
           ofs := !ofs + (n * size_float)
         end
   done;
@@ -279,7 +290,7 @@ let max_register_pressure = function
 
 (* Layout of the stack frame *)
 
-let num_stack_slots = [| 0; 0 |]
+let num_stack_slots = [| 0; 0; 0 |]
 let contains_calls = ref false
 
 (* Calling the assembler *)
