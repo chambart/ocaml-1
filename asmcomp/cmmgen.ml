@@ -1796,8 +1796,10 @@ and exit_if_true cond nfail otherwise =
   match cond with
   | Uconst (Uconst_pointer 0, _) -> otherwise
   | Uconst (Uconst_pointer 1, _) -> Cexit (nfail,[])
+  | Uifthenelse (arg1, Uconst (Uconst_pointer 1, _), arg2)
   | Uprim(Psequor, [arg1; arg2], _) ->
       exit_if_true arg1 nfail (exit_if_true arg2 nfail otherwise)
+  | Uifthenelse (_, _, Uconst (Uconst_pointer 0, _))
   | Uprim(Psequand, _, _) ->
       begin match otherwise with
       | Cexit (raise_num,[]) ->
@@ -1826,8 +1828,10 @@ and exit_if_false cond otherwise nfail =
   match cond with
   | Uconst (Uconst_pointer 0, _) -> Cexit (nfail,[])
   | Uconst (Uconst_pointer 1, _) -> otherwise
+  | Uifthenelse (arg1, arg2, Uconst (Uconst_pointer 0, _))
   | Uprim(Psequand, [arg1; arg2], _) ->
       exit_if_false arg1 (exit_if_false arg2 otherwise nfail) nfail
+  | Uifthenelse (_, Uconst (Uconst_pointer 1, _), _)
   | Uprim(Psequor, _, _) ->
       begin match otherwise with
       | Cexit (raise_num,[]) ->
