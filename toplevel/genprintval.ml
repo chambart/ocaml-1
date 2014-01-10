@@ -335,6 +335,8 @@ module Make(O : OBJ)(EVP : EVALPATH with type valu = O.t) = struct
               tree_of_val (depth - 1) obj ty
           | Tpackage _ ->
               Oval_stuff "<module>"
+          | Tunboxed s ->
+              Oval_stuff (Printf.sprintf "unboxed_%s" s)
         end
 
       and tree_of_val_list start depth obj ty_list =

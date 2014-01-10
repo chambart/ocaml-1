@@ -178,6 +178,8 @@ let rec core_type i ppf x =
   | Ptyp_extension (s, arg) ->
       line i ppf "Ptyp_extension \"%s\"\n" s.txt;
       payload i ppf arg
+  | Ptyp_unboxed s ->
+      line i ppf "Ptyp_unboxed \"%s\"\n" s
 
 and package_with i ppf (s, t) =
   line i ppf "with type %a\n" fmt_longident_loc s;

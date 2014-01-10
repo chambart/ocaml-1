@@ -519,6 +519,7 @@ module MakeIterator(Iter : IteratorArgument) : sig
             List.iter iter_row_field list
         | Ttyp_poly (list, ct) -> iter_core_type ct
         | Ttyp_package pack -> iter_package_type pack
+        | Ttyp_unboxed _ -> ()
       end;
       Iter.leave_core_type ct
 

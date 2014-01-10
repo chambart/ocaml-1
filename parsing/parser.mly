@@ -252,6 +252,7 @@ let varify_constructors var_names t =
           Ptyp_package(longident,List.map (fun (n,typ) -> (n,loop typ) ) lst)
       | Ptyp_extension (s, arg) ->
           Ptyp_extension (s, arg)
+      | Ptyp_unboxed s -> Ptyp_unboxed s
     in
     {t with ptyp_desc = desc}
   and loop_row_field  =
@@ -401,6 +402,7 @@ let mkexp_attrs d attrs =
 %token WHILE
 %token WITH
 %token <string * Location.t> COMMENT
+%token UNBOXEDINT32
 
 /* Precedences and associativities.
 
@@ -1688,6 +1690,8 @@ simple_core_type2:
       { mktyp(Ptyp_package $3) }
   | extension
       { mktyp (Ptyp_extension $1) }
+  | UNBOXEDINT32
+      { mktyp (Ptyp_unboxed "int32") }
 ;
 package_type:
     mty_longident { (mkrhs $1 1, []) }

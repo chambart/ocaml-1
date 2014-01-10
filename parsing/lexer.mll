@@ -89,7 +89,9 @@ let keyword_table =
     "lxor", INFIXOP3("lxor");
     "lsl", INFIXOP4("lsl");
     "lsr", INFIXOP4("lsr");
-    "asr", INFIXOP4("asr")
+    "asr", INFIXOP4("asr");
+
+    "unboxed_int32", UNBOXEDINT32;
 ]
 
 (* To buffer string literals *)

@@ -19,7 +19,8 @@ open Asttypes
 type type_expr =
   { mutable desc: type_desc;
     mutable level: int;
-    mutable id: int }
+    mutable id: int;
+    mutable instanciated_var: bool }
 
 and type_desc =
     Tvar of string option
@@ -35,6 +36,7 @@ and type_desc =
   | Tunivar of string option
   | Tpoly of type_expr * type_expr list
   | Tpackage of Path.t * Longident.t list * type_expr list
+  | Tunboxed of string
 
 and row_desc =
     { row_fields: (label * row_field) list;

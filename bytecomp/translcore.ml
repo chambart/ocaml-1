@@ -883,6 +883,7 @@ and transl_exp0 e =
               then transl_exp e
               else
                 Lprim(Pmakeblock(Obj.forward_tag, Immutable), [transl_exp e])
+          | Tunboxed _ -> failwith "todo: think, this should probably be forbidden"
           end
       (* other cases compile to a lazy block holding a function *)
       | _ ->

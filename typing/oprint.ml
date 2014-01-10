@@ -234,6 +234,8 @@ and print_simple_out_type ppf =
         )
         n tyl;
       fprintf ppf ")@]"
+  | Otyp_unboxed s -> fprintf ppf "unboxed_%s" s
+
 and print_fields rest ppf =
   function
     [] ->

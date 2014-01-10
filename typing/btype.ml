@@ -39,7 +39,7 @@ let pivot_level = 2 * lowest_level - 1
 let new_id = ref (-1)
 
 let newty2 level desc  =
-  incr new_id; { desc; level; id = !new_id }
+  incr new_id; { desc; level; id = !new_id; instanciated_var = false }
 let newgenty desc      = newty2 generic_level desc
 let newgenvar ?name () = newgenty (Tvar name)
 (*
@@ -229,6 +229,7 @@ let iter_type_expr f ty =
   | Tunivar _           -> ()
   | Tpoly (ty, tyl)     -> f ty; List.iter f tyl
   | Tpackage (_, _, l)  -> List.iter f l
+  | Tunboxed _          -> ()
 
 let rec iter_abbrev f = function
     Mnil                   -> ()
@@ -291,6 +292,7 @@ let rec copy_type_desc ?(keep_names=false) f = function
       let tyl = List.map (fun x -> norm_univar (f x)) tyl in
       Tpoly (f ty, tyl)
   | Tpackage (p, n, l)  -> Tpackage (p, n, List.map f l)
+  | Tunboxed s          -> Tunboxed s
 
 (* Utilities for copying *)
 
@@ -467,6 +469,7 @@ let extract_label l ls = extract_label_aux [] l ls
 type change =
     Ctype of type_expr * type_desc
   | Clevel of type_expr * int
+  | Cinstanciated_var of type_expr * bool
   | Cname of
       (Path.t * type_expr list) option ref * (Path.t * type_expr list) option
   | Crow of row_field option ref * row_field option
@@ -478,6 +481,7 @@ type change =
 let undo_change = function
     Ctype  (ty, desc) -> ty.desc <- desc
   | Clevel (ty, level) -> ty.level <- level
+  | Cinstanciated_var (ty, b) -> ty.instanciated_var <- b
   | Cname  (r, v) -> r := v
   | Crow   (r, v) -> r := v
   | Ckind  (r, v) -> r := v
@@ -525,6 +529,9 @@ let link_type ty ty' =
 let set_level ty level =
   if ty.id <= !last_snapshot then log_change (Clevel (ty, ty.level));
   ty.level <- level
+let set_instanciated_var ty =
+  if ty.id <= !last_snapshot then log_change (Cinstanciated_var (ty, ty.instanciated_var));
+  ty.instanciated_var <- true
 let set_univar rty ty =
   log_change (Cuniv (rty, !rty)); rty := Some ty
 let set_name nm v =

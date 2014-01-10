@@ -179,6 +179,8 @@ and raw_type_desc ppf = function
   | Tpackage (p, _, tl) ->
       fprintf ppf "@[<hov1>Tpackage(@,%a@,%a)@]" path p
         raw_type_list tl
+  | Tunboxed s ->
+      fprintf ppf "@[<hov1>Tunboxed(%s)@]" s
 
 and raw_field ppf = function
     Rpresent None -> fprintf ppf "Rpresent None"
@@ -511,6 +513,7 @@ let rec mark_loops_rec visited ty =
         List.iter (fun t -> add_alias t) tyl;
         mark_loops_rec visited ty
     | Tunivar _ -> add_named_var ty
+    | Tunboxed _ -> ()
 
 let mark_loops ty =
   normalize_type Env.empty ty;
@@ -637,6 +640,8 @@ let rec tree_of_typexp sch ty =
         let n =
           List.map (fun li -> String.concat "." (Longident.flatten li)) n in
         Otyp_module (Path.name p, n, tree_of_typlist sch tyl)
+    | Tunboxed s ->
+        Otyp_unboxed s
   in
   if List.memq px !delayed then delayed := List.filter ((!=) px) !delayed;
   if is_aliased px && aliasable ty then begin

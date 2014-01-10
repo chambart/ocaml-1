@@ -317,6 +317,7 @@ let rec transl_type env policy styp =
         v
       end
     in
+    ty.instanciated_var <- true;
     ctyp (Ttyp_var name) ty
   | Ptyp_arrow(l, st1, st2) ->
     let cty1 = transl_type env policy st1 in
@@ -626,6 +627,9 @@ let rec transl_type env policy styp =
            }) ty
   | Ptyp_extension (s, _arg) ->
       raise (Error (s.loc, env, Extension s.txt))
+  | Ptyp_unboxed s ->
+    let ty = newty (Tunboxed s) in
+    ctyp (Ttyp_unboxed s) ty
 
 and transl_poly_type env policy t =
   transl_type env policy (Ast_helper.Typ.force_poly t)

@@ -83,7 +83,7 @@ let reset_for_saving () = new_id := -1
 
 let newpersty desc =
   decr new_id;
-  { desc = desc; level = generic_level; id = !new_id }
+  { desc = desc; level = generic_level; id = !new_id; instanciated_var = false }
 
 (* Similar to [Ctype.nondep_type_rec]. *)
 let rec typexp s ty =

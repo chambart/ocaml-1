@@ -717,8 +717,9 @@ let get_level env p =
       (* no newtypes in predef *)
       Path.binding_time p
 
-let rec update_level env level ty =
+let rec update_level ?(inst_var=false) env level ty =
   let ty = repr ty in
+  if inst_var then set_instanciated_var ty;
   if ty.level > level then begin
     begin match Env.gadt_instance_level env ty with
       Some lv -> if level < lv then raise (Unify [(ty, newvar2 level)])
@@ -757,6 +758,11 @@ let rec update_level env level ty =
       when lab = dummy_method && (repr ty1).level > level ->
         raise (Unify [(ty1, newvar2 level)])
     | _ ->
+        if inst_var
+        then
+          (match ty.desc with
+           | Tunboxed _ -> raise (Unify [(ty, newvar2 level)])
+           | _ -> ());
         set_level ty level;
         (* XXX what about abbreviations in Tconstr ? *)
         iter_type_expr (update_level env level) ty
@@ -1065,6 +1071,9 @@ let instance ?partial env sch =
   in
   let ty = copy ?env ?partial sch in
   cleanup_types ();
+  (match ty.desc with
+   | Tvar _ -> ty.instanciated_var <- true;
+   | _ -> ());
   ty
 
 let instance_def sch =
@@ -1209,6 +1218,7 @@ let rec copy_sep fixed free bound visited ty =
   if TypeSet.is_empty univars then
     if ty.level <> generic_level then ty else
     let t = newvar () in
+    t.instanciated_var <- true;
     delayed_copy :=
       lazy (t.desc <- Tlink (copy ty))
       :: !delayed_copy;
@@ -1964,6 +1974,11 @@ let rec mcomp type_pairs env t1 t2 =
   let t2 = repr t2 in
   if t1 == t2 then () else
   match (t1.desc, t2.desc) with
+
+  (* Pas sûr du tout !
+     il ne faudrait pas faire un expand déjà ? *)
+  | (Tvar _, Tunboxed _) | (Tunboxed _, Tvar _) -> raise (Unify [])
+
   | (Tvar _, _)
   | (_, Tvar _)  ->
       ()
@@ -2008,6 +2023,8 @@ let rec mcomp type_pairs env t1 t2 =
               (mcomp type_pairs env)
         | (Tunivar _, Tunivar _) ->
             unify_univar t1' t2' !univar_pairs
+        | Tunboxed s1, Tunboxed s2 when s1 = s2 ->
+            ()
         | (_, _) ->
             raise (Unify [])
       end
@@ -2090,6 +2107,9 @@ and mcomp_type_decl type_pairs env p1 p2 tl1 tl2 =
     | Type_variant v1, Type_variant v2 ->
         mcomp_list type_pairs env tl1 tl2;
         mcomp_variant_description type_pairs env v1 v2
+
+    (* TODO unboxed ? *)
+
     | Type_variant _, Type_record _
     | Type_record _, Type_variant _ -> raise (Unify [])
     | _ ->
@@ -2190,6 +2210,10 @@ let unify_eq env t1 t2 =
       try TypePairs.find unify_eq_set (order_type_pair t1 t2); true
       with Not_found -> false
 
+let union_inst_var t1 t2 =
+  let inst_var = t1.instanciated_var || t2.instanciated_var in
+  if inst_var then (set_instanciated_var t1; set_instanciated_var t2)
+
 let rec unify (env:Env.t ref) t1 t2 =
   (* First step: special cases (optimizations) *)
   if t1 == t2 then () else
@@ -2201,7 +2225,7 @@ let rec unify (env:Env.t ref) t1 t2 =
   try
     type_changed := true;
     begin match (t1.desc, t2.desc) with
-      (Tvar _, Tconstr _) when deep_occur t1 t2 ->
+    | (Tvar _, Tconstr _) when deep_occur t1 t2 ->
         unify2 env t1 t2
     | (Tconstr _, Tvar _) when deep_occur t2 t1 ->
         unify2 env t1 t2
@@ -2240,6 +2264,8 @@ let rec unify (env:Env.t ref) t1 t2 =
         with Cannot_expand ->
           unify2 env t1 t2
         end
+    | Tunboxed s1, Tunboxed s2 when s1 = s2 ->
+        ()
     | _ ->
         unify2 env t1 t2
     end;
@@ -2259,8 +2285,9 @@ and unify2 env t1 t2 =
   in
   let t1', t2' = expand_both t1 t2 in
   let lv = min t1'.level t2'.level in
-  update_level !env lv t2;
-  update_level !env lv t1;
+  let inst_var = t1'.instanciated_var || t2'.instanciated_var in
+  update_level ~inst_var !env lv t2;
+  update_level ~inst_var !env lv t1;
   if unify_eq !env t1' t2' then () else
 
   let t1 = repr t1 and t2 = repr t2 in
@@ -2294,7 +2321,7 @@ and unify3 env t1 t1' t2 t2' =
   let create_recursion = (t2 != t2') && (deep_occur t1' t2) in
 
   begin match (d1, d2) with (* handle vars and univars specially *)
-    (Tunivar _, Tunivar _) ->
+  | (Tunivar _, Tunivar _) ->
       unify_univar t1' t2' !univar_pairs;
       link_type t1' t2'
   | (Tvar _, _) ->
@@ -2416,6 +2443,8 @@ and unify3 env t1 t1' t2 t2' =
             List.iter (reify env) (tl1 @ tl2);
             if !generate_equations then List.iter2 (mcomp !env) tl1 tl2
           end
+      | Tunboxed s1, Tunboxed s2 when s1 = s2 ->
+          ()
       | (_, _) ->
           raise (Unify [])
       end;
@@ -2811,6 +2840,7 @@ let rec moregen inst_nongen type_pairs env t1 t2 =
   if t1 == t2 then () else
 
   try
+    union_inst_var t1 t2;
     match (t1.desc, t2.desc) with
       (Tvar _, _) when may_instantiate inst_nongen t1 ->
         moregen_occur env t1.level t2;
@@ -2859,6 +2889,8 @@ let rec moregen inst_nongen type_pairs env t1 t2 =
                 (moregen inst_nongen type_pairs env)
           | (Tunivar _, Tunivar _) ->
               unify_univar t1' t2' !univar_pairs
+          | Tunboxed s1, Tunboxed s2 when s1 = s2 ->
+              ()
           | (_, _) ->
               raise (Unify [])
         end
@@ -3069,6 +3101,7 @@ let rec eqtype rename type_pairs subst env t1 t2 =
   if t1 == t2 then () else
 
   try
+    union_inst_var t1 t2;
     match (t1.desc, t2.desc) with
       (Tvar _, Tvar _) when rename ->
         begin try
@@ -3086,7 +3119,8 @@ let rec eqtype rename type_pairs subst env t1 t2 =
         (* Expansion may have changed the representative of the types... *)
         let t1' = repr t1' and t2' = repr t2' in
         if t1' == t2' then () else
-        begin try
+        begin union_inst_var t1' t2';
+        try
           TypePairs.find type_pairs (t1', t2')
         with Not_found ->
           TypePairs.add type_pairs (t1', t2') ();
@@ -3732,6 +3766,8 @@ let rec build_subtype env visited loops posi level t =
       if c > Unchanged then (newty (Tpoly(t1', tl)), c)
       else (t, Unchanged)
   | Tunivar _ | Tpackage _ ->
+      (t, Unchanged)
+  | Tunboxed _ ->
       (t, Unchanged)
 
 let enlarge_type env ty =

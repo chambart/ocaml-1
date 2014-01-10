@@ -103,6 +103,8 @@ and core_type_desc =
   | Ptyp_extension of extension
         (* [%id] *)
 
+  | Ptyp_unboxed of string
+
 and package_type = Longident.t loc * (Longident.t loc * core_type) list
       (*
         (module S)
