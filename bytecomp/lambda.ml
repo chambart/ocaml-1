@@ -113,6 +113,7 @@ type primitive =
   (* byte swap *)
   | Pbswap16
   | Pbbswap of boxed_integer
+  | PTruc of string
 
 and comparison =
     Ceq | Cneq | Clt | Cgt | Cle | Cge

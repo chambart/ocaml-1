@@ -311,6 +311,14 @@ let primitives_table = create_hashtable 57 [
   "%bswap_int32", Pbbswap(Pint32);
   "%bswap_int64", Pbbswap(Pint64);
   "%bswap_native", Pbbswap(Pnativeint);
+  "%unboxed_int_eq", PTruc "%unboxed_int_eq";
+  "%unboxed_int_add", PTruc "%unboxed_int_add";
+  "%unboxed_int_mul", PTruc "%unboxed_int_mul";
+  "%unboxed_int_toint", PTruc "%unboxed_int_toint";
+  "%unboxed_int_ofint", PTruc "%unboxed_int_ofint";
+  "%unboxed_couple", PTruc "%unboxed_couple";
+  "%unboxed_couple_0", PTruc "%unboxed_couple_0";
+  "%unboxed_couple_1", PTruc "%unboxed_couple_1";
 ]
 
 let prim_makearray =

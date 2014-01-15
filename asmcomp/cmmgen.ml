@@ -1556,6 +1556,16 @@ and transl_prim_1 p arg dbg =
       tag_int (Cop(Cextcall("caml_bswap16_direct", typ_int, false,
                             Debuginfo.none),
                    [untag_int (transl arg)]))
+  | PTruc "%unboxed_int_ofint" ->
+      untag_int (transl arg)
+  | PTruc "%unboxed_int_toint" ->
+      tag_int (transl arg)
+
+  | PTruc "%unboxed_couple_0" ->
+      Cop(Ctuple_field(typ_int,0),[transl arg])
+  | PTruc "%unboxed_couple_1" ->
+      Cop(Ctuple_field(typ_int,1),[transl arg])
+
   | _ ->
       fatal_error "Cmmgen.transl_prim_1"
 
@@ -1788,6 +1798,17 @@ and transl_prim_2 p arg1 arg2 dbg =
   | Pbintcomp(bi, cmp) ->
       tag_int (Cop(Ccmpi(transl_comparison cmp),
                      [transl_unbox_int bi arg1; transl_unbox_int bi arg2]))
+
+  | PTruc "%unboxed_int_add" ->
+      add_int (transl arg1) (transl arg2)
+  | PTruc "%unboxed_int_mul" ->
+      mul_int (transl arg1) (transl arg2)
+  | PTruc "%unboxed_int_eq" ->
+      tag_int(Cop(Ccmpi(transl_comparison Ceq), [transl arg1; transl arg2]))
+
+  | PTruc "%unboxed_couple" ->
+      Ctuple [transl arg1; transl arg2]
+
   | _ ->
       fatal_error "Cmmgen.transl_prim_2"
 

@@ -42,6 +42,7 @@ let oper_result_type = function
   | Cintoffloat -> typ_int
   | Craise _ -> typ_void
   | Ccheckbound _ -> typ_void
+  | Ctuple_field(ty,_) -> ty
 
 (* Infer the size in bytes of the result of a simple expression *)
 
@@ -431,6 +432,13 @@ method emit_expr env exp =
         None -> None
       | Some(simple_list, ext_env) ->
           Some(self#emit_tuple ext_env simple_list)
+      end
+  | Cop(Ctuple_field(ty, i), [arg]) ->
+      begin match self#emit_expr env arg with
+        None -> None
+      | Some regs ->
+          assert(Array.length regs > i);
+          Some([|regs.(i)|])
       end
   | Cop(Craise (k, dbg), [arg]) ->
       if !Clflags.debug && k <> Lambda.Raise_notrace then

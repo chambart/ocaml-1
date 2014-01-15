@@ -718,6 +718,8 @@ let get_level env p =
       Path.binding_time p
 
 let rec update_level ?(inst_var=false) env level ty =
+  let update_level' env level ty =
+    update_level ~inst_var env level ty in
   let ty = repr ty in
   if inst_var then set_instanciated_var ty;
   if ty.level > level then begin
@@ -731,19 +733,19 @@ let rec update_level ?(inst_var=false) env level ty =
         begin try
           (* if is_newtype env p then raise Cannot_expand; *)
           link_type ty (!forward_try_expand_once env ty);
-          update_level env level ty
+          update_level' env level ty
         with Cannot_expand ->
           (* +++ Levels should be restored... *)
           (* Format.printf "update_level: %i < %i@." level (get_level env p); *)
           if level < get_level env p then raise (Unify [(ty, newvar2 level)]);
-          iter_type_expr (update_level env level) ty
+          iter_type_expr (update_level' env level) ty
         end
     | Tpackage (p, _, _) when level < get_level env p ->
         raise (Unify [(ty, newvar2 level)])
     | Tobject(_, ({contents=Some(p, tl)} as nm))
       when level < get_level env p ->
         set_name nm None;
-        update_level env level ty
+        update_level' env level ty
     | Tvariant row ->
         let row = row_repr row in
         begin match row.row_name with
@@ -753,19 +755,19 @@ let rec update_level ?(inst_var=false) env level ty =
         | _ -> ()
         end;
         set_level ty level;
-        iter_type_expr (update_level env level) ty
+        iter_type_expr (update_level' env level) ty
     | Tfield(lab, _, ty1, _)
       when lab = dummy_method && (repr ty1).level > level ->
         raise (Unify [(ty1, newvar2 level)])
     | _ ->
-        if inst_var
+        if ty.instanciated_var
         then
           (match ty.desc with
            | Tunboxed _ -> raise (Unify [(ty, newvar2 level)])
            | _ -> ());
         set_level ty level;
         (* XXX what about abbreviations in Tconstr ? *)
-        iter_type_expr (update_level env level) ty
+        iter_type_expr (update_level' env level) ty
   end
 
 (* Generalize and lower levels of contravariant branches simultaneously *)
@@ -2221,7 +2223,7 @@ let rec unify (env:Env.t ref) t1 t2 =
   let t2 = repr t2 in
   if unify_eq !env t1 t2 then () else
   let reset_tracing = check_trace_gadt_instances !env in
-
+  union_inst_var t1 t2;
   try
     type_changed := true;
     begin match (t1.desc, t2.desc) with

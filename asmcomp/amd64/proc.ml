@@ -183,7 +183,7 @@ let loc_arguments arg =
 let loc_parameters arg =
   let (loc, ofs) = calling_conventions 0 9 100 109 incoming arg in loc
 let loc_results res =
-  let (loc, ofs) = calling_conventions 0 0 100 100 not_supported res in loc
+  let (loc, ofs) = calling_conventions 0 9 100 109 not_supported res in loc
 
 (* C calling conventions under Unix:
      first integer args in rdi, rsi, rdx, rcx, r8, r9
