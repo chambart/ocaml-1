@@ -209,3 +209,15 @@ let rec iter f = function
     Empty -> ()
   | Node(l, k, r, _) ->
       iter f l; f k.ident k.data; iter f r
+
+let compare x y =
+  let c = compare x.stamp y.stamp in
+  if c = 0
+  then compare x.name y.name
+  else
+    if c = 0
+    then compare x.flags y.flags
+    else c
+
+let output oc id = output_string oc (unique_name id)
+let hash i = (Char.code i.name.[0]) lxor i.stamp
