@@ -167,6 +167,7 @@ module type Optcomp_options = sig
   val _drawlambda : unit -> unit
   val _dlambda : unit -> unit
   val _dclambda : unit -> unit
+  val _dflambda : unit -> unit
   val _dcmm : unit -> unit
   val _dsel : unit -> unit
   val _dcombine : unit -> unit
@@ -217,6 +218,7 @@ module type Opttop_options = sig
   val _drawlambda : unit -> unit
   val _dlambda : unit -> unit
   val _dclambda : unit -> unit
+  val _dflambda : unit -> unit
   val _dcmm : unit -> unit
   val _dsel : unit -> unit
   val _dcombine : unit -> unit
