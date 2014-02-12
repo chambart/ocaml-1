@@ -36,7 +36,15 @@ let pass_dump_linear_if ppf flag message phrase =
   phrase
 
 let clambda_dump_if ppf ulambda =
-  if !dump_clambda then Printclambda.clambda ppf ulambda; ulambda
+  if !dump_clambda then
+    begin
+      Printclambda.clambda ppf ulambda;
+      List.iter (fun (lbl,_,cst) ->
+        Format.fprintf ppf "%s:@ " lbl;
+        Printclambda.structured_constant ppf cst)
+        (Compilenv.structured_constants ())
+    end;
+  ulambda
 
 let rec regalloc ppf round fd =
   if round > 50 then
@@ -96,6 +104,29 @@ let compile_genfuns ppf f =
        | _ -> ())
     (Cmmgen.generic_functions true [Compilenv.current_unit_infos ()])
 
+let test ppf lam =
+  let compilation_unit = Compilenv.current_unit () in
+  let flam = Flambdagen.intro ~compilation_unit lam in
+  if !Clflags.dump_flambda
+  then Format.fprintf ppf "%a@." Printflambda.flambda flam;
+  (try Flambdacheck.check ~current_compilation_unit:compilation_unit flam
+   with e ->
+     Format.fprintf ppf "%a@."
+       Printflambda.flambda flam;
+     raise e);
+  let fl_sym = Flambdasym.convert flam in
+  let fl,const,_ = fl_sym in
+  if !Clflags.dump_flambda
+  then begin
+    Format.fprintf ppf "%a@." Printflambda.flambda fl;
+    Flambda.SymbolMap.iter (fun sym lam ->
+        Format.fprintf ppf "sym: %a@ %a@."
+          Flambda.Symbol.print sym
+          Printflambda.flambda lam)
+      const
+  end;
+  Clambdagen.convert fl_sym
+
 let compile_implementation ?toplevel prefixname ppf (size, lam) =
   let asmfile =
     if !keep_asm_file
@@ -105,7 +136,8 @@ let compile_implementation ?toplevel prefixname ppf (size, lam) =
   begin try
     Emitaux.output_channel := oc;
     Emit.begin_assembly();
-    Closure.intro size lam
+    test ppf lam
+    (* Closure.intro size lam *)
     ++ clambda_dump_if ppf
     ++ Cmmgen.compunit size
     ++ List.iter (compile_phrase ppf) ++ (fun () -> ());
