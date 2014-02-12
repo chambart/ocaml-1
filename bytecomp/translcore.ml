@@ -871,7 +871,7 @@ and transl_exp0 e =
       (* other cases compile to a lazy block holding a function *)
       | _ ->
           let fn = Lfunction (Curried, [Ident.create "param"], transl_exp e) in
-          Lprim(Pmakeblock(Config.lazy_tag, Immutable), [fn])
+          Lprim(Pmakeblock(Config.lazy_tag, Mutable), [fn])
       end
   | Texp_object (cs, meths) ->
       let cty = cs.cstr_type in
@@ -1088,7 +1088,7 @@ let transl_exception id path decl =
     match path with
       None -> Ident.name id
     | Some p -> Path.name p in
-  Lprim(Pmakeblock(0, Immutable), [Lconst(Const_base(Const_string name))])
+  Lprim(Pmakeblock(0, Mutable), [Lconst(Const_base(Const_string name))])
 
 (* Error report *)
 
