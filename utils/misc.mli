@@ -36,6 +36,7 @@ val split_last: 'a list -> 'a list * 'a
 val samelist: ('a -> 'a -> bool) -> 'a list -> 'a list -> bool
         (* Like [List.for_all2] but returns [false] if the two
            lists have different length. *)
+val some_if_all_elements_are_some: 'a option list -> 'a list option
 
 val may: ('a -> unit) -> 'a option -> unit
 val may_map: ('a -> 'b) -> 'a option -> 'b option

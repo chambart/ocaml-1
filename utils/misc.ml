@@ -63,6 +63,15 @@ let rec samelist pred l1 l2 =
   | (hd1 :: tl1, hd2 :: tl2) -> pred hd1 hd2 && samelist pred tl1 tl2
   | (_, _) -> false
 
+let rec some_if_all_elements_are_some = function
+  | [] -> Some []
+  | h::t ->
+      match some_if_all_elements_are_some t with
+      | None -> None
+      | Some t' -> match h with
+        | None -> None
+        | Some h' -> Some (h' :: t')
+
 (* Options *)
 
 let may f = function
