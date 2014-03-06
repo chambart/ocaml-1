@@ -31,6 +31,7 @@ OTHEROBJS=\
   $(OTOPDIR)/utils/warnings.cmo \
   $(OTOPDIR)/utils/consistbl.cmo \
   $(OTOPDIR)/utils/ext_types.cmo \
+  $(OTOPDIR)/utils/sort_connected_components.cmo \
   $(OTOPDIR)/parsing/location.cmo \
   $(OTOPDIR)/parsing/longident.cmo \
   $(OTOPDIR)/parsing/syntaxerr.cmo \
