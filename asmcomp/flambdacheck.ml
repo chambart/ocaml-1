@@ -178,7 +178,7 @@ let every_bound_variable_is_from_current_compilation_unit
   with Counter_example_id var ->
     Counter_example var
 
-let no_assign_on_variable_of_kind_strict flam =
+let no_assign_on_variable_of_kind_Not_assigned flam =
   let test var env =
     if not (VarSet.mem var env)
     then raise (Counter_example_id var) in
@@ -398,8 +398,8 @@ let check ~current_compilation_unit flam =
     "bound variable %a is attributed to another compilation unit"
     Variable.print;
 
-  test (no_assign_on_variable_of_kind_strict flam)
-    "variable %a of kind strict is assigned" Variable.print;
+  test (no_assign_on_variable_of_kind_Not_assigned flam)
+    "variable %a of kind Not_assigned is assigned" Variable.print;
 
   test (no_variable_within_closure_is_bound_multiple_times flam)
     "variable within closure %a bound multiple times"
