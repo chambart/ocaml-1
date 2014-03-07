@@ -95,6 +95,7 @@ module Static_exception = struct
   include Int
   let of_int x = x
   let to_int x = x
+  let create () = Lambda.next_raise_count ()
 end
 
 type closure_element = {

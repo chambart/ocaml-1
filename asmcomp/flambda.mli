@@ -79,6 +79,7 @@ module Static_exception : sig
   include PrintableHashOrdered with type t = static_exception
   val of_int : int -> static_exception
   val to_int : static_exception -> int
+  val create : unit -> static_exception
 end
 
 module VarSet : sig
