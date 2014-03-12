@@ -14,7 +14,9 @@ let check_error f e =
 
 let v = new_var "v"
 let f = new_var "f"
+let g = new_var "g"
 let x = new_var "x"
+let y = new_var "y"
 
 let ext = new_var_other_unit "ext"
 
@@ -159,7 +161,7 @@ let fail16 =
 let pass13 =
   flet v (int 1) (int 1)
 
-let every_bound_variable_is_from_current_compilation_unit () =
+let check_every_bound_variable_is_from_current_compilation_unit () =
   let test =
     every_bound_variable_is_from_current_compilation_unit
       ~current_compilation_unit:compilation_unit in
@@ -171,8 +173,67 @@ let every_bound_variable_is_from_current_compilation_unit () =
     check_success test pass13;
   with e -> raise e
 
+(* failing no_assign_on_variable_of_kind_Not_assigned *)
+
+let fail17 =
+  flet x (int 1) (fassign x (int 2))
+
+let fail18 =
+  ffor x (int 1) (int 1) (fassign x (int 2))
+
+let fail19 =
+  (fassign x (int 2))
+
+let fail20 =
+  Flet(Assigned, x, int 1,
+       fclosure [f,[y],fassign x (int 2)] [],
+       nid ())
+
+(* passing no_assign_on_variable_of_kind_Not_assigned *)
+
+let pass17 =
+  Flet(Assigned, x, int 1, fassign x (int 2), nid ())
+
+let check_no_assign_on_variable_of_kind_Not_assigned () =
+  try
+    check_error no_assign_on_variable_of_kind_Not_assigned fail17;
+    check_error no_assign_on_variable_of_kind_Not_assigned fail18;
+    check_error no_assign_on_variable_of_kind_Not_assigned fail19;
+    check_error no_assign_on_variable_of_kind_Not_assigned fail20;
+    check_success no_assign_on_variable_of_kind_Not_assigned pass17;
+  with e -> raise e
+
+(* failing no_variable_within_closure_is_bound_multiple_times *)
+
+let fail21 =
+  fseq [
+    fclosure [f,[x],fvar y] [y, int 1];
+    fclosure [g,[v],fvar y] [y, int 1]
+  ]
+
+let check_no_variable_within_closure_is_bound_multiple_times () =
+  try
+    check_error no_variable_within_closure_is_bound_multiple_times fail21;
+  with e -> raise e
+
+(* failing no_function_within_closure_is_bound_multiple_times *)
+
+let fail22 =
+  fseq [
+    fclosure [f,[x],fvar x] [];
+    fclosure [f,[v],fvar v] []
+  ]
+
+let check_no_function_within_closure_is_bound_multiple_times () =
+  try
+    check_error no_function_within_closure_is_bound_multiple_times fail22;
+  with e -> raise e
+
 let run () =
   check_every_used_identifier_is_bound ();
   check_function_free_variables_are_bound_in_the_closure_and_parameters ();
   check_no_identifier_bound_multiple_times ();
-  every_bound_variable_is_from_current_compilation_unit ()
+  check_every_bound_variable_is_from_current_compilation_unit ();
+  check_no_assign_on_variable_of_kind_Not_assigned ();
+  check_no_variable_within_closure_is_bound_multiple_times ();
+  check_no_function_within_closure_is_bound_multiple_times ()

@@ -43,6 +43,9 @@ let ftry body v handler =
 let fcatch exn vars body handler =
   Fcatch(exn,vars,body,handler,nid ())
 
+let fassign v exp =
+  Fassign(v, exp, nid ())
+
 let fun_decl params fv body =
   { stub = false;
     params;
