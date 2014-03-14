@@ -64,7 +64,7 @@ module Variable = struct
   let output c v = Ident.output c v.var_var
   let hash v = Ident.hash v.var_var
   let equal v1 v2 =
-    Ident.equal v1.var_var v2.var_var &&
+    Ident.same v1.var_var v2.var_var &&
     Compilation_unit.equal v1.var_unit v2.var_unit
   let print ppf v = Ident.print ppf v.var_var
   let create ~compilation_unit id =
