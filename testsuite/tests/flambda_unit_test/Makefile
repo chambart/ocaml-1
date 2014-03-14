@@ -110,7 +110,7 @@ OTHEROBJS=\
   $(OTOPDIR)/asmcomp/printclambda.cmo \
   $(OTOPDIR)/asmcomp/asmgen.cmo
 
-OBJS=test_utils.cmo test_flambdacheck.cmo test_connected_components.cmo
+OBJS=test_utils.cmo test_flambdacheck.cmo test_flambdagen.cmo test_connected_components.cmo
 
 ADD_COMPFLAGS=$(INCLUDES) -g
 
