@@ -37,7 +37,8 @@ INCLUDES=-I utils -I parsing -I typing -I bytecomp -I asmcomp -I driver \
 
 UTILS=utils/misc.cmo utils/tbl.cmo utils/config.cmo \
   utils/clflags.cmo utils/terminfo.cmo utils/ccomp.cmo utils/warnings.cmo \
-  utils/consistbl.cmo utils/ext_types.cmo
+  utils/consistbl.cmo utils/ext_types.cmo \
+  utils/sort_connected_components.cmo
 
 PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/syntaxerr.cmo parsing/parser.cmo \
@@ -80,8 +81,12 @@ ASMCOMP=asmcomp/arch.cmo asmcomp/debuginfo.cmo \
   asmcomp/reg.cmo asmcomp/mach.cmo asmcomp/proc.cmo \
   asmcomp/flambda.cmo asmcomp/printflambda.cmo \
   asmcomp/flambdaiter.cmo asmcomp/flambdacheck.cmo \
+  asmcomp/flambdaexport.cmo \
   asmcomp/clambda.cmo asmcomp/printclambda.cmo asmcomp/compilenv.cmo \
+  asmcomp/flambdaconstants.cmo \
   asmcomp/flambdagen.cmo \
+  asmcomp/flambdasym.cmo \
+  asmcomp/clambdagen.cmo \
   asmcomp/closure.cmo asmcomp/cmmgen.cmo \
   asmcomp/printmach.cmo asmcomp/selectgen.cmo asmcomp/selection.cmo \
   asmcomp/comballoc.cmo asmcomp/liveness.cmo \
