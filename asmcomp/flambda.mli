@@ -53,6 +53,7 @@ module Variable : sig
   val make : compilation_unit:compilation_unit -> string -> t
   val compilation_unit : t -> compilation_unit
   val rename : compilation_unit:compilation_unit -> t -> t
+  val make_ident : t -> Ident.t (* to go back to clambda *)
 end
 
 module Closure_function : sig
@@ -116,6 +117,8 @@ module StaticExceptionTbl : ExtHashtbl with module M := Static_exception
 module CompilationUnitSet : ExtSet with module M := Compilation_unit
 module CompilationUnitMap : ExtMap with module M := Compilation_unit
 module CompilationUnitTbl : ExtHashtbl with module M := Compilation_unit
+
+module IdentMap : ExtMap with module M := Ident
 
 type let_kind =
   | Not_assigned
@@ -278,3 +281,9 @@ val recursive_functions : 'a function_declarations -> VarSet.t
 
 module Var_connected_components :
   Sort_connected_components.S with module Id := Variable
+
+(* To be used only in Compilenv. This is declared here to avoid circular dependencies *)
+
+val string_of_linkage_name : linkage_name -> string
+val ident_of_compilation_unit : compilation_unit -> Ident.t
+val ident_of_function_within_closure : function_within_closure -> Ident.t

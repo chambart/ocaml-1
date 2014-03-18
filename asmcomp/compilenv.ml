@@ -26,11 +26,14 @@ exception Error of error
 
 let global_infos_table =
   (Hashtbl.create 17 : (string, unit_infos option) Hashtbl.t)
+let export_infos_table =
+  (Hashtbl.create 10 : (string, Flambdaexport.exported) Hashtbl.t)
 
 let structured_constants =
   ref ([] : (string * bool * Clambda.ustructured_constant) list)
 
 let current_unit_id = ref (Ident.create_persistent "___UNINITIALIZED___")
+let merged_environment = ref Flambdaexport.empty_export
 
 let current_unit =
   { ui_name = "";
@@ -42,7 +45,8 @@ let current_unit =
     ui_curry_fun = [];
     ui_apply_fun = [];
     ui_send_fun = [];
-    ui_force_link = false }
+    ui_force_link = false;
+    ui_export_info = Flambdaexport.empty_export }
 
 let symbolname_for_pack pack name =
   match pack with
@@ -58,11 +62,12 @@ let symbolname_for_pack pack name =
       Buffer.add_string b name;
       Buffer.contents b
 
+let unit_id_from_name name = Ident.create_persistent name
 
 let reset ?packname name =
   Hashtbl.clear global_infos_table;
   let symbol = symbolname_for_pack packname name in
-  current_unit_id := Ident.create_persistent name;
+  current_unit_id := unit_id_from_name name;
   current_unit.ui_name <- name;
   current_unit.ui_symbol <- symbol;
   current_unit.ui_defines <- [symbol];
@@ -72,6 +77,9 @@ let reset ?packname name =
   current_unit.ui_apply_fun <- [];
   current_unit.ui_send_fun <- [];
   current_unit.ui_force_link <- false;
+  current_unit.ui_export_info <- Flambdaexport.empty_export;
+  merged_environment := Flambdaexport.empty_export;
+  Hashtbl.clear export_infos_table;
   structured_constants := []
 
 let current_unit_infos () =
@@ -176,10 +184,44 @@ let symbol_for_global id =
     | Some ui -> make_symbol ~unitname:ui.ui_symbol None
   end
 
+let dummy_unit_identifier = (* used only for static exceptions symbols *)
+  Ident.create_persistent "__dummy__"
+
+let symbol_for_global' id =
+  let open Flambda in
+  let sym_label = linkage_name (symbol_for_global id) in
+  if Ident.is_predef_exn id then
+    { sym_unit = Compilation_unit.create dummy_unit_identifier;
+      sym_label }
+  else
+    { sym_unit = Compilation_unit.create id;
+      sym_label }
+
 (* Register the approximation of the module being compiled *)
 
 let set_global_approx approx =
   current_unit.ui_approx <- approx
+
+(* Exporting and importing cross module informations *)
+
+let set_export_info export_info =
+  current_unit.ui_export_info <- export_info
+
+let approx_for_global comp_unit =
+  let id = Flambda.ident_of_compilation_unit comp_unit in
+  if Ident.is_predef_exn id || not (Ident.global id)
+  then invalid_arg (Format.asprintf "approx_for_global %a" Ident.print id);
+  let modname = Ident.name id in
+  try Hashtbl.find export_infos_table modname with
+  | Not_found ->
+    let exported = match get_global_info id with
+      | None -> Flambdaexport.empty_export
+      | Some ui -> ui.ui_export_info in
+    Hashtbl.add export_infos_table modname exported;
+    merged_environment := Flambdaexport.merge !merged_environment exported;
+    exported
+
+let approx_env () = !merged_environment
 
 (* Record that a currying function or application function is needed *)
 
@@ -227,10 +269,38 @@ let new_const_symbol () =
   incr const_label;
   make_symbol (Some (string_of_int !const_label))
 
+let new_const_symbol' () =
+  let sym_label = new_const_symbol () in
+  { Flambda.sym_unit = current_unit ();
+    sym_label = Flambda.linkage_name sym_label }
+
+let closure_symbol fv =
+  let open Flambda in
+  let compilation_unit = Closure_function.compilation_unit fv in
+  let unit_id = ident_of_compilation_unit compilation_unit in
+  let fun_id = ident_of_function_within_closure fv in
+  {sym_unit = compilation_unit;
+   sym_label =
+     Flambda.linkage_name
+       (make_symbol ~unitname:(Ident.name unit_id)
+          (Some ((Ident.unique_name fun_id) ^ "_closure"))) }
+
+let function_label fv =
+  let open Flambda in
+  let compilation_unit = Closure_function.compilation_unit fv in
+  let unit_id = ident_of_compilation_unit compilation_unit in
+  let fun_id = ident_of_function_within_closure fv in
+  make_symbol ~unitname:(Ident.name unit_id)
+    (Some (Ident.unique_name fun_id))
+
+
 let new_structured_constant cst global =
   let lbl = new_const_symbol() in
   structured_constants := (lbl, global, cst) :: !structured_constants;
   lbl
+
+let add_structured_constant lbl cst global =
+  structured_constants := (lbl, global, cst) :: !structured_constants
 
 let clear_structured_constants () = structured_constants := []
 

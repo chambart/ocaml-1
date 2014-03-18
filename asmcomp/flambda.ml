@@ -19,18 +19,26 @@ type static_exception = int
 module Compilation_unit : sig
   include PrintableHashOrdered
   val create : Ident.t -> t
+  val to_ident : t -> Ident.t
+  (* Should be used only in Compilenv *)
+  val name : t -> string
 end = struct
   include Ident
   let create id =
     assert(Ident.persistent id);
     id
+  let to_ident id = id
+  let name id = id.Ident.name
 end
 
 type compilation_unit = Compilation_unit.t
 
 type symbol = { sym_unit : compilation_unit; sym_label : linkage_name }
 
+let ident_of_compilation_unit = Compilation_unit.to_ident
+
 let linkage_name s = s
+let string_of_linkage_name s = s
 
 module Symbol = struct
   type t = symbol
@@ -68,6 +76,11 @@ module Variable = struct
     { var_unit = compilation_unit;
       var_var = Ident.rename var.var_var }
   let to_string var = Format.asprintf "%a" print var
+  let make_ident var =
+    let open Ident in
+    { var.var_var with
+      name = Compilation_unit.name var.var_unit
+             ^ "_" ^ var.var_var.name }
 end
 
 module SymbolSet = ExtSet(Symbol)
@@ -133,7 +146,11 @@ module Closure_element = struct
   let compilation_unit { ce_unit } = ce_unit
 
   let to_var { ce_unit; ce_id } = { var_unit = ce_unit; var_var = ce_id }
+
+  let to_string t = Format.asprintf "%a" print t
 end
+
+let ident_of_function_within_closure { ce_id } = ce_id
 
 module Closure_function = Closure_element
 module Closure_variable = Closure_element
@@ -153,6 +170,8 @@ module StaticExceptionTbl = ExtHashtbl(Static_exception)
 module CompilationUnitSet = ExtSet(Compilation_unit)
 module CompilationUnitMap = ExtMap(Compilation_unit)
 module CompilationUnitTbl = ExtHashtbl(Compilation_unit)
+
+module IdentMap = ExtMap(Ident)
 
 type let_kind =
   | Not_assigned

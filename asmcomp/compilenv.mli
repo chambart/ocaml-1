@@ -18,6 +18,8 @@ val reset: ?packname:string -> string -> unit
         (* Reset the environment and record the name of the unit being
            compiled (arg).  Optional argument is [-for-pack] prefix. *)
 
+val unit_id_from_name: string -> Ident.t
+
 val current_unit_infos: unit -> unit_infos
         (* Return the infos for the unit being compiled *)
 
@@ -41,6 +43,7 @@ val make_symbol: ?unitname:string -> string option -> string
 
 val symbol_for_global: Ident.t -> string
         (* Return the asm symbol that refers to the given global identifier *)
+val symbol_for_global': Ident.t -> Flambda.symbol
 
 val global_approx: Ident.t -> Clambda.value_approximation
         (* Return the approximation for the given global identifier *)
@@ -49,6 +52,12 @@ val set_global_approx: Clambda.value_approximation -> unit
 val record_global_approx_toplevel: unit -> unit
         (* Record the current approximation for the current toplevel phrase *)
 
+val set_export_info: Flambdaexport.exported -> unit
+        (* Record the informations of the unit being compiled *)
+val approx_env: unit -> Flambdaexport.exported
+        (* Returns all the information loaded from extenal compilation units *)
+val approx_for_global: Flambda.compilation_unit -> Flambdaexport.exported
+        (* Loads the exported information declaring the compilation_unit *)
 
 val need_curry_fun: int -> unit
 val need_apply_fun: int -> unit
@@ -57,8 +66,17 @@ val need_send_fun: int -> unit
            message sending) function with the given arity *)
 
 val new_const_symbol : unit -> string
+val new_const_symbol' : unit -> Flambda.symbol
+val closure_symbol : Flambda.function_within_closure -> Flambda.symbol
+        (* Symbol of a function if the function is
+           closed (statically allocated) *)
+val function_label : Flambda.function_within_closure -> string
+        (* linkage name of the code of a function *)
+
 val new_const_label : unit -> int
 val new_structured_constant : Clambda.ustructured_constant -> bool -> string
+val add_structured_constant : string -> Clambda.ustructured_constant ->
+  bool -> unit
 val structured_constants :
   unit -> (string * bool * Clambda.ustructured_constant) list
 val clear_structured_constants : unit -> unit
