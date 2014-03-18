@@ -1,16 +1,10 @@
 open Flambda
 
 let compilation_unit =
-  let sym_unit = Ident.create_persistent "unit" in
-  Compilation_unit.create
-    { sym_unit;
-      sym_label = linkage_name (Compilenv.symbol_for_global sym_unit) }
+  Compilation_unit.create (Ident.create_persistent "unit")
 
 let other_compilation_unit =
-  let sym_unit = Ident.create_persistent "other" in
-  Compilation_unit.create
-    { sym_unit;
-      sym_label = linkage_name (Compilenv.symbol_for_global sym_unit) }
+  Compilation_unit.create (Ident.create_persistent "other")
 
 let new_var name =
   let id = Ident.create name in

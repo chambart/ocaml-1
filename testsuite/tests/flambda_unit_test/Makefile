@@ -85,10 +85,14 @@ OTHEROBJS=\
   $(OTOPDIR)/asmcomp/flambda.cmo \
   $(OTOPDIR)/asmcomp/printflambda.cmo \
   $(OTOPDIR)/asmcomp/flambdaiter.cmo \
+  $(OTOPDIR)/asmcomp/flambdaexport.cmo \
   $(OTOPDIR)/asmcomp/flambdacheck.cmo \
   $(OTOPDIR)/asmcomp/clambda.cmo \
   $(OTOPDIR)/asmcomp/compilenv.cmo \
   $(OTOPDIR)/asmcomp/flambdagen.cmo \
+  $(OTOPDIR)/asmcomp/flambdaconstants.cmo \
+  $(OTOPDIR)/asmcomp/flambdasym.cmo \
+  $(OTOPDIR)/asmcomp/clambdagen.cmo \
   $(OTOPDIR)/asmcomp/closure.cmo \
   $(OTOPDIR)/asmcomp/cmmgen.cmo \
   $(OTOPDIR)/asmcomp/printmach.cmo \

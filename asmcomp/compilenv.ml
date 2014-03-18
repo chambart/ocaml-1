@@ -211,7 +211,10 @@ let save_unit_info filename =
   write_unit_info current_unit filename
 
 let current_unit () =
-  { Flambda.sym_unit = current_unit_id ();
+  Flambda.Compilation_unit.create (current_unit_id ())
+
+let current_unit_symbol () =
+  { Flambda.sym_unit = Flambda.Compilation_unit.create (current_unit_id ());
     sym_label = current_unit_linkage_name () }
 
 let const_label = ref 0

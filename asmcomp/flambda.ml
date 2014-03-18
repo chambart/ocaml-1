@@ -16,9 +16,19 @@ type linkage_name = string
 
 type static_exception = int
 
-type symbol = { sym_unit : Ident.t; sym_label : linkage_name }
+module Compilation_unit : sig
+  include PrintableHashOrdered
+  val create : Ident.t -> t
+end = struct
+  include Ident
+  let create id =
+    assert(Ident.persistent id);
+    id
+end
 
-type compilation_unit = symbol
+type compilation_unit = Compilation_unit.t
+
+type symbol = { sym_unit : compilation_unit; sym_label : linkage_name }
 
 let linkage_name s = s
 
@@ -31,28 +41,23 @@ module Symbol = struct
   let hash s = Hashtbl.hash s.sym_label
   let equal s1 s2 = s1.sym_label = s2.sym_label
   let print ppf s =
-    Format.fprintf ppf "%a - %s" Ident.print s.sym_unit s.sym_label
+    Format.fprintf ppf "%a - %s" Compilation_unit.print s.sym_unit s.sym_label
 end
 
-module Compilation_unit = struct
-  include Symbol
-  let create s = s
-end
-
-type variable = { var_unit : symbol; var_var : Ident.t }
+type variable = { var_unit : compilation_unit; var_var : Ident.t }
 
 module Variable = struct
   type t = variable
   let compare v1 v2 =
     let c = Ident.compare v1.var_var v2.var_var in
     if c = 0
-    then Symbol.compare v1.var_unit v2.var_unit
+    then Compilation_unit.compare v1.var_unit v2.var_unit
     else c
   let output c v = Ident.output c v.var_var
   let hash v = Ident.hash v.var_var
   let equal v1 v2 =
     Ident.equal v1.var_var v2.var_var &&
-    Symbol.equal v1.var_unit v2.var_unit
+    Compilation_unit.equal v1.var_unit v2.var_unit
   let print ppf v = Ident.print ppf v.var_var
   let create ~compilation_unit id =
     { var_unit = compilation_unit; var_var = id }
@@ -100,7 +105,7 @@ end
 
 type closure_element = {
   ce_id : Ident.t;
-  ce_unit : symbol;
+  ce_unit : compilation_unit;
 }
 
 type function_within_closure = closure_element
@@ -111,19 +116,23 @@ module Closure_element = struct
   let compare x y =
     let c = Ident.compare x.ce_id y.ce_id in
     if c = 0
-    then Symbol.compare x.ce_unit y.ce_unit
+    then Compilation_unit.compare x.ce_unit y.ce_unit
     else c
   let output oc x =
-    Printf.fprintf oc "%s.%a" x.ce_unit.sym_label
+    Printf.fprintf oc "%a.%a"
+      Compilation_unit.output x.ce_unit
       Ident.output x.ce_id
   let print ppf x =
-    Format.fprintf ppf "%s.%a" x.ce_unit.sym_label
+    Format.fprintf ppf "%a.%a"
+      Compilation_unit.print x.ce_unit
       Ident.print x.ce_id
   let hash off = Hashtbl.hash off
   let equal o1 o2 = compare o1 o2 = 0
 
   let create var = { ce_unit = var.var_unit; ce_id = var.var_var }
   let compilation_unit { ce_unit } = ce_unit
+
+  let to_var { ce_unit; ce_id } = { var_unit = ce_unit; var_var = ce_id }
 end
 
 module Closure_function = Closure_element
@@ -141,6 +150,9 @@ module StaticExceptionSet = ExtSet(Static_exception)
 module StaticExceptionMap = ExtMap(Static_exception)
 module StaticExceptionTbl = ExtHashtbl(Static_exception)
 
+module CompilationUnitSet = ExtSet(Compilation_unit)
+module CompilationUnitMap = ExtMap(Compilation_unit)
+module CompilationUnitTbl = ExtHashtbl(Compilation_unit)
 
 type let_kind =
   | Not_assigned
@@ -208,7 +220,7 @@ and 'a function_declaration = {
 and 'a function_declarations = {
   ident  : FunId.t;
   funs   : 'a function_declaration VarMap.t;
-  compilation_unit : symbol;
+  compilation_unit : compilation_unit;
   closed : bool;
 }
 
@@ -223,6 +235,14 @@ and 'a variable_in_closure = {
   vc_fun : function_within_closure;
   vc_var : variable_within_closure;
 }
+
+(* access functions *)
+
+let find_declaration cf { funs } =
+  VarMap.find (Closure_function.to_var cf) funs
+
+let find_free_variable cv { cl_free_var } =
+  VarMap.find (Closure_variable.to_var cv) cl_free_var
 
 (* utility functions *)
 

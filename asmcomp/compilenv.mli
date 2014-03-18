@@ -28,7 +28,9 @@ val current_unit_linkage_name: unit -> Flambda.linkage_name
 val current_unit_id: unit -> Ident.t
         (* Return the id of the unit being compiled *)
 
-val current_unit: unit -> Flambda.symbol
+val current_unit: unit -> Flambda.compilation_unit
+
+val current_unit_symbol: unit -> Flambda.symbol
 
 val make_symbol: ?unitname:string -> string option -> string
         (* [make_symbol ~unitname:u None] returns the asm symbol that

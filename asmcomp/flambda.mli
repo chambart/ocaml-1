@@ -30,15 +30,15 @@ type variable
 
 type linkage_name
 
-type symbol = { sym_unit : Ident.t; sym_label : linkage_name }
+type compilation_unit
+
+type symbol = { sym_unit : compilation_unit; sym_label : linkage_name }
 (** A symbol is an identifier of a constant provided by another
     compilation unit or of top level module.
     [sym_unit] is the compilation unit containing the value.
     [sym_lablel] is the linking name of the variable.
     The label must be globaly unique: two compilation units linked
     in the same program must not share labels *)
-
-type compilation_unit
 
 type function_within_closure
 type variable_within_closure
@@ -69,7 +69,7 @@ end
 module Symbol : PrintableHashOrdered with type t = symbol
 module Compilation_unit : sig
   include PrintableHashOrdered with type t = compilation_unit
-  val create : symbol -> t
+  val create : Ident.t -> t
 end
 
 module ExprId : Id
@@ -112,6 +112,10 @@ module ClosureVariableTbl : ExtHashtbl with module M := Closure_variable
 module StaticExceptionSet : ExtSet with module M := Static_exception
 module StaticExceptionMap : ExtMap with module M := Static_exception
 module StaticExceptionTbl : ExtHashtbl with module M := Static_exception
+
+module CompilationUnitSet : ExtSet with module M := Compilation_unit
+module CompilationUnitMap : ExtMap with module M := Compilation_unit
+module CompilationUnitTbl : ExtHashtbl with module M := Compilation_unit
 
 type let_kind =
   | Not_assigned
@@ -243,6 +247,18 @@ and 'a variable_in_closure = {
   vc_fun : function_within_closure;
   vc_var : variable_within_closure;
 }
+
+
+(* access functions *)
+
+val find_declaration : function_within_closure ->
+  'a function_declarations -> 'a function_declaration
+(** [find_declaration f decl] raises Not_found if [f] is not in [decl] *)
+
+val find_free_variable : variable_within_closure ->
+  'a closure -> 'a flambda
+(** [find_free_variable v clos] raises Not_found if [c] is not in [clos] *)
+
 
 (* utility functions *)
 
