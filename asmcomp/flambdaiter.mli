@@ -15,5 +15,12 @@ val apply_on_subexpressions : ('a Flambda.flambda -> unit) ->
 
 val iter : ('a Flambda.flambda -> unit) -> 'a Flambda.flambda -> unit
 
+val iter_toplevel : ('a Flambda.flambda -> unit) -> 'a Flambda.flambda -> unit
+(** [iter_toplevel f t] Apply f on every toplevel subexpression of t,
+    i.e. does not apply it on functions body *)
+
 val iter_on_closures :
   ('a Flambda.closure -> 'a -> unit) -> 'a Flambda.flambda -> unit
+
+val map : ('a Flambda.flambda -> 'a Flambda.flambda) ->
+  'a Flambda.flambda -> 'a Flambda.flambda
