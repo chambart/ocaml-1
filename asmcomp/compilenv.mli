@@ -58,9 +58,10 @@ val need_send_fun: int -> unit
 
 val new_const_symbol : unit -> string
 val new_const_label : unit -> int
-val new_structured_constant : Lambda.structured_constant -> bool -> string
+val new_structured_constant : Clambda.ustructured_constant -> bool -> string
 val structured_constants :
-  unit -> (string * bool * Lambda.structured_constant) list
+  unit -> (string * bool * Clambda.ustructured_constant) list
+val clear_structured_constants : unit -> unit
 
 val read_unit_info: string -> unit_infos * Digest.t
         (* Read infos and MD5 from a [.cmx] file. *)

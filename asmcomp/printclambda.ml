@@ -19,11 +19,47 @@ let rec pr_idents ppf = function
   | [] -> ()
   | h::t -> fprintf ppf "%a %a" Ident.print h pr_idents t
 
-let rec lam ppf = function
+let rec struct_const ppf = function
+  | Uconst_base(Const_int n) -> fprintf ppf "%i" n
+  | Uconst_base(Const_char c) -> fprintf ppf "%C" c
+  | Uconst_base(Const_string s) -> fprintf ppf "%S" s
+  | Uconst_immstring s -> fprintf ppf "#%S" s
+  | Uconst_base(Const_float f) -> fprintf ppf "%s" f
+  | Uconst_base(Const_int32 n) -> fprintf ppf "%lil" n
+  | Uconst_base(Const_int64 n) -> fprintf ppf "%LiL" n
+  | Uconst_base(Const_nativeint n) -> fprintf ppf "%nin" n
+  | Uconst_pointer n -> fprintf ppf "%ia" n
+  | Uconst_block(tag, []) ->
+      fprintf ppf "[%i]" tag
+  | Uconst_block(tag, sc1::scl) ->
+      let sconsts ppf scl =
+        List.iter (fun sc -> fprintf ppf "@ %a" struct_const sc) scl in
+      fprintf ppf "@[<1>[%i:@ @[%a%a@]]@]" tag struct_const sc1 sconsts scl
+  | Uconst_float_array [] ->
+      fprintf ppf "[| |]"
+  | Uconst_float_array (f1 :: fl) ->
+      let floats ppf fl =
+        List.iter (fun f -> fprintf ppf "@ %s" f) fl in
+      fprintf ppf "@[<1>[|@[%s%a@]|]@]" f1 floats fl
+  | Uconst_closure(clos, sym, fv) ->
+      let idents ppf =
+        List.iter (fprintf ppf "@ %a" Ident.print)in
+      let one_fun ppf f =
+        fprintf ppf "(fun@ %s@ %d@ @[<2>%a@]@ @[<2>%a@])"
+          f.label f.arity idents f.params lam f.body in
+      let funs ppf =
+        List.iter (fprintf ppf "@ %a" one_fun) in
+      let sconsts ppf scl =
+        List.iter (fun sc -> fprintf ppf "@ %a" struct_const sc) scl in
+      fprintf ppf "@[<2>(const_closure%a %s@ %a)@]" funs clos sym sconsts fv
+  | Uconst_label s ->
+    pp_print_string ppf s
+
+and lam ppf = function
   | Uvar id ->
       Ident.print ppf id
   | Uconst (cst,_) ->
-      Printlambda.structured_constant ppf cst
+      struct_const ppf cst
   | Udirect_apply(f, largs, _) ->
       let lams ppf largs =
         List.iter (fun l -> fprintf ppf "@ %a" lam l) largs in
@@ -36,14 +72,14 @@ let rec lam ppf = function
       let idents ppf =
         List.iter (fprintf ppf "@ %a" Ident.print)in
       let one_fun ppf f =
-        fprintf ppf "(fun@ %s@ %d @[<2>%a@] @[<2>%a@])"
+        fprintf ppf "(fun@ %s@ %d@ @[<2>%a@]@ @[<2>%a@])"
           f.label f.arity idents f.params lam f.body in
       let funs ppf =
         List.iter (fprintf ppf "@ %a" one_fun) in
       let lams ppf =
         List.iter (fprintf ppf "@ %a" lam) in
-      fprintf ppf "@[<2>(closure@ %a %a)@]" funs clos lams fv
-  | Uoffset(l,i) -> fprintf ppf "@[<2>(offset %a %d)@]" lam l i
+      fprintf ppf "@[<2>(closure%a@ %a)@]" funs clos lams fv
+  | Uoffset(l,i) -> fprintf ppf "@[<2>(offset@ %a@ %d)@]" lam l i
   | Ulet(id, arg, body) ->
       let rec letbody ul = match ul with
         | Ulet(id, arg, body) ->
@@ -132,3 +168,6 @@ and sequence ppf ulam = match ulam with
 
 let clambda ppf ulam =
   fprintf ppf "%a@." lam ulam
+
+let structured_constant ppf sc =
+  fprintf ppf "%a@." struct_const sc

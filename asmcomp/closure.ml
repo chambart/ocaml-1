@@ -19,6 +19,19 @@ open Lambda
 open Switch
 open Clambda
 
+let convert_structured_constant sc =
+  let rec aux = function
+    | Const_base c -> Uconst_base c
+    | Const_pointer i -> Uconst_pointer i
+    | Const_block (tag,fields) ->
+        Uconst_block (tag,List.map aux fields)
+    | Const_float_array fields ->
+        Uconst_float_array fields
+    | Const_immstring s ->
+        Uconst_immstring s
+  in
+  aux sc
+
 (* Auxiliaries for compiling functions *)
 
 let rec split_list n l =
@@ -119,9 +132,9 @@ let lambda_smaller lam threshold =
     match lam with
       Uvar v -> ()
     | Uconst(
-        (Const_base(Const_int _ | Const_char _ | Const_float _ |
+        (Uconst_base(Const_int _ | Const_char _ | Const_float _ |
                         Const_int32 _ | Const_int64 _ | Const_nativeint _) |
-             Const_pointer _), _) -> incr size
+             Uconst_pointer _), _) -> incr size
 (* Structured Constants are now emitted during closure conversion. *)
     | Uconst (_, Some _) -> incr size
     | Uconst _ ->
@@ -187,8 +200,8 @@ let rec is_pure_clambda = function
 
 (* Simplify primitive operations on integers *)
 
-let make_const_int n = (Uconst(Const_base(Const_int n), None), Value_integer n)
-let make_const_ptr n = (Uconst(Const_pointer n, None), Value_constptr n)
+let make_const_int n = (Uconst(Uconst_base(Const_int n), None), Value_integer n)
+let make_const_ptr n = (Uconst(Uconst_pointer n, None), Value_constptr n)
 let make_const_bool b = make_const_ptr(if b then 1 else 0)
 let make_comparison cmp (x: int) (y: int) =
   make_const_bool
@@ -279,9 +292,9 @@ let simplif_prim p (args, approxs as args_approxs) dbg =
    over functions. *)
 
 let approx_ulam = function
-    Uconst(Const_base(Const_int n),_) -> Value_integer n
-  | Uconst(Const_base(Const_char c),_) -> Value_integer(Char.code c)
-  | Uconst(Const_pointer n,_) -> Value_constptr n
+    Uconst(Uconst_base(Const_int n),_) -> Value_integer n
+  | Uconst(Uconst_base(Const_char c),_) -> Value_integer(Char.code c)
+  | Uconst(Uconst_pointer n,_) -> Value_constptr n
   | _ -> Value_unknown
 
 let rec substitute sb ulam =
@@ -338,7 +351,7 @@ let rec substitute sb ulam =
       Utrywith(substitute sb u1, id', substitute (Tbl.add id (Uvar id') sb) u2)
   | Uifthenelse(u1, u2, u3) ->
       begin match substitute sb u1 with
-        Uconst(Const_pointer n, _) ->
+        Uconst(Uconst_pointer n, _) ->
           if n <> 0 then substitute sb u2 else substitute sb u3
       | su1 ->
           Uifthenelse(su1, substitute sb u2, substitute sb u3)
@@ -364,15 +377,15 @@ let rec substitute sb ulam =
 
 let is_simple_argument = function
     Uvar _ -> true
-  | Uconst(Const_base(Const_int _ | Const_char _ | Const_float _ |
-                      Const_int32 _ | Const_int64 _ | Const_nativeint _),_) ->
+  | Uconst(Uconst_base(Const_int _ | Const_char _ | Const_float _ |
+                       Const_int32 _ | Const_int64 _ | Const_nativeint _),_) ->
       true
-  | Uconst(Const_pointer _, _) -> true
+  | Uconst(Uconst_pointer _, _) -> true
   | _ -> false
 
 let no_effects = function
     Uclosure _ -> true
-  | Uconst(Const_base(Const_string _),_) -> true
+  | Uconst(Uconst_base(Const_string _),_) -> true
   | u -> is_simple_argument u
 
 let rec bind_params_rec subst params args body =
@@ -511,12 +524,16 @@ let rec close fenv cenv = function
       close_approx_var fenv cenv id
   | Lconst cst ->
       begin match cst with
-        Const_base(Const_int n) -> (Uconst (cst,None), Value_integer n)
-      | Const_base(Const_char c) -> (Uconst (cst,None),
+        Const_base(Const_int n) -> (Uconst (convert_structured_constant cst,None),
+                                    Value_integer n)
+      | Const_base(Const_char c) -> (Uconst (convert_structured_constant cst,None),
                                      Value_integer(Char.code c))
-      | Const_pointer n -> (Uconst (cst, None), Value_constptr n)
-      | _ -> (Uconst (cst, Some (Compilenv.new_structured_constant cst true)),
-              Value_unknown)
+      | Const_pointer n -> (Uconst (convert_structured_constant cst, None),
+                            Value_constptr n)
+      | _ ->
+          let cst = convert_structured_constant cst in
+          (Uconst (cst, Some (Compilenv.new_structured_constant cst true)),
+           Value_unknown)
       end
   | Lfunction(kind, params, body) as funct ->
       close_one_function fenv cenv (Ident.create "fun") funct

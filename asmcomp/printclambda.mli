@@ -13,4 +13,5 @@
 open Clambda
 open Format
 
+val structured_constant: formatter -> ustructured_constant -> unit
 val clambda: formatter -> ulambda -> unit
