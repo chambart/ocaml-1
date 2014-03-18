@@ -255,3 +255,10 @@ val can_be_merged : 'a flambda -> 'a flambda -> bool
 val data_at_toplevel_node : 'a flambda -> 'a
 
 val description_of_toplevel_node : 'a flambda -> string
+
+val recursive_functions : 'a function_declarations -> VarSet.t
+
+(**/**)
+
+module Var_connected_components :
+  Sort_connected_components.S with module Id := Variable

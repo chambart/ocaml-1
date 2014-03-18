@@ -293,3 +293,22 @@ let description_of_toplevel_node = function
   | Ffor(id, lo, hi, dir, body,data) -> "for"
   | Fassign(id, lam,data) -> "assign"
   | Funreachable _ -> "unreachable"
+
+module Var_connected_components =
+  Sort_connected_components.Make(Variable)
+
+let recursive_functions { funs } =
+  let function_variables = VarMap.keys funs in
+  let directed_graph =
+    VarMap.map
+      (fun ffun -> VarSet.inter ffun.free_variables function_variables)
+      funs in
+  let connected_components =
+    Var_connected_components.connected_components_sorted_from_roots_to_leaf
+      directed_graph in
+  Array.fold_left (fun rec_fun -> function
+      | Var_connected_components.No_loop _ ->
+          rec_fun
+      | Var_connected_components.Has_loop elts ->
+          List.fold_right VarSet.add elts rec_fun)
+    VarSet.empty connected_components
