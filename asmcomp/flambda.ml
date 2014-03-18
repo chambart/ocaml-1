@@ -240,7 +240,6 @@ and 'a function_declarations = {
   ident  : FunId.t;
   funs   : 'a function_declaration VarMap.t;
   compilation_unit : compilation_unit;
-  closed : bool;
 }
 
 and 'a funct = {

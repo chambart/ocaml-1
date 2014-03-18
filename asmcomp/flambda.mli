@@ -234,7 +234,6 @@ and 'a function_declarations = {
   funs : 'a function_declaration VarMap.t;
   (** The ident key correspond to off_id of offset type *)
   compilation_unit : compilation_unit;
-  closed : bool;
 }
 
 and 'a funct = {

@@ -56,8 +56,7 @@ let fun_decls lst fv =
       VarMap.empty lst in
   { ident = FunId.create compilation_unit;
     funs;
-    compilation_unit;
-    closed = false }
+    compilation_unit }
 
 let fclosure lst fv =
   let fv_var = List.map fst fv in

@@ -237,7 +237,6 @@ let to_flambda ~compilation_unit lam =
       { ident = FunId.create compilation_unit;
         funs =
           List.fold_left close_one_function VarMap.empty function_declarations;
-        closed = false;
         compilation_unit } in
     let closure =
       { cl_fun = ffunctions;
