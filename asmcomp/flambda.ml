@@ -259,6 +259,12 @@ and 'a variable_in_closure = {
 let find_declaration cf { funs } =
   VarMap.find (Closure_function.to_var cf) funs
 
+let find_declaration_variable cf { funs } =
+  let var = Closure_function.to_var cf in
+  if not (VarMap.mem var funs)
+  then raise Not_found
+  else var
+
 let find_free_variable cv { cl_free_var } =
   VarMap.find (Closure_variable.to_var cv) cl_free_var
 

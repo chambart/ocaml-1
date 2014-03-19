@@ -257,6 +257,10 @@ val find_declaration : function_within_closure ->
   'a function_declarations -> 'a function_declaration
 (** [find_declaration f decl] raises Not_found if [f] is not in [decl] *)
 
+val find_declaration_variable : function_within_closure ->
+  'a function_declarations -> variable
+(** [find_declaration_variable f decl] raises Not_found if [f] is not in [decl] *)
+
 val find_free_variable : variable_within_closure ->
   'a closure -> 'a flambda
 (** [find_free_variable v clos] raises Not_found if [c] is not in [clos] *)
