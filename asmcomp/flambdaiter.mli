@@ -24,3 +24,6 @@ val iter_on_closures :
 
 val map : ('a Flambda.flambda -> 'a Flambda.flambda) ->
   'a Flambda.flambda -> 'a Flambda.flambda
+
+val map_toplevel : ('a Flambda.flambda -> 'a Flambda.flambda) ->
+  'a Flambda.flambda -> 'a Flambda.flambda

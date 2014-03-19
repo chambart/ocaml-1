@@ -56,7 +56,7 @@ let apply_on_subexpressions f = function
   | Fsend (_,f1,f2,fl,_,_) ->
     List.iter f (f1::f2::fl)
 
-let iter f t =
+let iter_general ~toplevel f t =
   let rec aux t =
     f t;
     match t with
@@ -89,7 +89,8 @@ let iter f t =
 
     | Fclosure ({cl_fun = funcs; cl_free_var = fv},_) ->
       VarMap.iter (fun _ v -> aux v) fv;
-      VarMap.iter (fun _ ffun -> aux ffun.body) funcs.funs
+      if not toplevel
+      then VarMap.iter (fun _ ffun -> aux ffun.body) funcs.funs
 
     | Fletrec (defs, body,_) ->
       List.iter (fun (_,l) -> aux l) defs;
@@ -107,6 +108,9 @@ let iter f t =
 
   and iter_list l = List.iter aux l in
   aux t
+
+let iter f t = iter_general ~toplevel:false f t
+let iter_toplevel f t = iter_general ~toplevel:true f t
 
 let iter_on_closures f t =
   let aux = function
@@ -122,59 +126,7 @@ let iter_on_closures f t =
   in
   iter aux t
 
-let iter_toplevel f t =
-  let rec aux t =
-    f t;
-    match t with
-    | Fsymbol _
-    | Fvar _
-    | Fconst _ -> ()
-
-    | Fassign (_,f1,_)
-    | Ffunction({fu_closure = f1},_)
-    | Fvariable_in_closure({vc_closure = f1},_) ->
-      aux f1
-
-    | Flet ( _, _, f1, f2,_)
-    | Ftrywith (f1,_,f2,_)
-    | Fsequence (f1,f2,_)
-    | Fwhile (f1,f2,_)
-    | Fcatch (_,_,f1,f2,_) ->
-      aux f1; aux f2;
-
-    | Ffor (_,f1,f2,_,f3,_)
-    | Fifthenelse (f1,f2,f3,_) ->
-      aux f1;aux f2;aux f3
-
-    | Fstaticfail (_,l,_)
-    | Fprim (_,l,_,_) ->
-      iter_list l
-
-    | Fapply ({ap_function = f1; ap_arg = fl},_) ->
-      iter_list (f1::fl)
-
-    | Fclosure ({cl_fun = funcs; cl_free_var = fv},_) ->
-      VarMap.iter (fun _ v -> aux v) fv
-
-    | Fletrec (defs, body,_) ->
-      List.iter (fun (_,l) -> aux l) defs;
-      aux body
-    | Fswitch (arg,sw,_) ->
-      aux arg;
-      List.iter (fun (_,l) -> aux l) sw.fs_consts;
-      List.iter (fun (_,l) -> aux l) sw.fs_blocks;
-      (match sw.fs_failaction with
-       | None -> ()
-       | Some f -> aux f)
-    | Fsend (_,f1,f2,fl,_,_) ->
-      iter_list (f1::f2::fl)
-    | Funreachable _ -> ()
-
-  and iter_list l = List.iter aux l in
-  aux t
-
-
-let map f tree =
+let map_general ~toplevel f tree =
   let rec aux tree =
     let exp = match tree with
       | Fsymbol _ -> tree
@@ -187,9 +139,13 @@ let map f tree =
       | Fclosure ({ cl_fun; cl_free_var;
                     cl_specialised_arg },annot) ->
           let cl_fun =
-            { cl_fun with
-              funs = VarMap.map
-                  (fun ffun -> { ffun with body = aux ffun.body }) cl_fun.funs } in
+            if toplevel
+            then cl_fun
+            else
+              { cl_fun with
+                funs = VarMap.map
+                    (fun ffun -> { ffun with body = aux ffun.body })
+                    cl_fun.funs } in
           Fclosure ({ cl_fun;
                       cl_free_var = VarMap.map aux cl_free_var;
                       cl_specialised_arg }, annot)
@@ -259,3 +215,6 @@ let map f tree =
     f exp
   in
   aux tree
+
+let map f tree = map_general ~toplevel:false f tree
+let map_toplevel f tree = map_general ~toplevel:true f tree
