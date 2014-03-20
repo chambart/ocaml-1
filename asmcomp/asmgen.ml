@@ -117,7 +117,15 @@ let test ppf lam =
      Format.fprintf ppf "%a@."
        Printflambda.flambda flam;
      raise e);
-  let fl_sym = Flambdasym.convert ~compilation_unit flam in
+  let flam = Flambdasimplify.simplify flam in
+  if !Clflags.dump_flambda
+  then Format.fprintf ppf "%a@." Printflambda.flambda flam;
+  (try Flambdacheck.check ~current_compilation_unit:compilation_unit flam
+   with e ->
+     Format.fprintf ppf "%a@."
+       Printflambda.flambda flam;
+     raise e);
+  let fl_sym = Flambdasym.convert flam in
   let fl,const,_ = fl_sym in
   if !Clflags.dump_flambda
   then begin
