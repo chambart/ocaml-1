@@ -270,6 +270,9 @@ val find_free_variable : variable_within_closure ->
 
 val function_arity : 'a function_declaration -> int
 
+val variables_bound_by_the_closure : function_within_closure ->
+  'a function_declarations -> VarSet.t
+
 val can_be_merged : 'a flambda -> 'a flambda -> bool
 (** If [can_be_merged f1 f2] is true, it is safe to merge switch
     branches containing [f1] and [f2] *)

@@ -272,6 +272,14 @@ let find_free_variable cv { cl_free_var } =
 
 let function_arity f = List.length f.params
 
+let variables_bound_by_the_closure cf decls =
+  let func = find_declaration cf decls in
+  let params = VarSet.of_list func.params in
+  let functions = VarMap.keys decls.funs in
+  VarSet.diff
+    (VarSet.diff func.free_variables params)
+    functions
+
 let can_be_merged f1 f2 = match f1,f2 with
   | Fsymbol (sym1, _), Fsymbol (sym2, _) ->
       Symbol.equal sym1 sym2
