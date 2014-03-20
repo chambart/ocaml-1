@@ -75,7 +75,7 @@ let implementation ppf sourcefile outputprefix =
   let env = Compmisc.initial_env() in
   Compilenv.reset ?packname:!Clflags.for_package modulename;
   let cmxfile = outputprefix ^ ".cmx" in
-  let objfile = outputprefix ^ ext_obj in
+  (* let objfile = outputprefix ^ ext_obj in *)
   try
     if !Clflags.print_types then ignore begin
       Pparse.file ppf inputfile Parse.implementation ast_impl_magic_number
@@ -102,10 +102,10 @@ let implementation ppf sourcefile outputprefix =
     Pparse.remove_preprocessed inputfile;
     Stypes.dump (Some (outputprefix ^ ".annot"));
   with x ->
-    remove_file objfile;
-    remove_file cmxfile;
-    Pparse.remove_preprocessed inputfile;
-    Stypes.dump (Some (outputprefix ^ ".annot"));
+    (* remove_file objfile; *)
+    (* remove_file cmxfile; *)
+    (* Pparse.remove_preprocessed inputfile; *)
+    (* Stypes.dump (Some (outputprefix ^ ".annot")); *)
     raise x
 
 let c_file name =

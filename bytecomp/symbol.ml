@@ -91,7 +91,10 @@ module Variable = struct
   let equal v1 v2 =
     Ident.same v1.var_var v2.var_var &&
     Compilation_unit.equal v1.var_unit v2.var_unit
-  let print ppf v = Ident.print ppf v.var_var
+  let print ppf v =
+    Format.fprintf ppf "%a.%a"
+      Compilation_unit.print v.var_unit
+      Ident.print v.var_var
   let create ~compilation_unit id =
     { var_unit = compilation_unit; var_var = id }
   let make ~compilation_unit name =
