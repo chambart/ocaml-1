@@ -36,6 +36,10 @@ val split_last: 'a list -> 'a list * 'a
 val samelist: ('a -> 'a -> bool) -> 'a list -> 'a list -> bool
         (* Like [List.for_all2] but returns [false] if the two
            lists have different length. *)
+val map2_head: ('a -> 'b -> 'c) -> 'a list -> 'b list -> ('c list * 'b list)
+        (* [let (r1,r2) = map2_head f l1 l2]
+           If [l1] is of length n and [l2 = h2 @ t2] with h2 of length n
+           and t2 of length k, r1 is [List.map2 f l1 h1] and r2 is t2 *)
 val some_if_all_elements_are_some: 'a option list -> 'a list option
 
 val may: ('a -> unit) -> 'a option -> unit

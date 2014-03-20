@@ -63,6 +63,15 @@ let rec samelist pred l1 l2 =
   | (hd1 :: tl1, hd2 :: tl2) -> pred hd1 hd2 && samelist pred tl1 tl2
   | (_, _) -> false
 
+let rec map2_head f l1 l2 =
+  match l1, l2 with
+  | [], _ -> [], l2
+  | h::t, [] -> raise (Invalid_argument "map2_head")
+  | h1::t1, h2::t2 ->
+      let h = f h1 h2 in
+      let (t,rem) = map2_head f t1 t2 in
+      h::t, rem
+
 let rec some_if_all_elements_are_some = function
   | [] -> Some []
   | h::t ->
