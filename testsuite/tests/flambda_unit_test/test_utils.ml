@@ -66,6 +66,27 @@ let fclosure lst fv =
        cl_specialised_arg = VarMap.empty },
      nid ())
 
+let fun_decl' params body =
+  { stub = false; params; body;
+    free_variables = Flambdaiter.free_variables body;
+    dbg = Debuginfo.none }
+
+let fun_decls' lst =
+  let funs =
+    List.fold_left (fun map (var,params,body) ->
+        let decl = fun_decl' params body in
+        VarMap.add var decl map)
+      VarMap.empty lst in
+  { ident = FunId.create compilation_unit;
+    funs;
+    compilation_unit }
+
+let fapply ?(kind=Indirect) f args =
+  Fapply({
+      ap_function = f;
+      ap_arg = args;
+      ap_dbg = Debuginfo.none;
+      ap_kind = kind},nid ())
 
 type env =
   { var : variable VarMap.t }
