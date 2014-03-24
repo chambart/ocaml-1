@@ -241,3 +241,63 @@ let free_variables tree =
   in
   iter_toplevel aux tree;
   VarSet.diff !free !bound
+
+let map_data (type t1) (type t2) (f:t1 -> t2) (tree:t1 flambda) : t2 flambda =
+  let rec mapper : t1 flambda -> t2 flambda = function
+    | Fsymbol (sym, v) -> Fsymbol (sym, f v)
+    | Fvar (id, v) -> Fvar (id, f v)
+    | Fconst (cst, v) -> Fconst (cst, f v)
+    | Flet(str, id, lam, body, v) ->
+        Flet(str, id, mapper lam, mapper body, f v)
+    | Fletrec(defs, body, v) ->
+        let defs = List.map (fun (id,def) -> (id, mapper def)) defs in
+        Fletrec( defs, mapper body, f v)
+    | Fapply ({ ap_function; ap_arg; ap_kind; ap_dbg }, v) ->
+        Fapply ({ ap_function = mapper ap_function;
+                  ap_arg = list_mapper ap_arg;
+                  ap_kind; ap_dbg }, f v)
+    | Fclosure ({ cl_fun; cl_free_var;
+                  cl_specialised_arg }, v) ->
+        let cl_fun =
+          { cl_fun with
+            funs = VarMap.map
+                (fun ffun -> { ffun with body = mapper ffun.body })
+                cl_fun.funs } in
+        Fclosure ({ cl_fun;
+                    cl_free_var = VarMap.map mapper cl_free_var;
+                    cl_specialised_arg }, f v)
+    | Ffunction ({ fu_closure; fu_fun; fu_relative_to}, v) ->
+        Ffunction ({ fu_closure = mapper fu_closure;
+                     fu_fun; fu_relative_to}, f v)
+    | Fvariable_in_closure (vc, v) ->
+        Fvariable_in_closure ({ vc with vc_closure = mapper vc.vc_closure }, f v)
+    | Fswitch(arg, sw, v) ->
+        let aux l = List.map (fun (i,v) -> i, mapper v) l in
+        let sw = { sw with
+                   fs_consts = aux sw.fs_consts;
+                   fs_blocks = aux sw.fs_blocks;
+                   fs_failaction = Misc.may_map mapper sw.fs_failaction } in
+        Fswitch(mapper arg, sw, f v)
+    | Fsend(kind, met, obj, args, dbg, v) ->
+        Fsend(kind, mapper met, mapper obj, list_mapper args, dbg, f v)
+    | Fprim(prim, args, dbg, v) ->
+        Fprim(prim, list_mapper args, dbg, f v)
+    | Fstaticfail (i, args, v) ->
+        Fstaticfail (i, list_mapper args, f v)
+    | Fcatch (i, vars, body, handler, v) ->
+        Fcatch (i, vars, mapper body, mapper handler, f v)
+    | Ftrywith(body, id, handler, v) ->
+        Ftrywith(mapper body, id, mapper handler, f v)
+    | Fifthenelse(arg, ifso, ifnot, v) ->
+        Fifthenelse(mapper arg, mapper ifso, mapper ifnot, f v)
+    | Fsequence(lam1, lam2, v) ->
+        Fsequence(mapper lam1, mapper lam2, f v)
+    | Fwhile(cond, body, v) ->
+        Fwhile(mapper cond, mapper body, f v)
+    | Ffor(id, lo, hi, dir, body, v) ->
+        Ffor(id, mapper lo, mapper hi, dir, mapper body, f v)
+    | Fassign(id, lam, v) ->
+        Fassign(id, mapper lam, f v)
+    | Funreachable v -> Funreachable (f v)
+  and list_mapper l = List.map mapper l in
+  mapper tree
