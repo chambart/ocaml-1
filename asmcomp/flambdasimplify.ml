@@ -222,7 +222,7 @@ let empty_env () =
     inlining_level = 0;
     sb = empty_sb;
     substitute = false;
-    inline_threshold = !Clflags.inline_threshold;
+    inline_threshold = min !Clflags.inline_threshold 100;
     closure_depth = 0}
 
 let local_env env =
