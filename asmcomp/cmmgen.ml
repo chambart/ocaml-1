@@ -2131,7 +2131,7 @@ let emit_all_constants cont =
   Hashtbl.clear immstrings;   (* PR#3979 *)
   List.iter
     (fun (symb, fundecls, clos_vars) ->
-       c := Cdata(emit_constant_closure (false,symb) fundecls clos_vars []) :: !c)
+       c := Cdata(emit_constant_closure (true,symb) fundecls clos_vars []) :: !c)
     !constant_closures;
   constant_closures := [];
   !c
