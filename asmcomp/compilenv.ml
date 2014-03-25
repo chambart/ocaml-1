@@ -239,20 +239,6 @@ let approx_for_global comp_unit =
 
 let approx_env () = !merged_environment
 
-let imported_closure =
-  let open Flambda in
-  let import_closure clos =
-    { clos with
-      funs =
-        VarMap.map
-          (fun ff -> { ff with body = Flambdaiter.map_data ExprId.create ff.body })
-          clos.funs } in
-  FunTbl.memoize imported_closure_table
-    (fun fun_id ->
-       let ex_info = approx_env () in
-       let closure = FunMap.find fun_id ex_info.Flambdaexport.ex_functions in
-       import_closure closure)
-
 (* Record that a currying function or application function is needed *)
 
 let need_curry_fun n =
@@ -341,6 +327,43 @@ let add_structured_constant lbl cst global =
 let clear_structured_constants () = structured_constants := []
 
 let structured_constants () = !structured_constants
+
+let imported_closure =
+  let open Flambda in
+  let import_closure clos =
+
+    let orig_var_map clos =
+      VarMap.fold
+        (fun id _ acc ->
+           let fun_id = Closure_function.create id in
+           let sym = closure_symbol fun_id in
+           SymbolMap.add sym id acc)
+        clos.funs SymbolMap.empty in
+
+    let sym_map = orig_var_map clos in
+
+    let f = function
+      | Fsymbol (sym, ()) as e ->
+          (try Fvar(SymbolMap.find sym sym_map,()) with
+           | Not_found -> e)
+      | e -> e in
+
+    { clos with
+      funs =
+        VarMap.map
+          (fun ff ->
+             let body = Flambdaiter.map_toplevel f ff.body in
+             let body = Flambdaiter.map_data ExprId.create body in
+             let free_variables = Flambdaiter.free_variables body in
+             { ff with body; free_variables })
+          clos.funs } in
+  let aux fun_id =
+    let ex_info = approx_env () in
+    let closure = FunMap.find fun_id ex_info.Flambdaexport.ex_functions in
+    let cl = import_closure closure in
+    cl
+  in
+  FunTbl.memoize imported_closure_table aux
 
 (* Error report *)
 
