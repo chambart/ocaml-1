@@ -301,3 +301,17 @@ let map_data (type t1) (type t2) (f:t1 -> t2) (tree:t1 flambda) : t2 flambda =
     | Funreachable v -> Funreachable (f v)
   and list_mapper l = List.map mapper l in
   mapper tree
+
+let toplevel_substitution sb tree =
+  let sb v = try VarMap.find v sb with Not_found -> v in
+  let aux = function
+    | Fvar (id,e) -> Fvar (sb id,e)
+    | Fassign (id,e,d) -> Fassign (sb id,e,d)
+    | Fclosure (cl,d) ->
+        Fclosure ({cl with
+                   cl_specialised_arg =
+                     VarMap.map sb cl.cl_specialised_arg},
+                  d)
+    | e -> e
+  in
+  map_toplevel aux tree
