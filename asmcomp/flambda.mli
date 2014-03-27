@@ -294,4 +294,5 @@ module Var_connected_components :
 
 val string_of_linkage_name : linkage_name -> string
 val ident_of_compilation_unit : compilation_unit -> Ident.t
+val linkage_name_of_compilation_unit : compilation_unit -> linkage_name
 val ident_of_function_within_closure : function_within_closure -> Ident.t

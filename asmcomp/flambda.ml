@@ -22,6 +22,7 @@ module Compilation_unit : sig
   val to_ident : t -> Ident.t
   (* Should be used only in Compilenv *)
   val name : t -> string
+  val linkage_name : t -> linkage_name
 end = struct
   type t =
     { id: Ident.t;
@@ -47,6 +48,8 @@ end = struct
 
   let to_ident x = x.id
   let name x = x.id.Ident.name
+
+  let linkage_name x = x.linkage_name
 end
 
 type compilation_unit = Compilation_unit.t
@@ -57,6 +60,7 @@ let predefined_exception_compilation_unit =
 type symbol = { sym_unit : compilation_unit; sym_label : linkage_name }
 
 let ident_of_compilation_unit = Compilation_unit.to_ident
+let linkage_name_of_compilation_unit = Compilation_unit.linkage_name
 
 let linkage_name s = s
 let string_of_linkage_name s = s

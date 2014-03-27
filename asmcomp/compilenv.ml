@@ -288,20 +288,21 @@ let new_const_symbol' () =
 let closure_symbol fv =
   let open Flambda in
   let compilation_unit = Closure_function.compilation_unit fv in
-  let unit_id = ident_of_compilation_unit compilation_unit in
   let fun_id = ident_of_function_within_closure fv in
+  let unitname = string_of_linkage_name
+      (linkage_name_of_compilation_unit compilation_unit) in
   {sym_unit = compilation_unit;
    sym_label =
      Flambda.linkage_name
-       (make_symbol ~unitname:(get_unit_name unit_id)
-          (Some ((Ident.unique_name fun_id) ^ "_closure"))) }
+       (make_symbol ~unitname (Some ((Ident.unique_name fun_id) ^ "_closure"))) }
 
 let function_label fv =
   let open Flambda in
   let compilation_unit = Closure_function.compilation_unit fv in
-  let unit_id = ident_of_compilation_unit compilation_unit in
+  let unitname = string_of_linkage_name
+      (linkage_name_of_compilation_unit compilation_unit) in
   let fun_id = ident_of_function_within_closure fv in
-  make_symbol ~unitname:(get_unit_name unit_id)
+  make_symbol ~unitname
     (Some (Ident.unique_name fun_id))
 
 
