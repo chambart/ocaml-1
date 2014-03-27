@@ -428,10 +428,12 @@ let make_const_int r n eid =
 let make_const_ptr r n eid = Fconst(Fconst_pointer n,eid), ret r (value_constptr n)
 let make_const_bool r b eid = make_const_ptr r (if b then 1 else 0) eid
 
-let find id env = VarMap.find id env.env_approx
-let find_unknwon id env =
-  try find id env
-  with Not_found -> value_unknown
+let find id env =
+  try VarMap.find id env.env_approx
+  with Not_found ->
+    Misc.fatal_error
+      (Format.asprintf "unbound variable %a@." Variable.print id)
+
 let present id env = VarMap.mem id env.env_approx
 let add_approx id approx env =
   let approx =
@@ -869,7 +871,7 @@ and loop_direct (env:env) r tree : 'a flambda * ret =
           id', Fvar(id',annot) with
         | Not_found -> id, tree
       in
-      check_var_and_constant_result env r tree (find_unknwon id env)
+      check_var_and_constant_result env r tree (find id env)
   | Fconst (cst,_) -> tree, ret r (const_approx cst)
 
 
@@ -961,7 +963,7 @@ and loop_direct (env:env) r tree : 'a flambda * ret =
       (* Format.printf "%a@." Variable.print id; *)
       let def_used_var = r.used_variables in
       let body_env = match str with
-        | Assigned -> env
+        | Assigned -> add_approx id value_unknown env
         | _ -> add_approx id r.approx env in
       let r_body = { r with used_variables = init_used_var } in
       let body, r = loop body_env r_body body in
@@ -981,8 +983,12 @@ and loop_direct (env:env) r tree : 'a flambda * ret =
       expr, exit_scope r id
   | Fletrec(defs, body, annot) ->
       let defs, env = new_subst_ids defs env in
+      let def_env = List.fold_left (fun env_acc (id,lam) ->
+          add_approx id value_unknown env_acc)
+          env defs
+      in
       let defs, body_env, r = List.fold_left (fun (defs, env_acc, r) (id,lam) ->
-          let lam, r = loop env r lam in
+          let lam, r = loop def_env r lam in
           let defs = (id,lam) :: defs in
           let env_acc = add_approx id r.approx env_acc in
           defs, env_acc, r) ([],env,r) defs in
@@ -1083,6 +1089,7 @@ and loop_direct (env:env) r tree : 'a flambda * ret =
       let lo, r = loop env r lo in
       let hi, r = loop env r hi in
       let id, env = new_subst_id id env in
+      let env = add_approx id value_unknown env in
       let body, r = loop env r body in
       let r = exit_scope r id in
       Ffor(id, lo, hi, dir, body, annot),
@@ -1198,7 +1205,7 @@ and closure env r cl annot =
   (*       Variable.print id *)
   (*       Variable.print (subst_var env id)) spec_args; *)
   let spec_args = VarMap.map (subst_var env) spec_args in
-  let approxs = VarMap.map (fun id -> find_unknwon id env) spec_args in
+  let approxs = VarMap.map (fun id -> find id env) spec_args in
 
   let fv, r = VarMap.fold (fun id lam (fv,r) ->
       let lam, r = loop env r lam in
