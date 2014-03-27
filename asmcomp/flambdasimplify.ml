@@ -1173,6 +1173,8 @@ and ffuns_subst env ffuns off_sb =
         (* kept_params; *)
         params;
         (* label *)
+        (* keep code in sync with the closure *)
+        body = Flambdaiter.toplevel_substitution env.sb.sb_var ffun.body;
       }, env
     in
     let env, off_sb =
