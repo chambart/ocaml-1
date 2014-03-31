@@ -10,29 +10,10 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* open Ext_types *)
 open Lambda
-(* open Asttypes *)
 open Flambda
-(* open Misc *)
 
 let fvar id = Fvar(id,ExprId.create ())
-(* let foffset (lam, off_id) = *)
-(*   Foffset(lam, { off_id; off_unit = Compilenv.current_unit ()}, *)
-(*           None, ExprId.create ()) *)
-
-(* let add_unit_name name = *)
-(*   let unit = Compilenv.current_unit_name () in *)
-(*   unit ^ "^" ^ name *)
-
-(* let reid id = *)
-(*   if id.Ident.stamp >= 1000 (\* naze: trouver mieux *\) *)
-(*   then *)
-(*     { id with Ident.name = add_unit_name id.Ident.name } *)
-(*   else id *)
-
-(* let id_create name = *)
-(*   Ident.create (add_unit_name name) *)
 
 let new_var name =
   Variable.make ~compilation_unit:(Compilenv.current_unit ()) name
@@ -288,13 +269,8 @@ let rename_var var =
 let new_subst_id id env =
   if env.substitute
   then
-    (* allows to prepare a substitution to know the final name *)
-    (* let id' = try VarMap.find id env.sb.sb_var with Not_found -> Ident.rename id in *)
-
     let id' = rename_var id in
     let env = add_sb_var id id' env in
-    (* if id'.Ident.stamp = 1323 || id'.Ident.stamp = 1322 *)
-    (* then Format.printf "%a -> %a@." Variable.print id Variable.print id'; *)
     id', env
   else id, env
 
@@ -323,18 +299,6 @@ type offset_subst =
 
 let empty_offset_subst =
   { os_fv = ClosureVariableMap.empty; os_fun = ClosureFunctionMap.empty }
-
-(* let new_subst_off id off_unit env off_sb = *)
-(*   if env.substitute *)
-(*   then *)
-(*     let id' = Ident.rename id in *)
-(*     (\* Format.printf "rename off: %a -> %a@." Variable.print id Variable.print id'; *\) *)
-(*     let env = add_sb_var id id' env in *)
-(*     let off = { off_unit; off_id = id } in *)
-(*     let off' = { off_unit = Compilenv.current_unit (); off_id = id' } in *)
-(*     let off_sb = ClosureVariableMap.add off off' off_sb in *)
-(*     id', env, off_sb *)
-(*   else id, env, off_sb *)
 
 let new_subst_off id env off_sb =
   if env.substitute
@@ -1301,7 +1265,6 @@ and closure env r cl annot =
         else VarSet.empty in (* ffun.kept_params *)
 
 
-      (* let r = List.fold_left exit_scope r ffun.params in *) (* included in free_variables *)
       let r = VarSet.fold (fun id r -> exit_scope r id)
           ffun.free_variables r in
       VarMap.add fid { ffun with body } funs, used_params, r)
@@ -1629,56 +1592,6 @@ and inline env r clos lfunc fun_id func args dbg eid =
       clos.funs
   in
   loop_substitute env r (Flet(Not_assigned, clos_id, lfunc, body, ExprId.create ()))
-
-(* (\* *)
-(*   let args' = List.map2 (fun id arg -> id, Ident.rename id, arg) *)
-(*       func.params args in *)
-(*   let fv' = VarSet.fold (fun id l -> (id, Ident.rename id) :: l) *)
-(*       func.closure_params [] in *)
-(*   let arg_subst = List.fold_left *)
-(*       (fun sb (id,id',_) -> VarMap.add id id' sb) VarMap.empty args' in *)
-(*   let fv_subst = VarMap.of_list fv' in *)
-(*   let closure_fun_subst = (\* other functions from the closure *\) *)
-(*     let other_functions = *)
-(*       VarMap.filter (fun id _ -> not (Ident.same id fun_id.off_id)) *)
-(*         clos.funs in *)
-(*     VarMap.mapi (fun id _ -> Ident.rename id) other_functions *)
-(*   in *)
-(*   let subst = *)
-(*     VarMap.disjoint_union closure_fun_subst *)
-(*       (VarMap.disjoint_union arg_subst fv_subst) in *)
-(*   let body, substitution_context = *)
-(*     (\* Format.printf "subst inline body %a@." Offset.print fun_id; *\) *)
-(*     (\* Flambdasubst.substitute' subst env.substitution_context func.body *\) *)
-(*     Flambdasubst.substitute' subst Flambdasubst.empty_context func.body *)
-(*   in *)
-(*   let env = { env with substitution_context } in *)
-(*   let body = *)
-(*     body *)
-(*     |> List.fold_right (fun (_,id',arg) body -> *)
-(*         Flet(Not_assigned, id', arg, body, ExprId.create ~name:"inline arg" ())) *)
-(*       args' *)
-(*     |> List.fold_right (fun (id,id') body -> *)
-(*         Flet(Not_assigned, id', *)
-(*              Fenv_field ({ env = Fvar(clos_id, ExprId.create ()); *)
-(*                            env_fun_id = fun_id; *)
-(*                            env_var = { off_unit = clos.unit; *)
-(*                                        off_id = id } }, *)
-(*                          ExprId.create ()), *)
-(*              body, ExprId.create ())) *)
-(*       fv' *)
-(*     |> VarMap.fold (fun id id' body -> *)
-(*         Flet(Not_assigned, id', *)
-(*              Foffset (Fvar(clos_id, ExprId.create ()), *)
-(*                       {fun_id with off_id = id}, *)
-(*                       Some fun_id, *)
-(*                       ExprId.create ()), *)
-(*              body, ExprId.create ())) *)
-(*       closure_fun_subst *)
-(*   in *)
-(*   loop env r (Flet(Not_assigned, clos_id, lfunc, body, ExprId.create ())) *)
-(* *\) *)
-
 
 let simplify tree =
   let env = empty_env () in
