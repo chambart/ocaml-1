@@ -38,6 +38,7 @@ and value_offset =
 and value_closure =
   { ffunctions : ExprId.t function_declarations;
     bound_var : approx ClosureVariableMap.t;
+    kept_params : VarSet.t ClosureFunctionMap.t;
     fv_subst_renaming : variable_within_closure ClosureVariableMap.t;
     fun_subst_renaming : function_within_closure ClosureFunctionMap.t }
 
@@ -96,6 +97,7 @@ module Import = struct
             closure =
               { ffunctions = Compilenv.imported_closure closure_id;
                 bound_var;
+                kept_params = ClosureFunctionMap.empty; (* XXX TODO *)
                 fv_subst_renaming = ClosureVariableMap.empty;
                 fun_subst_renaming = ClosureFunctionMap.empty } }
       | Value_unoffseted_closure { closure_id; bound_var } ->
@@ -103,6 +105,7 @@ module Import = struct
         value_unoffseted_closure
           { ffunctions = Compilenv.imported_closure closure_id;
             bound_var;
+            kept_params = ClosureFunctionMap.empty; (* XXX TODO *)
             fv_subst_renaming = ClosureVariableMap.empty;
             fun_subst_renaming = ClosureFunctionMap.empty }
       | _ ->
@@ -1203,6 +1206,7 @@ and closure env r cl annot =
       bound_var = VarMap.fold (fun id (_,desc) map ->
           ClosureVariableMap.add (Closure_variable.create id) desc map)
           fv ClosureVariableMap.empty;
+      kept_params = ClosureFunctionMap.empty; (* XXX TODO *)
       fv_subst_renaming = off_sb.os_fv;
       fun_subst_renaming = off_sb.os_fun } in
   let closure_env = VarMap.fold
@@ -1210,7 +1214,8 @@ and closure env r cl annot =
           (value_closure { fun_id = (Closure_function.create id);
                            closure = internal_closure }) env)
       ffuns.funs env in
-  let funs, used_params, r = VarMap.fold (fun fid ffun (funs,used_params,r) ->
+  let funs, kept_params, used_params, r = VarMap.fold (fun fid ffun
+                                           (funs,kept_params_map,used_params,r) ->
       (* Format.printf "ffun %a@." Variable.print fid; *)
       let closure_env = VarMap.fold
           (fun id (_,desc) env ->
@@ -1249,7 +1254,7 @@ and closure env r cl annot =
           else acc) used_params ffun.params in
 
       (* XXXXXXXXXXXXXXxx not reused yet *)
-      let _kept_params =
+      let kept_params =
         if (VarMap.cardinal ffuns.funs = 1) &&
            (* multiply recursive functions are not handled yet *)
            VarSet.mem fid recursive_funs &&
@@ -1264,11 +1269,18 @@ and closure env r cl annot =
         end
         else VarSet.empty in (* ffun.kept_params *)
 
+      (* if not (VarSet.is_empty kept_params) *)
+      (* then Format.printf "kept params %a %a@." *)
+      (*     Variable.print fid VarSet.print kept_params; *)
+
+      let kept_params_map =
+        ClosureFunctionMap.add
+          (Closure_function.create fid) kept_params kept_params_map in
 
       let r = VarSet.fold (fun id r -> exit_scope r id)
           ffun.free_variables r in
-      VarMap.add fid { ffun with body } funs, used_params, r)
-      ffuns.funs (VarMap.empty, VarSet.empty, r) in
+      VarMap.add fid { ffun with body } funs, kept_params_map, used_params, r)
+      ffuns.funs (VarMap.empty, ClosureFunctionMap.empty, VarSet.empty, r) in
 
   let spec_args = VarMap.filter
       (fun id _ -> VarSet.mem id used_params)
@@ -1278,7 +1290,7 @@ and closure env r cl annot =
       (* Format.printf "use %a (for %a)@." Variable.print v Variable.print id'; *)
       use_var acc v) spec_args r in
   let ffuns = { ffuns with funs } in
-  let closure = { internal_closure with ffunctions = ffuns } in
+  let closure = { internal_closure with ffunctions = ffuns; kept_params } in
   let r = VarMap.fold (fun id _ r -> exit_scope r id) ffuns.funs r in
   Fclosure ({cl_fun = ffuns; cl_free_var = VarMap.map fst fv;
              cl_specialised_arg = spec_args}, annot),
@@ -1451,34 +1463,50 @@ and direct_apply env r ~local clos funct fun_id func fapprox closure (args,appro
         (* let () = Format.printf "current functions: %a@ %a@." *)
         (*     FunId.print clos.ident *)
         (*     FunSet.print env.current_functions in *)
-      if false
+        let kept_params =
+          try ClosureFunctionMap.find fun_id closure.kept_params
+          with Not_found -> VarSet.empty
+        in
+
+        (* let () = *)
+        (*   try *)
+        (*     let kp = ClosureFunctionMap.find fun_id closure.kept_params in *)
+        (*     Format.printf "use site kept params %a %a@." *)
+        (*       Closure_function.print fun_id VarSet.print kp *)
+        (*   with Not_found -> *)
+        (*     Format.printf "no available kept params %a@." *)
+        (*       Closure_function.print fun_id *)
+        (* in *)
+
+      (* if false *)
 (*      XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
         need kept_param
-        recursive && not (FunSet.mem clos.ident env.current_functions) &&
-        not (VarSet.is_empty func.kept_params) &&
-        ClosureVariableMap.is_empty closure.bound_var (* closed *)
 *)
-      then assert false
-(*
-        begin
+      if
+        recursive && not (FunSet.mem clos.ident env.current_functions)
+        && not (VarSet.is_empty kept_params)
+        && ClosureVariableMap.is_empty closure.bound_var (* closed *)
+
+      then begin
         let f id approx acc =
           match approx.descr with
           | Value_unknown
           | Value_bottom -> acc
           | _ ->
-              if VarSet.mem id func.kept_params
+              if VarSet.mem id kept_params
               then VarMap.add id approx acc
               else acc in
         let worth = List.fold_right2 f func.params approxs VarMap.empty in
+
         if not (VarMap.is_empty worth) && not local
         then
           duplicate_apply env r funct clos fun_id func fapprox closure
-            (args,approxs) dbg
+            (args,approxs) kept_params ap_dbg
         else
-          Fapply (funct, args, Some fun_id, dbg, eid),
+          Fapply ({ap_function = funct; ap_arg = args;
+                   ap_kind = Direct fun_id; ap_dbg}, eid),
           ret r value_unknown
       end
-*)
       else
         Fapply ({ap_function = funct; ap_arg = args;
                  ap_kind = Direct fun_id; ap_dbg}, eid),
@@ -1486,65 +1514,73 @@ and direct_apply env r ~local clos funct fun_id func fapprox closure (args,appro
 
 (* (\* Inlining for recursive functions: duplicates the function *)
 (*    declaration and specialise it *\) *)
-(* and duplicate_apply env r funct clos fun_id func fapprox closure_approx *)
-(*     (args,approxs) dbg = *)
-(*   let env = inlining_level_up env in *)
-(*   (\* Format.printf "duplicate@."; *\) *)
-(*   let clos_id = id_create "dup_closure" in *)
-(*   let make_fv { off_id = id } _ fv = *)
-(*     (\* Format.printf "fv clos:%a fun:%a off:%a @." *\) *)
-(*     (\*   Variable.print clos_id Offset.print fun_id Offset.print *\) *)
-(*     (\*   { off_unit = clos.unit; *\) *)
-(*     (\*     off_id = id }; *\) *)
-(*     VarMap.add id *)
-(*       (Fenv_field ({ env = Fvar(clos_id, ExprId.create ()); *)
-(*                      env_fun_id = fun_id; *)
-(*                      env_var = { off_unit = clos.unit; *)
-(*                                  off_id = id } }, *)
-(*                    ExprId.create ())) fv *)
-(*   in *)
-(*   let fv = OffsetMap.fold make_fv closure_approx.bound_var VarMap.empty in *)
+and duplicate_apply env r funct clos fun_id func fapprox closure_approx
+    (args,approxs) kept_params ap_dbg =
+  let env = inlining_level_up env in
+  (* Format.printf "duplicate@."; *)
+  let clos_id = new_var "dup_closure" in
+  let make_fv var fv =
+    (* Format.printf "fv clos:%a fun:%a off:%a @." *)
+    (*   Variable.print clos_id Offset.print fun_id Offset.print *)
+    (*   { off_unit = clos.unit; *)
+    (*     off_id = id }; *)
+    VarMap.add var
+      (Fvariable_in_closure
+         ({ vc_closure = Fvar(clos_id, ExprId.create ());
+            vc_fun = fun_id;
+            vc_var = Closure_variable.create var },
+          ExprId.create ())) fv
+  in
 
-(*   let env = add_approx clos_id fapprox env in *)
+  let variables_in_closure =
+    variables_bound_by_the_closure fun_id clos in
 
-(*   (\* TODO: remove specialisation from here and factorise with the other case *\) *)
+  let fv = VarSet.fold make_fv variables_in_closure VarMap.empty in
 
-(*   let (spec_args, args, env_func) = *)
-(*     let f (id,arg) approx (spec_args,args,env_func) = *)
-(*       let new_id = Ident.rename id in *)
-(*       (\* Format.printf "rename %a -> %a@." Variable.print id Variable.print new_id; *\) *)
-(*       let args = (new_id, arg) :: args in *)
-(*       let env_func = add_approx new_id approx env_func in *)
-(*       let spec_args = *)
-(*         match approx.descr with *)
-(*         | Value_unknown *)
-(*         | Value_bottom -> spec_args *)
-(*         | _ -> *)
-(*             if VarSet.mem id func.kept_params *)
-(*             then VarMap.add id new_id spec_args *)
-(*             else spec_args in *)
-(*       spec_args, args, env_func *)
-(*     in *)
-(*     let params = List.combine func.params args in *)
-(*     List.fold_right2 f params approxs (VarMap.empty,[],env) in *)
+  let env = add_approx clos_id fapprox env in
 
-(*   let args_exprs = List.map (fun (id,_) -> Fvar(id,ExprId.create ())) args in *)
+  (* TODO: remove specialisation from here and factorise with the other case *)
 
-(*   let clos_expr = (Fclosure(clos, fv, spec_args, ExprId.create ())) in *)
+  let (spec_args, args, env_func) =
+    let f (id,arg) approx (spec_args,args,env_func) =
+      let new_id = rename_var id in
+      (* Format.printf "rename %a -> %a@." Variable.print id Variable.print new_id; *)
+      let args = (new_id, arg) :: args in
+      let env_func = add_approx new_id approx env_func in
+      let spec_args =
+        match approx.descr with
+        | Value_unknown
+        | Value_bottom -> spec_args
+        | _ ->
+            if VarSet.mem id kept_params
+            then VarMap.add id new_id spec_args
+            else spec_args in
+      spec_args, args, env_func
+    in
+    let params = List.combine func.params args in
+    List.fold_right2 f params approxs (VarMap.empty,[],env) in
 
-(*   let r = exit_scope r clos_id in *)
-(*   let expr = Foffset(clos_expr, fun_id, *)
-(*                      None, ExprId.create ()) in *)
-(*   let expr = Fapply (expr, args_exprs, Some fun_id, dbg, ExprId.create ()) in *)
-(*   let expr = List.fold_left *)
-(*       (fun expr (id,arg) -> *)
-(*          (\* Format.printf "flet %a -> %a@." Variable.print id Printflambda.flambda arg; *\) *)
-(*          Flet(Not_assigned, id, arg, expr, ExprId.create ())) *)
-(*       expr args in *)
-(*   let expr = Flet(Not_assigned, clos_id, funct, expr, ExprId.create ()) in *)
-(*   let r = List.fold_left (fun r (id,_) -> exit_scope r id) r args in *)
-(*   loop_substitute env r expr *)
-(*   (\* expr, r *\) *)
+  let args_exprs = List.map (fun (id,_) -> Fvar(id,ExprId.create ())) args in
+
+  let clos_expr = (Fclosure({ cl_fun = clos;
+                              cl_free_var = fv;
+                              cl_specialised_arg = spec_args}, ExprId.create ())) in
+
+  let r = exit_scope r clos_id in
+  let expr = Ffunction({fu_closure = clos_expr; fu_fun = fun_id;
+                        fu_relative_to = None}, ExprId.create ()) in
+  let expr = Fapply ({ ap_function = expr; ap_arg = args_exprs;
+                       ap_kind = Direct fun_id; ap_dbg },
+                     ExprId.create ()) in
+  let expr = List.fold_left
+      (fun expr (id,arg) ->
+         (* Format.printf "flet %a -> %a@." Variable.print id Printflambda.flambda arg; *)
+         Flet(Not_assigned, id, arg, expr, ExprId.create ()))
+      expr args in
+  let expr = Flet(Not_assigned, clos_id, funct, expr, ExprId.create ()) in
+  let r = List.fold_left (fun r (id,_) -> exit_scope r id) r args in
+  loop_substitute env r expr
+  (* expr, r *)
 
 (* Duplicates the body of the called function *)
 and inline env r clos lfunc fun_id func args dbg eid =
