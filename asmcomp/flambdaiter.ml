@@ -218,3 +218,26 @@ let map_general ~toplevel f tree =
 
 let map f tree = map_general ~toplevel:false f tree
 let map_toplevel f tree = map_general ~toplevel:true f tree
+
+let free_variables tree =
+  let free = ref VarSet.empty in
+  let bound = ref VarSet.empty in
+  let add id =
+    if not (VarSet.mem id !free) then free := VarSet.add id !free in
+  let aux = function
+    | Fvar (id,_) -> add id
+    | Fassign (id,_,_) -> add id
+    | Fclosure ({cl_specialised_arg},_) ->
+        VarMap.iter (fun _ id -> add id) cl_specialised_arg
+    | Ftrywith(_,id,_,_)
+    | Ffor(id, _, _, _, _, _)
+    | Flet ( _, id, _, _,_) ->
+        bound := VarSet.add id !bound
+    | Fletrec (l, _,_) ->
+        List.iter (fun (id,_) -> bound := VarSet.add id !bound) l
+    | Fcatch (_,ids,_,_,_) ->
+        List.iter (fun id -> bound := VarSet.add id !bound) ids
+    | _ -> ()
+  in
+  iter_toplevel aux tree;
+  VarSet.diff !free !bound

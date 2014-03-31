@@ -27,3 +27,5 @@ val map : ('a Flambda.flambda -> 'a Flambda.flambda) ->
 
 val map_toplevel : ('a Flambda.flambda -> 'a Flambda.flambda) ->
   'a Flambda.flambda -> 'a Flambda.flambda
+
+val free_variables : 'a Flambda.flambda -> Flambda.VarSet.t
