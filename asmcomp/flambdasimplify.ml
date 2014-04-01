@@ -137,7 +137,9 @@ module Import = struct
     | Value_symbol sym -> value_symbol sym
 
   let import_symbol sym : t =
-    if Ident.is_predef_exn (Flambda.ident_of_compilation_unit sym.sym_unit)
+    if Compilation_unit.equal
+        predefined_exception_compilation_unit
+        sym.sym_unit
     then
       value_unknown
     else
