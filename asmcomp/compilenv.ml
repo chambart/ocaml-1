@@ -190,14 +190,14 @@ let symbol_for_global id =
   end
 
 let unit_for_global id =
-  let sym_label = Flambda.linkage_name (symbol_for_global id) in
-  Flambda.Compilation_unit.create id sym_label
+  let sym_label = Symbol.linkage_name (symbol_for_global id) in
+  Symbol.Compilation_unit.create id sym_label
 
 let symbol_for_global' id =
   let open Symbol in
   let sym_label = linkage_name (symbol_for_global id) in
   if Ident.is_predef_exn id then
-    { sym_unit = Flambda.predefined_exception_compilation_unit;
+    { sym_unit = predefined_exception_compilation_unit;
       sym_label }
   else
     { sym_unit = unit_for_global id;
@@ -262,12 +262,16 @@ let save_unit_info filename =
   current_unit.ui_imports_cmi <- Env.imported_units();
   write_unit_info current_unit filename
 
+let current_unit_linkage_name () =
+  Symbol.linkage_name
+    (make_symbol ~unitname:current_unit.ui_symbol None)
+
 let current_unit () =
   Symbol.Compilation_unit.create (current_unit_id ())
     (current_unit_linkage_name ())
 
 let current_unit_symbol () =
-  { Symbol.sym_unit = Symbol.Compilation_unit.create (current_unit_id ());
+  { Symbol.sym_unit = current_unit ();
     sym_label = current_unit_linkage_name () }
 
 let const_label = ref 0

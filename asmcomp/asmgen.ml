@@ -106,7 +106,10 @@ let compile_genfuns ppf f =
 
 let test ppf lam =
   let compilation_unit = Compilenv.current_unit () in
-  let flam = Flambdagen.intro ~compilation_unit lam in
+  let flam = Flambdagen.intro ~compilation_unit
+      ~current_unit_id:(Compilenv.current_unit_id ())
+      ~symbol_for_global':Compilenv.symbol_for_global'
+      lam in
   if !Clflags.dump_flambda
   then Format.fprintf ppf "%a@." Printflambda.flambda flam;
   (try Flambdacheck.check ~current_compilation_unit:compilation_unit flam
