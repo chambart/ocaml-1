@@ -10,14 +10,25 @@
 (*                                                                        *)
 (**************************************************************************)
 
-type constant_result = {
-  not_constant_id : Flambda.VarSet.t;
-  not_constant_closure : Flambda.FunSet.t;
-}
+(* Introduction of closures *)
 
-val not_constants : for_clambda:bool -> 'a Flambda.flambda -> constant_result
-(** [not_constant ~for_clambda expr]
-    If for_clambda is true, are marked constant only expressions that can
-    effectively be compiled to constants by Clambdagen.
-    When for_clambda is false, field access to a constant are not considered
-    constant *)
+(* This pass bind free variables of functions in a explicitely created
+   closure.
+
+   Also done here:
+   * constant blocks are converted to applications of the makeblock
+     primitive
+   * Levent nodes are removed and their informations is moved to
+     raise, function and method calls
+   * field(getglobal self) and set_field(getglobal self) are converted
+     to the Pgetglobalfield and Psetglobalfield primitives
+   * tupled function converted to a stub and a curried function
+   * apply and revapply primitives are removed
+ *)
+
+val intro:
+  ?for_bytecode:bool ->
+  compilation_unit:Symbol.compilation_unit ->
+  current_unit_id:unit ->
+  symbol_for_global':unit ->
+  Lambda.lambda -> Symbol.ExprId.t Flambda.flambda

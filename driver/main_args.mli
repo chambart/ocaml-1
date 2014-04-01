@@ -69,6 +69,7 @@ module type Bytecomp_options =
     val _dtypedtree : unit -> unit
     val _drawlambda : unit -> unit
     val _dlambda : unit -> unit
+    val _dflambda : unit -> unit
     val _dinstr : unit -> unit
 
     val anonymous : string -> unit
@@ -104,6 +105,7 @@ module type Bytetop_options = sig
   val _dtypedtree : unit -> unit
   val _drawlambda : unit -> unit
   val _dlambda : unit -> unit
+  val _dflambda : unit -> unit
   val _dinstr : unit -> unit
 
   val anonymous : string -> unit

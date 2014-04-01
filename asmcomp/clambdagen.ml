@@ -11,6 +11,7 @@
 (***********************************************************************)
 
 open Misc
+open Symbol
 open Lambda
 open Clambda
 open Flambda
@@ -134,7 +135,7 @@ module type Param2 = sig
   val fv_offset_table : int ClosureVariableMap.t
   val closures : t Flambda.function_declarations ClosureFunctionMap.t
   val constant_closures : FunSet.t
-  val functions : unit Flambda.function_declarations Flambda.FunMap.t
+  val functions : unit Flambda.function_declarations FunMap.t
 end
 
 type const_lbl =
@@ -348,6 +349,8 @@ module Conv(P:Param2) = struct
         (* shoudl'nt be executable, maybe build something else *)
         Uprim(Praise, [Uconst (Uconst_pointer 0, None)], Debuginfo.none)
 
+    | Fevent _ -> assert false
+
   and conv_switch env cases num_keys default =
     let num_keys =
       if Ext_types.IntSet.cardinal num_keys = 0
@@ -410,24 +413,31 @@ module Conv(P:Param2) = struct
 
        will be represented in memory as:
 
-         [ closure header; fun_a; 1; infix header; fun caml_curry_2; 2; fun_b; v1; v2 ]
+         [ closure header; fun_a;
+           1; infix header; fun caml_curry_2;
+           2; fun_b; v1; v2 ]
 
-       fun_a and fun_b will take an additional parameter 'env' to access their closure.
-       It will be shifted such that in the body of a function the env parameter points
-       to its code pointer. i.e. in fun_b it will be shifted by 3 words.
+       fun_a and fun_b will take an additional parameter 'env' to
+       access their closure.  It will be shifted such that in the body
+       of a function the env parameter points to its code
+       pointer. i.e. in fun_b it will be shifted by 3 words.
 
-       Hence accessing to v1 in the body of fun_a is accessing to the 6th field of 'env'
-       and in the body of fun_b it is the 1st field.
+       Hence accessing to v1 in the body of fun_a is accessing to the
+       6th field of 'env' and in the body of fun_b it is the 1st
+       field.
 
-       If the closure can be compiled to a constant, the env parameter is not always passed
-       to the function (for direct calls). Inside the body of the function, we acces a constant
-       globaly defined: there are label camlModule__id created to access the functions.
-       fun_a can be accessed by 'camlModule__id' and fun_b by 'camlModule__id_3'
-       (3 is the offset of fun_b in the closure).
+       If the closure can be compiled to a constant, the env parameter
+       is not always passed to the function (for direct calls). Inside
+       the body of the function, we acces a constant globaly defined:
+       there are label camlModule__id created to access the functions.
+       fun_a can be accessed by 'camlModule__id' and fun_b by
+       'camlModule__id_3' (3 is the offset of fun_b in the closure).
 
-       Inside a constant closure, there will be no access to the closure for the free variables,
-       but if the function is inlined, some variables can be retrieved from the closure outside
-       of its body, so constant closure still contains their free variables. *)
+       Inside a constant closure, there will be no access to the
+       closure for the free variables, but if the function is inlined,
+       some variables can be retrieved from the closure outside of its
+       body, so constant closure still contains their free
+       variables. *)
 
     let funct = VarMap.bindings functs.funs in
     let fv = VarMap.bindings fv in

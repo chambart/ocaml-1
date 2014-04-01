@@ -25,14 +25,14 @@ val current_unit_infos: unit -> unit_infos
 
 val current_unit_name: unit -> string
         (* Return the name of the unit being compiled *)
-val current_unit_linkage_name: unit -> Flambda.linkage_name
+val current_unit_linkage_name: unit -> Symbol.linkage_name
         (* Return the linkage_name of the unit being compiled *)
 val current_unit_id: unit -> Ident.t
         (* Return the id of the unit being compiled *)
 
-val current_unit: unit -> Flambda.compilation_unit
+val current_unit: unit -> Symbol.compilation_unit
 
-val current_unit_symbol: unit -> Flambda.symbol
+val current_unit_symbol: unit -> Symbol.symbol
 
 val make_symbol: ?unitname:string -> string option -> string
         (* [make_symbol ~unitname:u None] returns the asm symbol that
@@ -45,7 +45,7 @@ val unit_for_global: Ident.t -> Flambda.compilation_unit
 
 val symbol_for_global: Ident.t -> string
         (* Return the asm symbol that refers to the given global identifier *)
-val symbol_for_global': Ident.t -> Flambda.symbol
+val symbol_for_global': Ident.t -> Symbol.symbol
 
 val global_approx: Ident.t -> Clambda.value_approximation
         (* Return the approximation for the given global identifier *)
@@ -58,7 +58,7 @@ val set_export_info: Flambdaexport.exported -> unit
         (* Record the informations of the unit being compiled *)
 val approx_env: unit -> Flambdaexport.exported
         (* Returns all the information loaded from extenal compilation units *)
-val approx_for_global: Flambda.compilation_unit -> Flambdaexport.exported
+val approx_for_global: Symbol.compilation_unit -> Flambdaexport.exported
         (* Loads the exported information declaring the compilation_unit *)
 
 val need_curry_fun: int -> unit
@@ -68,11 +68,11 @@ val need_send_fun: int -> unit
            message sending) function with the given arity *)
 
 val new_const_symbol : unit -> string
-val new_const_symbol' : unit -> Flambda.symbol
-val closure_symbol : Flambda.function_within_closure -> Flambda.symbol
+val new_const_symbol' : unit -> Symbol.symbol
+val closure_symbol : Symbol.function_within_closure -> Symbol.symbol
         (* Symbol of a function if the function is
            closed (statically allocated) *)
-val function_label : Flambda.function_within_closure -> string
+val function_label : Symbol.function_within_closure -> string
         (* linkage name of the code of a function *)
 
 val new_const_label : unit -> int

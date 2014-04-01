@@ -16,7 +16,9 @@
 
 open Flambda
 
-val convert : 'a flambda ->
+val convert :
+  compilation_unit:Symbol.compilation_unit ->
+  'a flambda ->
   unit flambda *
-  unit flambda SymbolMap.t *
+  unit flambda Symbol.SymbolMap.t *
   Flambdaexport.exported

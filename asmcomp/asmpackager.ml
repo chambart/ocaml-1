@@ -126,9 +126,9 @@ let build_package_cmx members cmxfile =
     List.fold_left
       (fun set info ->
          let unit_id = Compilenv.unit_id_from_name info.ui_name in
-         Flambda.CompilationUnitSet.add
+         Symbol.CompilationUnitSet.add
            (Compilenv.unit_for_global unit_id) set)
-      Flambda.CompilationUnitSet.empty units in
+      Symbol.CompilationUnitSet.empty units in
   let units = List.map (fun info ->
       { info with
         ui_export_info =

@@ -10,6 +10,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
+open Symbol
 open Flambda
 
 let apply_on_subexpressions f = function
@@ -20,7 +21,8 @@ let apply_on_subexpressions f = function
 
   | Fassign (_,f1,_)
   | Ffunction({fu_closure = f1},_)
-  | Fvariable_in_closure({vc_closure = f1},_) ->
+  | Fvariable_in_closure({vc_closure = f1},_)
+  | Fevent (f1,_,_) ->
     f f1
 
   | Flet ( _, _, f1, f2,_)
@@ -66,7 +68,8 @@ let iter_general ~toplevel f t =
 
     | Fassign (_,f1,_)
     | Ffunction({fu_closure = f1},_)
-    | Fvariable_in_closure({vc_closure = f1},_) ->
+    | Fvariable_in_closure({vc_closure = f1},_)
+    | Fevent (f1,_,_)  ->
       aux f1
 
     | Flet ( _, _, f1, f2,_)
@@ -121,7 +124,7 @@ let iter_on_closures f t =
     | Fvariable_in_closure _ | Flet _ | Fletrec _
     | Fprim _ | Fswitch _ | Fstaticfail _ | Fcatch _
     | Ftrywith _ | Fifthenelse _ | Fsequence _
-    | Fwhile _ | Ffor _ | Fsend _ | Funreachable _
+    | Fwhile _ | Ffor _ | Fsend _ | Fevent _ | Funreachable _
       -> ()
   in
   iter aux t
@@ -210,6 +213,10 @@ let map_general ~toplevel f tree =
               fs_consts = List.map (fun (i,v) -> i, aux v) sw.fs_consts;
               fs_blocks = List.map (fun (i,v) -> i, aux v) sw.fs_blocks; } in
           Fswitch(arg, sw, annot)
+
+      | Fevent (lam, ev, annot) ->
+          let lam = aux lam in
+          Fevent (lam, ev, annot)
       | Funreachable _ -> tree
     in
     f exp

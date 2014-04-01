@@ -11,6 +11,7 @@
 (***********************************************************************)
 
 open Ext_types
+open Symbol
 open Flambda
 
 module Innerid = Id(struct end)

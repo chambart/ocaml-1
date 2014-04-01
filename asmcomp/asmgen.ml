@@ -114,14 +114,14 @@ let test ppf lam =
      Format.fprintf ppf "%a@."
        Printflambda.flambda flam;
      raise e);
-  let fl_sym = Flambdasym.convert flam in
+  let fl_sym = Flambdasym.convert ~compilation_unit flam in
   let fl,const,_ = fl_sym in
   if !Clflags.dump_flambda
   then begin
     Format.fprintf ppf "%a@." Printflambda.flambda fl;
-    Flambda.SymbolMap.iter (fun sym lam ->
+    Symbol.SymbolMap.iter (fun sym lam ->
         Format.fprintf ppf "sym: %a@ %a@."
-          Flambda.Symbol.print sym
+          Symbol.Symbol.print sym
           Printflambda.flambda lam)
       const
   end;
@@ -137,7 +137,6 @@ let compile_implementation ?toplevel prefixname ppf (size, lam) =
     Emitaux.output_channel := oc;
     Emit.begin_assembly();
     test ppf lam
-    (* Closure.intro size lam *)
     ++ clambda_dump_if ppf
     ++ Cmmgen.compunit size
     ++ List.iter (compile_phrase ppf) ++ (fun () -> ());

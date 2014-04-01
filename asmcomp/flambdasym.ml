@@ -25,6 +25,7 @@ Then the tables needed to build the Flambdaexport.exported type are build.
 *)
 
 open Misc
+open Symbol
 open Flambda
 open Flambdaexport
 
@@ -211,7 +212,7 @@ module Conv(P:Param1) = struct
     try VarMap.find id env.approx with Not_found -> Value_unknown
 
   let extern_symbol_descr sym =
-    if Ident.is_predef_exn (Flambda.ident_of_compilation_unit sym.sym_unit)
+    if Ident.is_predef_exn (ident_of_compilation_unit sym.sym_unit)
     then None
     else
       let export = Compilenv.approx_for_global sym.sym_unit in
@@ -586,6 +587,8 @@ module Conv(P:Param1) = struct
         Funreachable (),
         Value_unknown
 
+    | Fevent _ -> assert false
+
   and conv_closure env functs _param_approxs fv =
     let closed = FunSet.mem functs.ident P.constant_closures in
 
@@ -831,8 +834,8 @@ module Prepare(P:Param2) = struct
 
 end
 
-let convert (type a) (expr:a Flambda.flambda) =
-  let not_constants = Flambdaconstants.not_constants ~for_clambda:true expr in
+let convert (type a) ~compilation_unit (expr:a Flambda.flambda) =
+  let not_constants = Flambdaconstants.not_constants ~compilation_unit ~for_clambda:true expr in
   let constant_closures = constant_closures not_constants expr in
   let module P1 = struct
     type t = a

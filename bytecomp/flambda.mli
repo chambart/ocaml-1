@@ -10,6 +10,9 @@
 (*                                                                     *)
 (***********************************************************************)
 
+open Ext_types
+open Symbol
+
 (** A variant of lambda code with explicit closures, where every dependency
     is explicit
 
@@ -24,120 +27,6 @@
     * no structured constants (represented as prim(makeblock) )
 *)
 
-open Ext_types
-
-type variable
-
-type linkage_name
-
-type compilation_unit
-
-val predefined_exception_compilation_unit: compilation_unit
-
-type symbol = { sym_unit : compilation_unit; sym_label : linkage_name }
-(** A symbol is an identifier of a constant provided by another
-    compilation unit or of top level module.
-    [sym_unit] is the compilation unit containing the value.
-    [sym_lablel] is the linking name of the variable.
-    The label must be globaly unique: two compilation units linked
-    in the same program must not share labels *)
-
-type function_within_closure
-type variable_within_closure
-
-type static_exception
-
-val linkage_name : string -> linkage_name
-
-module Variable : sig
-  include PrintableHashOrdered with type t = variable
-  val create : compilation_unit:compilation_unit -> Ident.t -> t
-  val make : compilation_unit:compilation_unit -> string -> t
-  val compilation_unit : t -> compilation_unit
-  val rename : compilation_unit:compilation_unit -> t -> t
-  val make_ident : t -> Ident.t (* to go back to clambda *)
-end
-
-module Closure_function : sig
-  include PrintableHashOrdered with type t = function_within_closure
-  val create : variable -> t
-  val compilation_unit : t -> compilation_unit
-end
-module Closure_variable : sig
-  include PrintableHashOrdered with type t = variable_within_closure
-  val create : variable -> t
-  val compilation_unit : t -> compilation_unit
-end
-
-module Symbol : PrintableHashOrdered with type t = symbol
-module Compilation_unit : sig
-  include PrintableHashOrdered with type t = compilation_unit
-  val create : Ident.t -> linkage_name -> t
-end
-
-module ExprId : Id
-module FunId : UnitId with module Compilation_unit := Compilation_unit
-
-module Static_exception : sig
-  include PrintableHashOrdered with type t = static_exception
-  val of_int : int -> static_exception
-  val to_int : static_exception -> int
-  val create : unit -> static_exception
-end
-
-module VarSet : sig
-  include ExtSet with module M := Variable
-  val of_ident_set : compilation_unit:compilation_unit -> Lambda.IdentSet.t -> t
-end
-module VarMap : ExtMap with module M := Variable
-module VarTbl : ExtHashtbl with module M := Variable
-
-module SymbolSet : ExtSet with module M := Symbol
-module SymbolMap : ExtMap with module M := Symbol
-module SymbolTbl : ExtHashtbl with module M := Symbol
-
-module ExprSet : ExtSet with module M := ExprId
-module ExprMap : ExtMap with module M := ExprId
-module ExprTbl : ExtHashtbl with module M := ExprId
-
-module FunSet : ExtSet with module M := FunId
-module FunMap : ExtMap with module M := FunId
-module FunTbl : ExtHashtbl with module M := FunId
-
-module ClosureFunctionSet : ExtSet with module M := Closure_function
-module ClosureFunctionMap : ExtMap with module M := Closure_function
-module ClosureFunctionTbl : ExtHashtbl with module M := Closure_function
-
-module ClosureVariableSet : ExtSet with module M := Closure_variable
-module ClosureVariableMap : ExtMap with module M := Closure_variable
-module ClosureVariableTbl : ExtHashtbl with module M := Closure_variable
-
-module StaticExceptionSet : ExtSet with module M := Static_exception
-module StaticExceptionMap : ExtMap with module M := Static_exception
-module StaticExceptionTbl : ExtHashtbl with module M := Static_exception
-
-module CompilationUnitSet : ExtSet with module M := Compilation_unit
-module CompilationUnitMap : ExtMap with module M := Compilation_unit
-module CompilationUnitTbl : ExtHashtbl with module M := Compilation_unit
-
-module IdentMap : ExtMap with module M := Ident
-
-type let_kind =
-  | Not_assigned
-  | Assigned
-
-type call_kind =
-  | Indirect
-  | Direct of function_within_closure
-
-(* A data is attached to each node. It is often used to uniquely
-   identify an expression *)
-type 'a flambda =
-    Fsymbol of symbol * 'a
-  | Fvar of variable * 'a
-  | Fconst of const * 'a
-  | Fapply of 'a apply * 'a
-  | Fclosure of 'a closure * 'a
   (** There are 2 kind of closures: specified and unspecified ones.
       A closure is first build as unspecified using the Fclosure constructor.
       It represents a block containing code pointers and values (the free
@@ -170,6 +59,23 @@ type 'a flambda =
       g will use the closure:
       {[ Ffunction { fu_closure = f; fu_fun = id_g; fu_relative_to = Some id_f } ]}
   *)
+
+type let_kind =
+  | Not_assigned
+  | Assigned
+
+type call_kind =
+  | Indirect
+  | Direct of function_within_closure
+
+(* A data is attached to each node. It is often used to uniquely
+   identify an expression *)
+type 'a flambda =
+    Fsymbol of symbol * 'a
+  | Fvar of variable * 'a
+  | Fconst of const * 'a
+  | Fapply of 'a apply * 'a
+  | Fclosure of 'a closure * 'a
   | Ffunction of 'a funct * 'a
   | Fvariable_in_closure of 'a variable_in_closure * 'a
   | Flet of let_kind * variable * 'a flambda * 'a flambda * 'a
@@ -187,6 +93,7 @@ type 'a flambda =
   | Fassign of variable * 'a flambda * 'a
   | Fsend of Lambda.meth_kind * 'a flambda * 'a flambda * 'a flambda list *
              Debuginfo.t * 'a
+  | Fevent of 'a flambda * Lambda.lambda_event * 'a
   | Funreachable of 'a
   (** Represent a code that has been proved to be unreachable *)
 
@@ -284,15 +191,3 @@ val data_at_toplevel_node : 'a flambda -> 'a
 val description_of_toplevel_node : 'a flambda -> string
 
 val recursive_functions : 'a function_declarations -> VarSet.t
-
-(**/**)
-
-module Var_connected_components :
-  Sort_connected_components.S with module Id := Variable
-
-(* To be used only in Compilenv. This is declared here to avoid circular dependencies *)
-
-val string_of_linkage_name : linkage_name -> string
-val ident_of_compilation_unit : compilation_unit -> Ident.t
-val linkage_name_of_compilation_unit : compilation_unit -> linkage_name
-val ident_of_function_within_closure : function_within_closure -> Ident.t

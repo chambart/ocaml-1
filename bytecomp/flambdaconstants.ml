@@ -49,6 +49,7 @@
 *)
 
 open Ext_types
+open Symbol
 open Flambda
 
 type constant_result = {
@@ -60,12 +61,14 @@ module type Param = sig
   type t
   val expr : t Flambda.flambda
   val for_clambda : bool
+  val compilation_unit : compilation_unit
 end
 
 module NotConstants(P:Param) = struct
 
 
   let for_clambda = P.for_clambda
+  let compilation_unit = P.compilation_unit
 
   type dep =
     | Closure of FunId.t
@@ -215,7 +218,7 @@ module NotConstants(P:Param) = struct
            then a.(0) cannot be compiled. There must be a specialisation
            phase after that eliminating the then branch and a dead code
            elimination eliminating potential reference to a.(0) *)
-      if id.Ident.name = Compilenv.current_unit_name ()
+      if Ident.same id (ident_of_compilation_unit compilation_unit)
       then register_implication ~in_nc:(Global i) ~implies_in_nc:curr
       else mark_curr curr
 
@@ -286,6 +289,10 @@ module NotConstants(P:Param) = struct
       mark_loop [] f2;
       List.iter (mark_loop []) fl
 
+    | Fevent (f1, _, _) ->
+      mark_curr curr;
+      mark_loop [] f1;
+
     | Funreachable _ ->
       mark_curr curr
 
@@ -325,11 +332,13 @@ module NotConstants(P:Param) = struct
 
 end
 
-let not_constants (type a) ~for_clambda (expr:a Flambda.flambda) =
+let not_constants (type a) ~for_clambda ~compilation_unit
+    (expr:a Flambda.flambda) =
   let module P = struct
     type t = a
     let expr = expr
     let for_clambda = for_clambda
+    let compilation_unit = compilation_unit
   end in
   let module A = NotConstants(P) in
   A.res

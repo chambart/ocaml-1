@@ -11,11 +11,18 @@
 (***********************************************************************)
 
 open Lambda
+open Symbol
 
 type compilation_env =
-  { ce_stack: int Ident.tbl;
-    ce_heap: int Ident.tbl;
-    ce_rec: int Ident.tbl }
+  { ce_stack: int VarMap.t;
+    ce_heap: int VarMap.t;
+    ce_rec: int VarMap.t;
+    ce_closures: int ClosureFunctionMap.t }
+
+type debug_compenv =
+ { dce_stack: int Ident.tbl;
+   dce_heap: int Ident.tbl;
+   dce_rec: int Ident.tbl }
 
 type debug_event =
   { mutable ev_pos: int;                (* Position in bytecode *)
@@ -25,7 +32,7 @@ type debug_event =
     ev_info: debug_event_info;          (* Extra information *)
     ev_typenv: Env.summary;             (* Typing environment *)
     ev_typsubst: Subst.t;               (* Substitution over types *)
-    ev_compenv: compilation_env;        (* Compilation environment *)
+    ev_compenv: debug_compenv;          (* Compilation environment *)
     ev_stacksize: int;                  (* Size of stack frame *)
     ev_repr: debug_event_repr }         (* Position of the representative *)
 

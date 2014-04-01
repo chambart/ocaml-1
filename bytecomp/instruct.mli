@@ -13,13 +13,15 @@
 (* The type of the instructions of the abstract machine *)
 
 open Lambda
+open Symbol
 
 (* Structure of compilation environments *)
 
 type compilation_env =
-  { ce_stack: int Ident.tbl; (* Positions of variables in the stack *)
-    ce_heap: int Ident.tbl;  (* Structure of the heap-allocated env *)
-    ce_rec: int Ident.tbl }  (* Functions bound by the same let rec *)
+  { ce_stack: int VarMap.t;            (* Positions of variables in the stack *)
+    ce_heap: int VarMap.t;             (* Structure of the heap-allocated env *)
+    ce_rec: int VarMap.t;              (* Functions bound by the same let rec *)
+    ce_closures: int ClosureFunctionMap.t } (* Recursives closures in the stack, but yet unbound *)
 
 (* The ce_stack component gives locations of variables residing
    in the stack. The locations are offsets w.r.t. the origin of the
@@ -34,6 +36,13 @@ type compilation_env =
 
 (* Debugging events *)
 
+type debug_compenv =
+  (* Simplified compilation_env, restricted to elements of the current
+     compilation unit. *)
+ { dce_stack: int Ident.tbl;
+   dce_heap: int Ident.tbl;
+   dce_rec: int Ident.tbl }
+
 (* Warning: when you change these types, check byterun/backtrace.c *)
 type debug_event =
   { mutable ev_pos: int;                (* Position in bytecode *)
@@ -43,7 +52,7 @@ type debug_event =
     ev_info: debug_event_info;          (* Extra information *)
     ev_typenv: Env.summary;             (* Typing environment *)
     ev_typsubst: Subst.t;               (* Substitution over types *)
-    ev_compenv: compilation_env;        (* Compilation environment *)
+    ev_compenv: debug_compenv;          (* Compilation environment *)
     ev_stacksize: int;                  (* Size of stack frame *)
     ev_repr: debug_event_repr }         (* Position of the representative *)
 

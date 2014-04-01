@@ -89,7 +89,7 @@ let current_unit_name () =
   current_unit.ui_name
 
 let current_unit_linkage_name () =
-  Flambda.linkage_name current_unit.ui_symbol
+  Symbol.linkage_name current_unit.ui_symbol
 
 let current_unit_id () = !current_unit_id
 
@@ -194,7 +194,7 @@ let unit_for_global id =
   Flambda.Compilation_unit.create id sym_label
 
 let symbol_for_global' id =
-  let open Flambda in
+  let open Symbol in
   let sym_label = linkage_name (symbol_for_global id) in
   if Ident.is_predef_exn id then
     { sym_unit = Flambda.predefined_exception_compilation_unit;
@@ -214,9 +214,9 @@ let set_export_info export_info =
   current_unit.ui_export_info <- export_info
 
 let approx_for_global comp_unit =
-  let id = Flambda.ident_of_compilation_unit comp_unit in
-  if (Flambda.Compilation_unit.equal
-      Flambda.predefined_exception_compilation_unit
+  let id = Symbol.ident_of_compilation_unit comp_unit in
+  if (Symbol.Compilation_unit.equal
+      Symbol.predefined_exception_compilation_unit
       comp_unit)
      || Ident.is_predef_exn id
      || not (Ident.global id)
@@ -263,11 +263,11 @@ let save_unit_info filename =
   write_unit_info current_unit filename
 
 let current_unit () =
-  Flambda.Compilation_unit.create (current_unit_id ())
+  Symbol.Compilation_unit.create (current_unit_id ())
     (current_unit_linkage_name ())
 
 let current_unit_symbol () =
-  { Flambda.sym_unit = Flambda.Compilation_unit.create (current_unit_id ());
+  { Symbol.sym_unit = Symbol.Compilation_unit.create (current_unit_id ());
     sym_label = current_unit_linkage_name () }
 
 let const_label = ref 0
@@ -282,22 +282,22 @@ let new_const_symbol () =
 
 let new_const_symbol' () =
   let sym_label = new_const_symbol () in
-  { Flambda.sym_unit = current_unit ();
-    sym_label = Flambda.linkage_name sym_label }
+  { Symbol.sym_unit = current_unit ();
+    sym_label = Symbol.linkage_name sym_label }
 
 let closure_symbol fv =
-  let open Flambda in
+  let open Symbol in
   let compilation_unit = Closure_function.compilation_unit fv in
   let fun_id = ident_of_function_within_closure fv in
   let unitname = string_of_linkage_name
       (linkage_name_of_compilation_unit compilation_unit) in
   {sym_unit = compilation_unit;
    sym_label =
-     Flambda.linkage_name
+     linkage_name
        (make_symbol ~unitname (Some ((Ident.unique_name fun_id) ^ "_closure"))) }
 
 let function_label fv =
-  let open Flambda in
+  let open Symbol in
   let compilation_unit = Closure_function.compilation_unit fv in
   let unitname = string_of_linkage_name
       (linkage_name_of_compilation_unit compilation_unit) in

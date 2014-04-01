@@ -46,11 +46,11 @@ let rec path event = function
         begin match event with
           Some ev ->
             begin try
-              let pos = Ident.find_same id ev.ev_compenv.ce_stack in
+              let pos = Ident.find_same id ev.ev_compenv.dce_stack in
               Debugcom.Remote_value.local (ev.ev_stacksize - pos)
             with Not_found ->
             try
-              let pos = Ident.find_same id ev.ev_compenv.ce_heap in
+              let pos = Ident.find_same id ev.ev_compenv.dce_heap in
               Debugcom.Remote_value.from_environment pos
             with Not_found ->
               raise(Error(Unbound_identifier id))

@@ -63,6 +63,12 @@ let rec samelist pred l1 l2 =
   | (hd1 :: tl1, hd2 :: tl2) -> pred hd1 hd2 && samelist pred tl1 tl2
   | (_, _) -> false
 
+let sameoption pred o1 o2 =
+  match (o1, o2) with
+  | None, None -> true
+  | Some e1, Some e2 -> pred e1 e2
+  | _, _ -> false
+
 let rec map2_head f l1 l2 =
   match l1, l2 with
   | [], _ -> [], l2

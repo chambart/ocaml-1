@@ -10,6 +10,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Symbol
 open Lambda
 open Flambda
 
@@ -45,7 +46,7 @@ type 'param_id function_declaration =
     params : 'param_id list;
     body : lambda }
 
-let to_flambda ~compilation_unit lam =
+let to_flambda ~for_bytecode ~compilation_unit ~current_unit_id ~symbol_for_global' lam =
 
   let make_var id = Variable.create ~compilation_unit id in
 
@@ -120,19 +121,22 @@ let to_flambda ~compilation_unit lam =
     | Lprim(Prevapply loc,[arg;funct]) ->
         close sb (Lapply(funct, [arg], loc))
     | Lprim(Praise, [Levent(arg, ev)]) ->
-        Fprim(Praise, [close sb arg], Debuginfo.from_raise ev, nid ())
+        let arg = close sb arg in
+        let arg = if for_bytecode then Fevent (arg, ev, nid ()) else arg in
+        Fprim(Praise, [arg], Debuginfo.from_raise ev, nid ())
     | Lprim(Pfield i, [Lprim(Pgetglobal id, [])])
-      when id.Ident.name = Compilenv.current_unit_name () ->
+      when Ident.same id current_unit_id ->
         Fprim(Pgetglobalfield(id,i), [], Debuginfo.none,
               nid ~name:"getglobalfield" ())
     | Lprim(Psetfield(i,_), [Lprim(Pgetglobal id, []); lam]) ->
-        assert(id.Ident.name = Compilenv.current_unit_name ());
+        assert(Ident.same id current_unit_id);
         Fprim(Psetglobalfield i, [close sb lam], Debuginfo.none,
               nid ~name:"setglobalfield" ())
     | Lprim(Pgetglobal id, [])
       when not (Ident.is_predef_exn id) &&
-           id.Ident.name <> Compilenv.current_unit_name () ->
-        let symbol = Compilenv.symbol_for_global' id in
+           not for_bytecode ->
+        assert(id.Ident.name <> Compilenv.current_unit_name ());
+        let symbol = symbol_for_global' id in
         Fsymbol (symbol,nid ~name:"external_global" ())
     | Lprim(p, args) ->
         Fprim(p, close_list sb args, Debuginfo.none,
@@ -169,7 +173,8 @@ let to_flambda ~compilation_unit lam =
     | Lassign(id, lam) ->
         Fassign(make_var id, close sb lam, nid ())
     | Levent(lam, ev) ->
-        add_debug_info ev (close sb lam)
+        let lam = add_debug_info ev (close sb lam) in
+        if for_bytecode then Fevent(lam, ev, nid ()) else lam
     | Lifused _ ->
         assert false
 
@@ -403,11 +408,11 @@ let lift_strings_to_toplevel lam =
            lam))
     lam bindings
 
-let intro ~compilation_unit lam =
+let intro ?(for_bytecode = false) ~compilation_unit lam =
   (* Strings are the only expressions that can't be duplicated without
      changing the semantics. So we lift them to toplevel to avoid
      having to handle special cases later.
      There is no runtime cost to this transformation: strings are
      constants, they will not appear in the closures *)
-  let lam = lift_strings_to_toplevel lam in
-  to_flambda ~compilation_unit lam
+  let lam = if for_bytecode then lam else lift_strings_to_toplevel lam in
+  to_flambda ~for_bytecode ~compilation_unit lam

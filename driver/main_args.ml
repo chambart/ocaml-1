@@ -480,6 +480,8 @@ module type Bytecomp_options = sig
   val _dtypedtree : unit -> unit
   val _drawlambda : unit -> unit
   val _dlambda : unit -> unit
+  val _dflambda : unit -> unit
+  val _dflambda : unit -> unit
   val _dinstr : unit -> unit
 
   val anonymous : string -> unit
@@ -514,6 +516,8 @@ module type Bytetop_options = sig
   val _dtypedtree : unit -> unit
   val _drawlambda : unit -> unit
   val _dlambda : unit -> unit
+  val _dflambda : unit -> unit
+  val _dflambda : unit -> unit
   val _dinstr : unit -> unit
 
   val anonymous : string -> unit
@@ -717,6 +721,7 @@ struct
     mk_dtypedtree F._dtypedtree;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
+    mk_dflambda F._dflambda;
     mk_dinstr F._dinstr;
   ]
 end;;
@@ -753,6 +758,7 @@ struct
     mk_dtypedtree F._dtypedtree;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
+    mk_dflambda F._dflambda;
     mk_dinstr F._dinstr;
   ]
 end;;
