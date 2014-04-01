@@ -126,7 +126,8 @@ let test ppf lam =
        Printflambda.flambda flam;
      raise e);
   let fl_sym = Flambdasym.convert flam in
-  let fl,const,_ = fl_sym in
+  let fl,const,export = fl_sym in
+  Compilenv.set_export_info export;
   if !Clflags.dump_flambda
   then begin
     Format.fprintf ppf "%a@." Printflambda.flambda fl;

@@ -29,6 +29,10 @@ let global_infos_table =
 let export_infos_table =
   (Hashtbl.create 10 : (string, Flambdaexport.exported) Hashtbl.t)
 
+let imported_closure_table =
+  (Flambda.FunTbl.create 10
+   : Flambda.ExprId.t Flambda.function_declarations Flambda.FunTbl.t)
+
 let structured_constants =
   ref ([] : (string * bool * Clambda.ustructured_constant) list)
 
@@ -66,6 +70,7 @@ let unit_id_from_name name = Ident.create_persistent name
 
 let reset ?packname name =
   Hashtbl.clear global_infos_table;
+  Flambda.FunTbl.clear imported_closure_table;
   let symbol = symbolname_for_pack packname name in
   current_unit_id := unit_id_from_name name;
   current_unit.ui_name <- name;
@@ -87,9 +92,6 @@ let current_unit_infos () =
 
 let current_unit_name () =
   current_unit.ui_name
-
-let current_unit_linkage_name () =
-  Symbol.linkage_name current_unit.ui_symbol
 
 let current_unit_id () = !current_unit_id
 
@@ -203,6 +205,10 @@ let symbol_for_global' id =
     { sym_unit = unit_for_global id;
       sym_label }
 
+let current_unit_linkage_name () =
+  Symbol.linkage_name
+    (make_symbol ~unitname:current_unit.ui_symbol None)
+
 (* Register the approximation of the module being compiled *)
 
 let set_global_approx approx =
@@ -232,6 +238,20 @@ let approx_for_global comp_unit =
     exported
 
 let approx_env () = !merged_environment
+
+let imported_closure =
+  let open Flambda in
+  let import_closure clos =
+    { clos with
+      funs =
+        VarMap.map
+          (fun ff -> { ff with body = Flambdaiter.map_data ExprId.create ff.body })
+          clos.funs } in
+  FunTbl.memoize imported_closure_table
+    (fun fun_id ->
+       let ex_info = approx_env () in
+       let closure = FunMap.find fun_id ex_info.Flambdaexport.ex_functions in
+       import_closure closure)
 
 (* Record that a currying function or application function is needed *)
 
