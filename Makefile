@@ -65,6 +65,13 @@ COMP=bytecomp/lambda.cmo bytecomp/printlambda.cmo \
   bytecomp/translobj.cmo bytecomp/translcore.cmo \
   bytecomp/translclass.cmo bytecomp/translmod.cmo \
   bytecomp/simplif.cmo bytecomp/runtimedef.cmo \
+  bytecomp/debuginfo.cmo \
+  bytecomp/symbol.cmo \
+  bytecomp/flambda.cmo bytecomp/printflambda.cmo \
+  bytecomp/flambdaiter.cmo bytecomp/flambdacheck.cmo \
+  bytecomp/flambdaexport.cmo \
+  bytecomp/flambdaconstants.cmo \
+  bytecomp/flambdagen.cmo \
   driver/pparse.cmo driver/main_args.cmo \
   driver/compenv.cmo driver/compmisc.cmo
 
@@ -76,18 +83,13 @@ BYTECOMP=bytecomp/meta.cmo bytecomp/instruct.cmo bytecomp/bytegen.cmo \
   bytecomp/bytelink.cmo bytecomp/bytelibrarian.cmo bytecomp/bytepackager.cmo \
   driver/errors.cmo driver/compile.cmo
 
-ASMCOMP=asmcomp/arch.cmo asmcomp/debuginfo.cmo \
+ASMCOMP=asmcomp/arch.cmo \
   asmcomp/cmm.cmo asmcomp/printcmm.cmo \
   asmcomp/reg.cmo asmcomp/mach.cmo asmcomp/proc.cmo \
-  asmcomp/flambda.cmo asmcomp/printflambda.cmo \
-  asmcomp/flambdaiter.cmo asmcomp/flambdacheck.cmo \
-  asmcomp/flambdaexport.cmo \
   asmcomp/clambda.cmo asmcomp/printclambda.cmo asmcomp/compilenv.cmo \
-  asmcomp/flambdaconstants.cmo \
-  asmcomp/flambdagen.cmo \
   asmcomp/flambdasym.cmo \
   asmcomp/clambdagen.cmo \
-  asmcomp/closure.cmo asmcomp/cmmgen.cmo \
+  asmcomp/cmmgen.cmo \
   asmcomp/printmach.cmo asmcomp/selectgen.cmo asmcomp/selection.cmo \
   asmcomp/comballoc.cmo asmcomp/liveness.cmo \
   asmcomp/spill.cmo asmcomp/split.cmo \
