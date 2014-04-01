@@ -135,7 +135,7 @@ let to_flambda ~for_bytecode ~compilation_unit ~current_unit_id ~symbol_for_glob
     | Lprim(Pgetglobal id, [])
       when not (Ident.is_predef_exn id) &&
            not for_bytecode ->
-        assert(id.Ident.name <> Compilenv.current_unit_name ());
+        assert(not (Ident.same id current_unit_id));
         let symbol = symbol_for_global' id in
         Fsymbol (symbol,nid ~name:"external_global" ())
     | Lprim(p, args) ->
@@ -408,11 +408,13 @@ let lift_strings_to_toplevel lam =
            lam))
     lam bindings
 
-let intro ?(for_bytecode = false) ~compilation_unit lam =
+let intro ?(for_bytecode = false) ~compilation_unit ~current_unit_id
+    ~symbol_for_global' lam =
   (* Strings are the only expressions that can't be duplicated without
      changing the semantics. So we lift them to toplevel to avoid
      having to handle special cases later.
      There is no runtime cost to this transformation: strings are
      constants, they will not appear in the closures *)
   let lam = if for_bytecode then lam else lift_strings_to_toplevel lam in
-  to_flambda ~for_bytecode ~compilation_unit lam
+  to_flambda ~for_bytecode ~compilation_unit ~current_unit_id
+    ~symbol_for_global' lam

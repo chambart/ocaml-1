@@ -10,27 +10,30 @@
 (*                                                                     *)
 (***********************************************************************)
 
-val apply_on_subexpressions : ('a Flambda.flambda -> unit) ->
-  'a Flambda.flambda -> unit
+open Symbol
+open Flambda
 
-val iter : ('a Flambda.flambda -> unit) -> 'a Flambda.flambda -> unit
+val apply_on_subexpressions : ('a flambda -> unit) ->
+  'a flambda -> unit
 
-val iter_toplevel : ('a Flambda.flambda -> unit) -> 'a Flambda.flambda -> unit
+val iter : ('a flambda -> unit) -> 'a flambda -> unit
+
+val iter_toplevel : ('a flambda -> unit) -> 'a flambda -> unit
 (** [iter_toplevel f t] Apply f on every toplevel subexpression of t,
     i.e. does not apply it on functions body *)
 
 val iter_on_closures :
-  ('a Flambda.closure -> 'a -> unit) -> 'a Flambda.flambda -> unit
+  ('a closure -> 'a -> unit) -> 'a flambda -> unit
 
-val map : ('a Flambda.flambda -> 'a Flambda.flambda) ->
-  'a Flambda.flambda -> 'a Flambda.flambda
+val map : ('a flambda -> 'a flambda) ->
+  'a flambda -> 'a flambda
 
-val map_toplevel : ('a Flambda.flambda -> 'a Flambda.flambda) ->
-  'a Flambda.flambda -> 'a Flambda.flambda
+val map_toplevel : ('a flambda -> 'a flambda) ->
+  'a flambda -> 'a flambda
 
-val free_variables : 'a Flambda.flambda -> Flambda.VarSet.t
+val free_variables : 'a flambda -> VarSet.t
 
-val map_data : ('a -> 'b) -> 'a Flambda.flambda -> 'b Flambda.flambda
+val map_data : ('a -> 'b) -> 'a flambda -> 'b flambda
 
-val toplevel_substitution : Flambda.variable Flambda.VarMap.t ->
-  'a Flambda.flambda -> 'a Flambda.flambda
+val toplevel_substitution : variable VarMap.t ->
+  'a flambda -> 'a flambda

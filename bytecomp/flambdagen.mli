@@ -29,6 +29,6 @@
 val intro:
   ?for_bytecode:bool ->
   compilation_unit:Symbol.compilation_unit ->
-  current_unit_id:unit ->
-  symbol_for_global':unit ->
+  current_unit_id:Ident.t ->
+  symbol_for_global':(Ident.t -> Symbol.symbol) ->
   Lambda.lambda -> Symbol.ExprId.t Flambda.flambda

@@ -1039,9 +1039,14 @@ let comp_remainder offset_tables cont =
 (**** Compilation of a lambda phrase ****)
 
 let compile_implementation modulename expr =
+  let current_unit_id = Ident.create_persistent modulename in
   let compilation_unit =
-    Compilation_unit.create (Ident.create_persistent modulename) in
-  let flam = Flambdagen.intro ~for_bytecode:true ~compilation_unit expr in
+    Compilation_unit.create current_unit_id
+      (linkage_name "__dummy_linkage__") in
+  let flam = Flambdagen.intro ~for_bytecode:true ~compilation_unit
+      ~current_unit_id
+      ~symbol_for_global':(fun _ -> assert false)
+      expr in
   if !Clflags.dump_flambda
   then Format.fprintf Format.err_formatter "%a@." Printflambda.flambda flam;
   Stack.clear functions_to_compile;
@@ -1057,9 +1062,14 @@ let compile_implementation modulename expr =
     init_code
 
 let compile_phrase expr =
+  let current_unit_id = Ident.create_persistent "" in
   let compilation_unit =
-    Compilation_unit.create (Ident.create_persistent "") in
-  let flam = Flambdagen.intro ~for_bytecode:true ~compilation_unit expr in
+    Compilation_unit.create current_unit_id
+      (linkage_name "__dummy_linkage__") in
+  let flam = Flambdagen.intro ~for_bytecode:true ~compilation_unit
+      ~current_unit_id
+      ~symbol_for_global':(fun _ -> assert false)
+      expr in
   if !Clflags.dump_flambda
   then Format.fprintf Format.err_formatter "%a@." Printflambda.flambda flam;
   Stack.clear functions_to_compile;

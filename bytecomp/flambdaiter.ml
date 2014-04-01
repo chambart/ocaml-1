@@ -306,6 +306,7 @@ let map_data (type t1) (type t2) (f:t1 -> t2) (tree:t1 flambda) : t2 flambda =
     | Fassign(id, lam, v) ->
         Fassign(id, mapper lam, f v)
     | Funreachable v -> Funreachable (f v)
+    | Fevent(lam, ev, v) -> Fevent(mapper lam, ev, f v)
   and list_mapper l = List.map mapper l in
   mapper tree
 
