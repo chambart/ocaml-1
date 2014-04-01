@@ -173,6 +173,11 @@ let global_approx id =
       | None -> Value_unknown
       | Some ui -> ui.ui_approx
 
+let get_unit_name id =
+  match get_global_info id with
+  | None -> Ident.name id
+  | Some ui -> ui.ui_symbol
+
 (* Return the symbol used to refer to a global identifier *)
 
 let symbol_for_global id =
@@ -184,6 +189,10 @@ let symbol_for_global id =
     | Some ui -> make_symbol ~unitname:ui.ui_symbol None
   end
 
+let unit_for_global id =
+  let sym_label = Flambda.linkage_name (symbol_for_global id) in
+  Flambda.Compilation_unit.create id sym_label
+
 let symbol_for_global' id =
   let open Flambda in
   let sym_label = linkage_name (symbol_for_global id) in
@@ -191,7 +200,7 @@ let symbol_for_global' id =
     { sym_unit = Flambda.predefined_exception_compilation_unit;
       sym_label }
   else
-    { sym_unit = Compilation_unit.create id;
+    { sym_unit = unit_for_global id;
       sym_label }
 
 (* Register the approximation of the module being compiled *)
@@ -255,6 +264,7 @@ let save_unit_info filename =
 
 let current_unit () =
   Flambda.Compilation_unit.create (current_unit_id ())
+    (current_unit_linkage_name ())
 
 let current_unit_symbol () =
   { Flambda.sym_unit = Flambda.Compilation_unit.create (current_unit_id ());
@@ -283,7 +293,7 @@ let closure_symbol fv =
   {sym_unit = compilation_unit;
    sym_label =
      Flambda.linkage_name
-       (make_symbol ~unitname:(Ident.name unit_id)
+       (make_symbol ~unitname:(get_unit_name unit_id)
           (Some ((Ident.unique_name fun_id) ^ "_closure"))) }
 
 let function_label fv =
@@ -291,7 +301,7 @@ let function_label fv =
   let compilation_unit = Closure_function.compilation_unit fv in
   let unit_id = ident_of_compilation_unit compilation_unit in
   let fun_id = ident_of_function_within_closure fv in
-  make_symbol ~unitname:(Ident.name unit_id)
+  make_symbol ~unitname:(get_unit_name unit_id)
     (Some (Ident.unique_name fun_id))
 
 

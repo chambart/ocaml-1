@@ -18,23 +18,41 @@ type static_exception = int
 
 module Compilation_unit : sig
   include PrintableHashOrdered
-  val create : Ident.t -> t
+  val create : Ident.t -> linkage_name -> t
   val to_ident : t -> Ident.t
   (* Should be used only in Compilenv *)
   val name : t -> string
 end = struct
-  include Ident
-  let create id =
+  type t =
+    { id: Ident.t;
+      linkage_name: linkage_name }
+  (* multiple units can have the same id, if they are in different
+     pack. To distinguish we also keep the linkage name which contains
+     the pack name *)
+  let compare v1 v2 =
+    let c = Ident.compare v1.id v2.id in
+    if c = 0
+    then String.compare v1.linkage_name v2.linkage_name
+    else c
+
+  let equal x y = compare x y = 0
+
+  let create id linkage_name =
     assert(Ident.persistent id);
-    id
-  let to_ident id = id
-  let name id = id.Ident.name
+    { id; linkage_name }
+
+  let print ppf x = Ident.print ppf x.id
+  let output oc x = Ident.output oc x.id
+  let hash x = Ident.hash x.id
+
+  let to_ident x = x.id
+  let name x = x.id.Ident.name
 end
 
 type compilation_unit = Compilation_unit.t
 
 let predefined_exception_compilation_unit =
-  Compilation_unit.create (Ident.create_persistent "__dummy__")
+  Compilation_unit.create (Ident.create_persistent "__dummy__") "__dummy__"
 
 type symbol = { sym_unit : compilation_unit; sym_label : linkage_name }
 

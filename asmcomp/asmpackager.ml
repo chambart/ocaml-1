@@ -127,7 +127,7 @@ let build_package_cmx members cmxfile =
       (fun set info ->
          let unit_id = Compilenv.unit_id_from_name info.ui_name in
          Flambda.CompilationUnitSet.add
-           (Flambda.Compilation_unit.create unit_id) set)
+           (Compilenv.unit_for_global unit_id) set)
       Flambda.CompilationUnitSet.empty units in
   let units = List.map (fun info ->
       { info with

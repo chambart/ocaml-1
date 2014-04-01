@@ -223,10 +223,14 @@ let import_for_pack ~pack_units ~pack exp =
   let ex_functions =
     FunMap.map (import_ffunctions_for_pack pack_units pack)
       exp.ex_functions in
+  (* The only reachable global identifier of a pack is the pack itself *)
+  let globals = IdentMap.filter (fun unit _ ->
+      Ident.same (ident_of_compilation_unit pack) unit)
+      exp.ex_globals in
   let res =
     { ex_functions;
       ex_functions_off = ex_functions_off ex_functions;
-      ex_globals = IdentMap.map import_approx exp.ex_globals;
+      ex_globals = IdentMap.map import_approx globals;
       ex_offset_fun = exp.ex_offset_fun;
       ex_offset_fv = exp.ex_offset_fv;
       ex_values = import_eidmap import_desr exp.ex_values;

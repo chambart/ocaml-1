@@ -132,9 +132,7 @@ let to_flambda ~compilation_unit lam =
     | Lprim(Pgetglobal id, [])
       when not (Ident.is_predef_exn id) &&
            id.Ident.name <> Compilenv.current_unit_name () ->
-        let symbol =
-          { sym_unit = Compilation_unit.create id;
-            sym_label = linkage_name (Compilenv.symbol_for_global id) } in
+        let symbol = Compilenv.symbol_for_global' id in
         Fsymbol (symbol,nid ~name:"external_global" ())
     | Lprim(p, args) ->
         Fprim(p, close_list sb args, Debuginfo.none,

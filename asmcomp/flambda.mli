@@ -72,7 +72,7 @@ end
 module Symbol : PrintableHashOrdered with type t = symbol
 module Compilation_unit : sig
   include PrintableHashOrdered with type t = compilation_unit
-  val create : Ident.t -> t
+  val create : Ident.t -> linkage_name -> t
 end
 
 module ExprId : Id
