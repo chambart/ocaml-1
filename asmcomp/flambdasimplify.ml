@@ -167,7 +167,7 @@ module Import = struct
     really_import (import_symbol sym).descr
 
   let import_global id =
-    let unit = Compilation_unit.create id in
+    let unit = Compilenv.unit_for_global id in
     import_approx
       (IdentMap.find id (Compilenv.approx_for_global unit).ex_globals)
 
