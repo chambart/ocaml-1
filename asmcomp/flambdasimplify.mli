@@ -19,4 +19,4 @@
 
 open Flambda
 
-val simplify : ExprId.t flambda -> ExprId.t flambda
+val simplify : Symbol.ExprId.t flambda -> Symbol.ExprId.t flambda

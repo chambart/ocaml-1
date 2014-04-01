@@ -11,6 +11,7 @@
 (***********************************************************************)
 
 open Lambda
+open Symbol
 open Flambda
 
 let fvar id = Fvar(id,ExprId.create ())
@@ -582,6 +583,7 @@ let lambda_smaller' lam threshold =
         size := !size + 8;
         lambda_size met; lambda_size obj; lambda_list_size args
     | Funreachable _ -> ()
+    | Fevent _ -> assert false
   and lambda_list_size l = List.iter lambda_size l in
   try
     lambda_size lam;
@@ -655,6 +657,8 @@ let rec no_effects = function
     -> false
 
   | Funreachable _ -> true
+
+  | Fevent _ -> assert false
 
 let check_constant_result r lam approx =
   match approx.descr with
@@ -1099,6 +1103,7 @@ and loop_direct (env:env) r tree : 'a flambda * ret =
           ret r value_unknown
       end
   | Funreachable _ -> tree, ret r value_bottom
+  | Fevent _ -> assert false
 
 and loop_list env r l = match l with
   | [] -> [], [], r

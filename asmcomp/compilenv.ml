@@ -30,8 +30,8 @@ let export_infos_table =
   (Hashtbl.create 10 : (string, Flambdaexport.exported) Hashtbl.t)
 
 let imported_closure_table =
-  (Flambda.FunTbl.create 10
-   : Flambda.ExprId.t Flambda.function_declarations Flambda.FunTbl.t)
+  (Symbol.FunTbl.create 10
+   : Symbol.ExprId.t Flambda.function_declarations Symbol.FunTbl.t)
 
 let structured_constants =
   ref ([] : (string * bool * Clambda.ustructured_constant) list)
@@ -70,7 +70,7 @@ let unit_id_from_name name = Ident.create_persistent name
 
 let reset ?packname name =
   Hashtbl.clear global_infos_table;
-  Flambda.FunTbl.clear imported_closure_table;
+  Symbol.FunTbl.clear imported_closure_table;
   let symbol = symbolname_for_pack packname name in
   current_unit_id := unit_id_from_name name;
   current_unit.ui_name <- name;
@@ -329,6 +329,7 @@ let clear_structured_constants () = structured_constants := []
 let structured_constants () = !structured_constants
 
 let imported_closure =
+  let open Symbol in
   let open Flambda in
   let import_closure clos =
 

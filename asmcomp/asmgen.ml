@@ -125,7 +125,7 @@ let test ppf lam =
      Format.fprintf ppf "%a@."
        Printflambda.flambda flam;
      raise e);
-  let fl_sym = Flambdasym.convert flam in
+  let fl_sym = Flambdasym.convert ~compilation_unit flam in
   let fl,const,export = fl_sym in
   Compilenv.set_export_info export;
   if !Clflags.dump_flambda
