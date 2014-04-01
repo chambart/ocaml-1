@@ -1,3 +1,4 @@
+open Symbol
 open Flambda
 open Test_utils
 open Flambdacheck

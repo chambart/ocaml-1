@@ -1,10 +1,15 @@
+open Symbol
 open Flambda
 
+let compilation_unit_id = Ident.create_persistent "unit"
+
 let compilation_unit =
-  Compilation_unit.create (Ident.create_persistent "unit")
+  Compilation_unit.create compilation_unit_id
+    (linkage_name "test")
 
 let other_compilation_unit =
   Compilation_unit.create (Ident.create_persistent "other")
+    (linkage_name "other_test")
 
 let new_var name =
   let id = Ident.create name in
@@ -132,6 +137,8 @@ let rec equal env t1 t2 = match t1, t2 with
       let e = Format.asprintf "equal: Not implemented %a"
           Printflambda.flambda t1 in
       failwith e
+
+  | Fevent _, _  -> false
 
 let equal t1 t2 =
   equal empty_env t1 t2

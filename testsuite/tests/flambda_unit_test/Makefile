@@ -75,26 +75,26 @@ OTHEROBJS=\
   $(OTOPDIR)/bytecomp/translmod.cmo \
   $(OTOPDIR)/bytecomp/simplif.cmo \
   $(OTOPDIR)/bytecomp/runtimedef.cmo \
+  $(OTOPDIR)/bytecomp/debuginfo.cmo \
+  $(OTOPDIR)/bytecomp/symbol.cmo \
+  $(OTOPDIR)/bytecomp/flambda.cmo \
+  $(OTOPDIR)/bytecomp/printflambda.cmo \
+  $(OTOPDIR)/bytecomp/flambdaiter.cmo \
+  $(OTOPDIR)/bytecomp/flambdacheck.cmo \
+  $(OTOPDIR)/bytecomp/flambdagen.cmo \
+  $(OTOPDIR)/bytecomp/flambdaconstants.cmo \
   $(OTOPDIR)/asmcomp/arch.cmo \
-  $(OTOPDIR)/asmcomp/debuginfo.cmo \
   $(OTOPDIR)/asmcomp/cmm.cmo \
   $(OTOPDIR)/asmcomp/printcmm.cmo \
   $(OTOPDIR)/asmcomp/reg.cmo \
   $(OTOPDIR)/asmcomp/mach.cmo \
   $(OTOPDIR)/asmcomp/proc.cmo \
-  $(OTOPDIR)/asmcomp/flambda.cmo \
-  $(OTOPDIR)/asmcomp/printflambda.cmo \
-  $(OTOPDIR)/asmcomp/flambdaiter.cmo \
   $(OTOPDIR)/asmcomp/flambdaexport.cmo \
-  $(OTOPDIR)/asmcomp/flambdacheck.cmo \
   $(OTOPDIR)/asmcomp/clambda.cmo \
   $(OTOPDIR)/asmcomp/compilenv.cmo \
   $(OTOPDIR)/asmcomp/flambdasimplify.cmo \
-  $(OTOPDIR)/asmcomp/flambdagen.cmo \
-  $(OTOPDIR)/asmcomp/flambdaconstants.cmo \
   $(OTOPDIR)/asmcomp/flambdasym.cmo \
   $(OTOPDIR)/asmcomp/clambdagen.cmo \
-  $(OTOPDIR)/asmcomp/closure.cmo \
   $(OTOPDIR)/asmcomp/cmmgen.cmo \
   $(OTOPDIR)/asmcomp/printmach.cmo \
   $(OTOPDIR)/asmcomp/selectgen.cmo \
