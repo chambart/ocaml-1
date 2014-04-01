@@ -33,6 +33,9 @@ end
 
 type compilation_unit = Compilation_unit.t
 
+let predefined_exception_compilation_unit =
+  Compilation_unit.create (Ident.create_persistent "__dummy__")
+
 type symbol = { sym_unit : compilation_unit; sym_label : linkage_name }
 
 let ident_of_compilation_unit = Compilation_unit.to_ident

@@ -32,6 +32,8 @@ type linkage_name
 
 type compilation_unit
 
+val predefined_exception_compilation_unit: compilation_unit
+
 type symbol = { sym_unit : compilation_unit; sym_label : linkage_name }
 (** A symbol is an identifier of a constant provided by another
     compilation unit or of top level module.

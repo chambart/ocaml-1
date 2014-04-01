@@ -184,14 +184,11 @@ let symbol_for_global id =
     | Some ui -> make_symbol ~unitname:ui.ui_symbol None
   end
 
-let dummy_unit_identifier = (* used only for static exceptions symbols *)
-  Ident.create_persistent "__dummy__"
-
 let symbol_for_global' id =
   let open Flambda in
   let sym_label = linkage_name (symbol_for_global id) in
   if Ident.is_predef_exn id then
-    { sym_unit = Compilation_unit.create dummy_unit_identifier;
+    { sym_unit = Flambda.predefined_exception_compilation_unit;
       sym_label }
   else
     { sym_unit = Compilation_unit.create id;
@@ -209,7 +206,11 @@ let set_export_info export_info =
 
 let approx_for_global comp_unit =
   let id = Flambda.ident_of_compilation_unit comp_unit in
-  if Ident.is_predef_exn id || not (Ident.global id)
+  if (Flambda.Compilation_unit.equal
+      Flambda.predefined_exception_compilation_unit
+      comp_unit)
+     || Ident.is_predef_exn id
+     || not (Ident.global id)
   then invalid_arg (Format.asprintf "approx_for_global %a" Ident.print id);
   let modname = Ident.name id in
   try Hashtbl.find export_infos_table modname with
