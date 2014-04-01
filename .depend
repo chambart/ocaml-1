@@ -388,8 +388,8 @@ bytecomp/flambdaconstants.cmi : bytecomp/symbol.cmi bytecomp/flambda.cmi
 bytecomp/flambdaexport.cmi : bytecomp/symbol.cmi bytecomp/flambda.cmi \
     utils/ext_types.cmi
 bytecomp/flambdagen.cmi : bytecomp/symbol.cmi bytecomp/lambda.cmi \
-    bytecomp/flambda.cmi
-bytecomp/flambdaiter.cmi : bytecomp/flambda.cmi
+    typing/ident.cmi bytecomp/flambda.cmi
+bytecomp/flambdaiter.cmi : bytecomp/symbol.cmi bytecomp/flambda.cmi
 bytecomp/flambda.cmi : bytecomp/symbol.cmi bytecomp/lambda.cmi \
     utils/ext_types.cmi bytecomp/debuginfo.cmi parsing/asttypes.cmi
 bytecomp/instruct.cmi : typing/types.cmi bytecomp/symbol.cmi \
@@ -500,12 +500,12 @@ bytecomp/flambdaexport.cmx : bytecomp/symbol.cmx typing/ident.cmx \
     bytecomp/flambdaexport.cmi
 bytecomp/flambdagen.cmo : bytecomp/symbol.cmi utils/misc.cmi \
     bytecomp/lambda.cmi typing/ident.cmi bytecomp/flambda.cmi \
-    utils/ext_types.cmi bytecomp/debuginfo.cmi asmcomp/compilenv.cmi \
-    parsing/asttypes.cmi bytecomp/flambdagen.cmi
+    utils/ext_types.cmi bytecomp/debuginfo.cmi parsing/asttypes.cmi \
+    bytecomp/flambdagen.cmi
 bytecomp/flambdagen.cmx : bytecomp/symbol.cmx utils/misc.cmx \
     bytecomp/lambda.cmx typing/ident.cmx bytecomp/flambda.cmx \
-    utils/ext_types.cmx bytecomp/debuginfo.cmx asmcomp/compilenv.cmx \
-    parsing/asttypes.cmi bytecomp/flambdagen.cmi
+    utils/ext_types.cmx bytecomp/debuginfo.cmx parsing/asttypes.cmi \
+    bytecomp/flambdagen.cmi
 bytecomp/flambdaiter.cmo : bytecomp/symbol.cmi utils/misc.cmi \
     bytecomp/flambda.cmi bytecomp/flambdaiter.cmi
 bytecomp/flambdaiter.cmx : bytecomp/symbol.cmx utils/misc.cmx \
@@ -656,12 +656,12 @@ asmcomp/codegen.cmi : asmcomp/cmm.cmi
 asmcomp/coloring.cmi :
 asmcomp/comballoc.cmi : asmcomp/mach.cmi
 asmcomp/compilenv.cmi : bytecomp/symbol.cmi typing/ident.cmi \
-    bytecomp/flambdaexport.cmi bytecomp/flambda.cmi asmcomp/cmx_format.cmi \
-    asmcomp/clambda.cmi
+    bytecomp/flambdaexport.cmi asmcomp/cmx_format.cmi asmcomp/clambda.cmi
 asmcomp/emitaux.cmi : bytecomp/debuginfo.cmi
 asmcomp/emit.cmi : asmcomp/linearize.cmi asmcomp/cmm.cmi
 asmcomp/flambdaalias.cmi : typing/ident.cmi bytecomp/flambdaexport.cmi \
     bytecomp/flambda.cmi
+asmcomp/flambdasimplify.cmi : bytecomp/flambda.cmi
 asmcomp/flambdasym.cmi : bytecomp/symbol.cmi bytecomp/flambdaexport.cmi \
     bytecomp/flambda.cmi
 asmcomp/interf.cmi : asmcomp/mach.cmi
@@ -789,12 +789,12 @@ asmcomp/comballoc.cmx : asmcomp/reg.cmx asmcomp/mach.cmx utils/config.cmx \
     asmcomp/arch.cmx asmcomp/comballoc.cmi
 asmcomp/compilenv.cmo : bytecomp/symbol.cmi utils/misc.cmi \
     parsing/location.cmi typing/ident.cmi bytecomp/flambdaexport.cmi \
-    bytecomp/flambda.cmi typing/env.cmi utils/config.cmi \
-    asmcomp/cmx_format.cmi asmcomp/clambda.cmi asmcomp/compilenv.cmi
+    typing/env.cmi utils/config.cmi asmcomp/cmx_format.cmi \
+    asmcomp/clambda.cmi asmcomp/compilenv.cmi
 asmcomp/compilenv.cmx : bytecomp/symbol.cmx utils/misc.cmx \
     parsing/location.cmx typing/ident.cmx bytecomp/flambdaexport.cmx \
-    bytecomp/flambda.cmx typing/env.cmx utils/config.cmx \
-    asmcomp/cmx_format.cmi asmcomp/clambda.cmx asmcomp/compilenv.cmi
+    typing/env.cmx utils/config.cmx asmcomp/cmx_format.cmi \
+    asmcomp/clambda.cmx asmcomp/compilenv.cmi
 asmcomp/emitaux.cmo : asmcomp/linearize.cmi bytecomp/debuginfo.cmi \
     utils/config.cmi utils/clflags.cmi asmcomp/arch.cmo asmcomp/emitaux.cmi
 asmcomp/emitaux.cmx : asmcomp/linearize.cmx bytecomp/debuginfo.cmx \
@@ -819,6 +819,16 @@ asmcomp/flambdaalias.cmx : bytecomp/symbol.cmx utils/misc.cmx \
     bytecomp/lambda.cmx typing/ident.cmx bytecomp/flambdaexport.cmx \
     bytecomp/flambda.cmx utils/ext_types.cmx asmcomp/compilenv.cmx \
     parsing/asttypes.cmi asmcomp/flambdaalias.cmi
+asmcomp/flambdasimplify.cmo : bytecomp/symbol.cmi bytecomp/printflambda.cmi \
+    typing/primitive.cmi utils/misc.cmi bytecomp/lambda.cmi typing/ident.cmi \
+    bytecomp/flambdaiter.cmi bytecomp/flambdaexport.cmi bytecomp/flambda.cmi \
+    bytecomp/debuginfo.cmi asmcomp/compilenv.cmi utils/clflags.cmi \
+    parsing/asttypes.cmi asmcomp/arch.cmo asmcomp/flambdasimplify.cmi
+asmcomp/flambdasimplify.cmx : bytecomp/symbol.cmx bytecomp/printflambda.cmx \
+    typing/primitive.cmx utils/misc.cmx bytecomp/lambda.cmx typing/ident.cmx \
+    bytecomp/flambdaiter.cmx bytecomp/flambdaexport.cmx bytecomp/flambda.cmx \
+    bytecomp/debuginfo.cmx asmcomp/compilenv.cmx utils/clflags.cmx \
+    parsing/asttypes.cmi asmcomp/arch.cmx asmcomp/flambdasimplify.cmi
 asmcomp/flambdasym.cmo : bytecomp/symbol.cmi bytecomp/printflambda.cmi \
     utils/misc.cmi bytecomp/lambda.cmi typing/ident.cmi \
     bytecomp/flambdaiter.cmi bytecomp/flambdaexport.cmi \

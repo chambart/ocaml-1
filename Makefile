@@ -87,6 +87,7 @@ ASMCOMP=asmcomp/arch.cmo \
   asmcomp/cmm.cmo asmcomp/printcmm.cmo \
   asmcomp/reg.cmo asmcomp/mach.cmo asmcomp/proc.cmo \
   asmcomp/clambda.cmo asmcomp/printclambda.cmo asmcomp/compilenv.cmo \
+  asmcomp/flambdasimplify.cmo \
   asmcomp/flambdasym.cmo \
   asmcomp/clambdagen.cmo \
   asmcomp/cmmgen.cmo \
