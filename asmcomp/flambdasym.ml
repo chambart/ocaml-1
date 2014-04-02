@@ -436,20 +436,22 @@ module Conv(P:Param1) = struct
     | Fapply({ap_function =
                 Ffunction ({fu_closure = Fclosure ({ cl_fun = ffuns;
                                                      cl_free_var = fv;
-                                                     cl_specialised_arg = spec_arg }, _);
+                                                     cl_specialised_arg }, _);
                             fu_fun = off;
                             fu_relative_to = (None as rel)}, _);
               ap_arg = args;
               ap_kind = Direct direc;
               ap_dbg = dbg}, _) ->
+        List.iter (fun arg -> Format.printf "%a" Printflambda.flambda arg) args;
         assert (Closure_function.equal off direc);
         let uargs, args_approx = conv_list_approx env args in
         let func =
           try find_declaration off ffuns
           with Not_found -> assert false in
         assert(List.length uargs = List.length func.params);
-        let args_approx = List.fold_right2 VarMap.add func.params args_approx
-            VarMap.empty in
+        let args_approx =
+          List.fold_right2 VarMap.add func.params args_approx VarMap.empty
+          |> VarMap.filter (fun var _ -> VarMap.mem var cl_specialised_arg) in
         let uffuns, fun_approx = conv_closure env ffuns args_approx fv in
         let approx = match get_descr fun_approx with
           | Some(Value_closure { fun_id; closure = { results } }) ->
@@ -589,7 +591,7 @@ module Conv(P:Param1) = struct
 
     | Fevent _ -> assert false
 
-  and conv_closure env functs _param_approxs fv =
+  and conv_closure env functs param_approxs fv =
     let closed = FunSet.mem functs.ident P.constant_closures in
 
     let fv_ulam_approx = VarMap.map (conv_approx env) fv in
@@ -643,16 +645,10 @@ module Conv(P:Param1) = struct
           functs.funs env
       in
 
-      (* XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX *)
-      (* to update: add associated informations about invariant parameters somewhere ? *)
-
-      (* (\* add informations about kept parameters *\) *)
-      (* let env = *)
-      (*   VarMap.fold (fun id approx env -> *)
-      (*       if VarSet.mem id func.kept_params *)
-      (*       then add_approx id approx env *)
-      (*       else env) *)
-      (*     param_approxs env in *)
+      let env =
+        (* param_approxs must be constants: part of specialised_args *)
+        VarMap.fold (fun id approx env -> add_approx id approx env)
+          param_approxs env in
 
       (* Add to the substitution the value of the free variables *)
       let add_env_variable id lam env =
