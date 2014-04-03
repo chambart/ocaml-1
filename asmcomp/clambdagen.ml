@@ -12,6 +12,7 @@
 
 open Misc
 open Symbol
+open Abstract_identifiers
 open Lambda
 open Clambda
 open Flambda
@@ -27,9 +28,9 @@ let list_closures expr constants =
     | Fclosure({ cl_fun = functs; cl_free_var = fv }, data) ->
         let add off_id _ map =
           ClosureFunctionMap.add
-            (Closure_function.create off_id)
+            (Closure_function.wrap off_id)
             functs map in
-        closures := VarMap.fold add functs.funs !closures;
+        closures := FidentMap.fold add functs.funs !closures;
     | e -> ()
   in
   Flambdaiter.iter aux expr;
@@ -87,8 +88,8 @@ module Offsets(P:Param1) = struct
 
   and iter_closure functs fv =
 
-    let funct = VarMap.bindings functs.funs in
-    let fv = VarMap.bindings fv in
+    let funct = FidentMap.bindings functs.funs in
+    let fv = FidentMap.bindings fv in
 
     (* build the table mapping the function to the offset of its code
        pointer inside the closure value *)
@@ -97,7 +98,7 @@ module Offsets(P:Param1) = struct
       let arity = Flambda.function_arity func in
       let env_pos = env_pos + 1 +
                     (if arity <> 1 then 3 else 2) in
-      let map = ClosureFunctionMap.add (Closure_function.create id) pos map in
+      let map = ClosureFunctionMap.add (Closure_function.wrap id) pos map in
       (map,env_pos)
     in
     let fun_offset, fv_pos =
@@ -108,7 +109,7 @@ module Offsets(P:Param1) = struct
        substituted here. But if the function is inlined, it is
        possible that the closure is accessed from outside its body. *)
     let aux_fv_offset (map,pos) (id, _) =
-      let off = Closure_variable.create id in
+      let off = Closure_variable.wrap id in
       assert(not (ClosureVariableMap.mem off map));
       let map = ClosureVariableMap.add off pos map in
       (map,pos + 1)
@@ -168,14 +169,14 @@ module Conv(P:Param2) = struct
 
   let get_fun_offset off =
     try
-      if is_current_unit (Closure_function.compilation_unit off)
+      if Closure_function.in_compilation_unit (Compilenv.current_unit ()) off
       then ClosureFunctionMap.find off fun_offset_table
       else ClosureFunctionMap.find off extern_fun_offset_table
     with Not_found ->
       fatal_error (Format.asprintf "missing offset %a" Closure_function.print off)
 
   let get_fv_offset off =
-    if is_current_unit (Closure_variable.compilation_unit off)
+    if Closure_variable.in_compilation_unit (Compilenv.current_unit ()) off
     then
       if not (ClosureVariableMap.mem off fv_offset_table)
       then fatal_error (Format.asprintf "env field offset not found: %a\n%!"
@@ -217,21 +218,21 @@ module Conv(P:Param2) = struct
         fatal_error (Format.asprintf "missing closure %a"
                        FunId.print fid)
 
-  type env = ulambda VarMap.t (* substitution *)
+  type env = ulambda FidentMap.t (* substitution *)
 
-  let empty_env () = VarMap.empty
+  let empty_env () = FidentMap.empty
 
-  let add_sb id subst env = VarMap.add id subst env
+  let add_sb id subst env = FidentMap.add id subst env
 
-  let rec conv ?(expected_symbol:symbol option) (env : env) = function
+  let rec conv ?(expected_symbol:Symbol.t option) (env : env) = function
     | Fvar (id,_) ->
         begin
           (* If the variable is a recursive access to the function
              currently being defined: it is replaced by an offset in the
              closure. If the variable is bound by the closure, it is
              replace by a field access inside the closure *)
-          try VarMap.find id env
-          with Not_found -> Uvar (Variable.make_ident id)
+          try FidentMap.find id env
+          with Not_found -> Uvar (Fident.unique_ident id)
         end
 
     | Fsymbol (sym,_) ->
@@ -243,11 +244,11 @@ module Conv(P:Param2) = struct
         Uconst (conv_const cst, None)
 
     | Flet(str, id, lam, body, _) ->
-        Ulet(Variable.make_ident id, conv env lam, conv env body)
+        Ulet(Fident.unique_ident id, conv env lam, conv env body)
 
     | Fletrec(defs, body, _) ->
         let udefs = List.map (fun (id,def) ->
-            Variable.make_ident id, conv env def) defs in
+            Fident.unique_ident id, conv env def) defs in
         Uletrec(udefs, conv env body)
 
     | Fclosure({ cl_fun = funct; cl_free_var = fv }, _) ->
@@ -325,13 +326,13 @@ module Conv(P:Param2) = struct
 
     | Fprim(p, args, dbg, _) ->
         Uprim(p, conv_list env args, dbg)
-    | Fstaticfail (i, args, _) ->
+    | Fstaticraise (i, args, _) ->
         Ustaticfail (Static_exception.to_int i, conv_list env args)
-    | Fcatch (i, vars, body, handler, _) ->
-        Ucatch (Static_exception.to_int i, List.map Variable.make_ident vars,
+    | Fstaticcatch (i, vars, body, handler, _) ->
+        Ucatch (Static_exception.to_int i, List.map Fident.unique_ident vars,
                 conv env body, conv env handler)
     | Ftrywith(body, id, handler, _) ->
-        Utrywith(conv env body, Variable.make_ident id, conv env handler)
+        Utrywith(conv env body, Fident.unique_ident id, conv env handler)
     | Fifthenelse(arg, ifso, ifnot, _) ->
         Uifthenelse(conv env arg, conv env ifso, conv env ifnot)
     | Fsequence(lam1, lam2, _) ->
@@ -339,9 +340,9 @@ module Conv(P:Param2) = struct
     | Fwhile(cond, body, _) ->
         Uwhile(conv env cond, conv env body)
     | Ffor(id, lo, hi, dir, body, _) ->
-        Ufor(Variable.make_ident id, conv env lo, conv env hi, dir, conv env body)
+        Ufor(Fident.unique_ident id, conv env lo, conv env hi, dir, conv env body)
     | Fassign(id, lam, _) ->
-        Uassign(Variable.make_ident id, conv env lam)
+        Uassign(Fident.unique_ident id, conv env lam)
     | Fsend(kind, met, obj, args, dbg, _) ->
         Usend(kind, conv env met, conv env obj, conv_list env args, dbg)
 
@@ -439,8 +440,8 @@ module Conv(P:Param2) = struct
        body, so constant closure still contains their free
        variables. *)
 
-    let funct = VarMap.bindings functs.funs in
-    let fv = VarMap.bindings fv in
+    let funct = FidentMap.bindings functs.funs in
+    let fv = FidentMap.bindings fv in
     let closed = is_closure_constant functs.ident in
 
     (* the environment variable used for non constant closures *)
@@ -458,13 +459,13 @@ module Conv(P:Param2) = struct
     let fv_ulam = List.map (fun (id,lam) -> id,conv env lam) fv in
 
     let conv_function (id,func) =
-      let cf = Closure_function.create id in
+      let cf = Closure_function.wrap id in
       (* adds variables from the closure to the substitution environment *)
       let fun_offset = ClosureFunctionMap.find cf fun_offset_table in
 
       (* inside the body of the function, we cannot access variables
          declared outside, so take a clean substitution table. *)
-      let env = VarMap.empty in
+      let env = FidentMap.empty in
 
       let env =
         (* Add to the substitution the value of the free variables *)
@@ -474,7 +475,7 @@ module Conv(P:Param2) = struct
           | Not_const ->
               assert(not closed);
               let var_offset = ClosureVariableMap.find
-                  (Closure_variable.create id) fv_offset_table in
+                  (Closure_variable.wrap id) fv_offset_table in
               let pos = var_offset - fun_offset in
               add_sb id (Uprim(Pfield pos, [Uvar env_var], Debuginfo.none)) env
           | No_lbl
@@ -490,13 +491,13 @@ module Conv(P:Param2) = struct
         then env
         else
           let add_offset_subst pos env (id,_) =
-            let offset = ClosureFunctionMap.find (Closure_function.create id) fun_offset_table in
+            let offset = ClosureFunctionMap.find (Closure_function.wrap id) fun_offset_table in
             let exp = Uoffset(Uvar env_var, offset - pos) in
             add_sb id exp env in
           List.fold_left (add_offset_subst fun_offset) env funct
       in
 
-      let params = List.map Variable.make_ident func.params in
+      let params = List.map Fident.unique_ident func.params in
 
       { Clambda.label = Compilenv.function_label cf;
         arity = Flambda.function_arity func;

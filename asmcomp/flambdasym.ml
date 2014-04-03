@@ -26,6 +26,7 @@ Then the tables needed to build the Flambdaexport.exported type are build.
 
 open Misc
 open Symbol
+open Abstract_identifiers
 open Flambda
 open Flambdaexport
 
@@ -45,8 +46,8 @@ let functions not_constants expr =
   let fun_id_map = ref FunMap.empty in
   let aux ({ cl_fun } as cl) _ =
     let add var _ map =
-      ClosureFunctionMap.add (Closure_function.create var) cl_fun map in
-    cf_map := VarMap.fold add cl_fun.funs !cf_map;
+      ClosureFunctionMap.add (Closure_function.wrap var) cl_fun map in
+    cf_map := FidentMap.fold add cl_fun.funs !cf_map;
     fun_id_map := FunMap.add cl.cl_fun.ident cl.cl_fun !fun_id_map
   in
   Flambdaiter.iter_on_closures aux expr;
@@ -70,7 +71,7 @@ module type Param1 = sig
 end
 
 type const_sym =
-  | Lbl of symbol
+  | Lbl of Symbol.t
   | No_lbl
   | Not_const
   | Const_closure
@@ -80,7 +81,7 @@ type infos =
     ex_table : descr EidMap.t ref;
     ex_symbol_id : ExportId.t SymbolMap.t ref;
     constants : unit flambda SymbolTbl.t;
-    symbol_alias : symbol SymbolTbl.t;
+    symbol_alias : Symbol.t SymbolTbl.t;
     ex_functions : unit function_declarations FunMap.t ref }
 
 let init_infos () =
@@ -171,19 +172,19 @@ module Conv(P:Param1) = struct
                            Closure_function.print fun_id)
 
   let not_constants = P.not_constants
-  let is_constant id = not (VarSet.mem id not_constants.Flambdaconstants.not_constant_id)
+  let is_constant id = not (FidentSet.mem id not_constants.Flambdaconstants.not_constant_id)
 
   type env =
-    { sb : unit flambda VarMap.t; (* substitution *)
-      cm : symbol VarMap.t; (* variables associated to constants *)
-      approx : approx VarMap.t }
+    { sb : unit flambda FidentMap.t; (* substitution *)
+      cm : Symbol.t FidentMap.t; (* variables associated to constants *)
+      approx : approx FidentMap.t }
 
   let infos = init_infos ()
 
   let empty_env =
-    { sb = VarMap.empty;
-      cm = VarMap.empty;
-      approx = VarMap.empty }
+    { sb = FidentMap.empty;
+      cm = FidentMap.empty;
+      approx = FidentMap.empty }
 
   let canonical_symbol s = canonical_symbol s infos
   let set_symbol_alias s1 s2 =
@@ -193,10 +194,10 @@ module Conv(P:Param1) = struct
     then SymbolTbl.add infos.symbol_alias s1' s2'
 
   let add_sb id subst env =
-    { env with sb = VarMap.add id subst env.sb }
+    { env with sb = FidentMap.add id subst env.sb }
 
   let add_cm id const env =
-    { env with cm = VarMap.add id const env.cm }
+    { env with cm = FidentMap.add id const env.cm }
 
   let add_global i approx =
     Hashtbl.add infos.global i approx
@@ -207,12 +208,12 @@ module Conv(P:Param1) = struct
       fatal_error (Format.asprintf "no global %i" i)
 
   let add_approx id approx env =
-    { env with approx = VarMap.add id approx env.approx }
+    { env with approx = FidentMap.add id approx env.approx }
   let get_approx id env =
-    try VarMap.find id env.approx with Not_found -> Value_unknown
+    try FidentMap.find id env.approx with Not_found -> Value_unknown
 
   let extern_symbol_descr sym =
-    if Ident.is_predef_exn (ident_of_compilation_unit sym.sym_unit)
+    if Compilenv.is_predefined_exception sym
     then None
     else
       let export = Compilenv.approx_for_global sym.sym_unit in
@@ -263,7 +264,7 @@ module Conv(P:Param1) = struct
           (* If the variable reference a constant, it is replaced by the
              constant label *)
           try
-            let lbl = VarMap.find id env.cm in
+            let lbl = FidentMap.find id env.cm in
             Fsymbol(lbl, ()), Value_symbol lbl
           with Not_found ->
 
@@ -272,7 +273,7 @@ module Conv(P:Param1) = struct
                closure. If the variable is bound by the closure, it is
                replace by a field access inside the closure *)
             try
-              let lam = VarMap.find id env.sb in
+              let lam = FidentMap.find id env.sb in
               lam, get_approx id env
             with Not_found ->
               Fvar (id, ()), get_approx id env
@@ -328,7 +329,7 @@ module Conv(P:Param1) = struct
           | Const_closure ->
               conv_approx env body
           | Not_const ->
-              Format.printf "%a@." Variable.print id;
+              Format.printf "%a@." Fident.print id;
               Printflambda.flambda Format.std_formatter lam;
               assert false
         end
@@ -352,7 +353,7 @@ module Conv(P:Param1) = struct
                       unboxing doesn't handle it well *)
                    add_sb id (conv env def) env, acc
                | Fvar (var_id, _) ->
-                   assert(List.for_all(fun (id,_) -> not (Variable.equal var_id id)) consts);
+                   assert(List.for_all(fun (id,_) -> not (Fident.equal var_id id)) consts);
                    (* For variables: the variable could have been substituted to
                       a constant: avoid it by substituting it directly *)
                    add_sb id (conv env def) env, acc
@@ -371,7 +372,7 @@ module Conv(P:Param1) = struct
             | _ ->
                 fatal_error (Format.asprintf
                                "recursive constant value without symbol %a"
-                               Variable.print id))
+                               Fident.print id))
           consts;
 
         let not_consts, env =
@@ -389,7 +390,7 @@ module Conv(P:Param1) = struct
     | Fclosure ({ cl_fun = funct;
                   cl_free_var = fv;
                   cl_specialised_arg = spec_arg }, _) ->
-        let args_approx = VarMap.map (fun id -> get_approx id env) spec_arg in
+        let args_approx = FidentMap.map (fun id -> get_approx id env) spec_arg in
         conv_closure env funct args_approx fv
 
     | Ffunction({ fu_closure = lam; fu_fun = id; fu_relative_to = rel }, _) as expr ->
@@ -450,8 +451,8 @@ module Conv(P:Param1) = struct
           with Not_found -> assert false in
         assert(List.length uargs = List.length func.params);
         let args_approx =
-          List.fold_right2 VarMap.add func.params args_approx VarMap.empty
-          |> VarMap.filter (fun var _ -> VarMap.mem var cl_specialised_arg) in
+          List.fold_right2 FidentMap.add func.params args_approx FidentMap.empty
+          |> FidentMap.filter (fun var _ -> FidentMap.mem var cl_specialised_arg) in
         let uffuns, fun_approx = conv_closure env ffuns args_approx fv in
         let approx = match get_descr fun_approx with
           | Some(Value_closure { fun_id; closure = { results } }) ->
@@ -547,12 +548,12 @@ module Conv(P:Param1) = struct
         Fprim(p, conv_list env args, dbg, ()),
         Value_unknown
 
-    | Fstaticfail (i, args, _) ->
-        Fstaticfail (i, conv_list env args, ()),
+    | Fstaticraise (i, args, _) ->
+        Fstaticraise (i, conv_list env args, ()),
         Value_unknown
 
-    | Fcatch (i, vars, body, handler, _) ->
-        Fcatch (i, vars, conv env body, conv env handler, ()),
+    | Fstaticcatch (i, vars, body, handler, _) ->
+        Fstaticcatch (i, vars, conv env body, conv env handler, ()),
         Value_unknown
 
     | Ftrywith(body, id, handler, _) ->
@@ -594,50 +595,50 @@ module Conv(P:Param1) = struct
   and conv_closure env functs param_approxs fv =
     let closed = FunSet.mem functs.ident P.constant_closures in
 
-    let fv_ulam_approx = VarMap.map (conv_approx env) fv in
-    let fv_ulam = VarMap.map (fun (lam,approx) -> lam) fv_ulam_approx in
+    let fv_ulam_approx = FidentMap.map (conv_approx env) fv in
+    let fv_ulam = FidentMap.map (fun (lam,approx) -> lam) fv_ulam_approx in
 
     let kept_fv id =
-      let cv = Closure_variable.create id in
+      let cv = Closure_variable.wrap id in
       not (is_constant id)
       || (ClosureVariableSet.mem cv used_variable_withing_closure) in
 
-    let used_fv_approx = VarMap.filter (fun id _ -> kept_fv id) fv_ulam_approx in
-    let used_fv = VarMap.map (fun (lam,approx) -> lam) used_fv_approx in
+    let used_fv_approx = FidentMap.filter (fun id _ -> kept_fv id) fv_ulam_approx in
+    let used_fv = FidentMap.map (fun (lam,approx) -> lam) used_fv_approx in
 
     let varmap_to_closfun_map map =
-      VarMap.fold (fun var v acc ->
-          let cf = Closure_function.create var in
+      FidentMap.fold (fun var v acc ->
+          let cf = Closure_function.wrap var in
           ClosureFunctionMap.add cf v acc)
         map ClosureFunctionMap.empty in
 
     let value_closure' =
       { closure_id = functs.ident;
         bound_var =
-          VarMap.fold (fun off_id (_,approx) map ->
-              let cv = Closure_variable.create off_id in
+          FidentMap.fold (fun off_id (_,approx) map ->
+              let cv = Closure_variable.wrap off_id in
               ClosureVariableMap.add cv approx map)
             used_fv_approx ClosureVariableMap.empty;
         results =
           varmap_to_closfun_map
-            (VarMap.map (fun _ -> Value_unknown) functs.funs) } in
+            (FidentMap.map (fun _ -> Value_unknown) functs.funs) } in
 
     (* add informations about free variables *)
     let env =
-      VarMap.fold (fun id (_,approx) -> add_approx id approx)
+      FidentMap.fold (fun id (_,approx) -> add_approx id approx)
         fv_ulam_approx env in
 
     let conv_function id func =
 
       (* inside the body of the function, we cannot access variables
          declared outside, so take a clean substitution table. *)
-      let env = { env with sb = VarMap.empty } in
+      let env = { env with sb = FidentMap.empty } in
 
       (* add informations about currently defined functions to
          allow direct call *)
       let env =
-        VarMap.fold (fun id _ env ->
-            let fun_id = Closure_function.create id in
+        FidentMap.fold (fun id _ env ->
+            let fun_id = Closure_function.wrap id in
             let desc = Value_closure { fun_id; closure = value_closure' } in
             let ex = new_descr desc in
             if closed then add_symbol (Compilenv.closure_symbol fun_id) ex;
@@ -647,7 +648,7 @@ module Conv(P:Param1) = struct
 
       let env =
         (* param_approxs must be constants: part of specialised_args *)
-        VarMap.fold (fun id approx env -> add_approx id approx env)
+        FidentMap.fold (fun id approx env -> add_approx id approx env)
           param_approxs env in
 
       (* Add to the substitution the value of the free variables *)
@@ -663,32 +664,32 @@ module Conv(P:Param1) = struct
         | Const_closure ->
             env
       in
-      let env = VarMap.fold add_env_variable fv_ulam env in
+      let env = FidentMap.fold add_env_variable fv_ulam env in
 
       let env =
         if closed
         then
           (* if the function is closed, recursive call access those constants *)
-          VarMap.fold (fun id _ env ->
-              let fun_id = Closure_function.create id in
+          FidentMap.fold (fun id _ env ->
+              let fun_id = Closure_function.wrap id in
               add_cm id (Compilenv.closure_symbol fun_id) env) functs.funs env
         else env
       in
       let body, approx = conv_approx env func.body in
       { func with
-        free_variables = VarSet.filter kept_fv func.free_variables;
+        free_variables = FidentSet.filter kept_fv func.free_variables;
         body }, approx
     in
 
-    let funs_approx = VarMap.mapi conv_function functs.funs in
+    let funs_approx = FidentMap.mapi conv_function functs.funs in
 
-    let ufunct = { functs with funs = VarMap.map fst funs_approx } in
+    let ufunct = { functs with funs = FidentMap.map fst funs_approx } in
 
     infos.ex_functions := FunMap.add ufunct.ident ufunct !(infos.ex_functions);
 
     let value_closure' =
       { value_closure' with
-        results = varmap_to_closfun_map (VarMap.map snd funs_approx) } in
+        results = varmap_to_closfun_map (FidentMap.map snd funs_approx) } in
 
     let closure_ex_id = new_descr (Value_unoffseted_closure value_closure') in
     let value_closure = Value_id closure_ex_id in
@@ -698,7 +699,7 @@ module Conv(P:Param1) = struct
       let expr =
         Fclosure ({ cl_fun = ufunct;
                     cl_free_var = used_fv;
-                    cl_specialised_arg = VarMap.empty }, ()) in
+                    cl_specialised_arg = FidentMap.empty }, ()) in
       if FunSet.mem ufunct.ident P.constant_closures
       then
         let sym = add_constant expr in
@@ -823,9 +824,9 @@ module Prepare(P:Param2) = struct
 
   let ex_functions_off =
     let aux_fun ffunctions off_id _ map =
-      let fun_id = Closure_function.create off_id in
+      let fun_id = Closure_function.wrap off_id in
       ClosureFunctionMap.add fun_id ffunctions map in
-    let aux _ f map = VarMap.fold (aux_fun f) f.funs map in
+    let aux _ f map = FidentMap.fold (aux_fun f) f.funs map in
     FunMap.fold aux ex_functions ClosureFunctionMap.empty
 
 end

@@ -10,7 +10,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
-open Symbol
+open Abstract_identifiers
 open Flambda
 
 val apply_on_subexpressions : ('a flambda -> unit) ->
@@ -23,7 +23,7 @@ val iter_toplevel : ('a flambda -> unit) -> 'a flambda -> unit
     i.e. does not apply it on functions body *)
 
 val iter_on_closures :
-  ('a closure -> 'a -> unit) -> 'a flambda -> unit
+  ('a fclosure -> 'a -> unit) -> 'a flambda -> unit
 
 val map : ('a flambda -> 'a flambda) ->
   'a flambda -> 'a flambda
@@ -31,9 +31,9 @@ val map : ('a flambda -> 'a flambda) ->
 val map_toplevel : ('a flambda -> 'a flambda) ->
   'a flambda -> 'a flambda
 
-val free_variables : 'a flambda -> VarSet.t
+val free_variables : 'a flambda -> FidentSet.t
 
 val map_data : ('a -> 'b) -> 'a flambda -> 'b flambda
 
-val toplevel_substitution : variable VarMap.t ->
+val toplevel_substitution : Fident.t FidentMap.t ->
   'a flambda -> 'a flambda

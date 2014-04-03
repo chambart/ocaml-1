@@ -14,14 +14,14 @@
 
 open Format
 open Ext_types
-open Symbol
+open Abstract_identifiers
 open Flambda
 
 let rec lam ppf = function
   | Fsymbol (symbol,_) ->
       Symbol.print ppf symbol
   | Fvar (id,_) ->
-      Variable.print ppf id
+      Fident.print ppf id
   | Fconst (cst,_) ->
       const ppf cst
   | Fapply({ap_function; ap_arg; ap_kind},_) ->
@@ -39,20 +39,20 @@ let rec lam ppf = function
         Closure_variable.print vc_var Closure_function.print vc_fun lam vc_closure
   | Fclosure({cl_fun;cl_free_var;cl_specialised_arg},_) ->
       let idents ppf =
-        List.iter (fprintf ppf "@ %a" Variable.print) in
+        List.iter (fprintf ppf "@ %a" Fident.print) in
       let funs ppf =
-        VarMap.iter (fun var f ->
+        FidentMap.iter (fun var f ->
             fprintf ppf "@ (fun@ %a@[<2>%a@]@ @[<2>%a@])"
-              Variable.print var idents f.params lam f.body) in
+              Fident.print var idents f.params lam f.body) in
       let lams ppf =
-        VarMap.iter (fun id v -> fprintf ppf "@ %a = %a"
-                        Variable.print id lam v) in
+        FidentMap.iter (fun id v -> fprintf ppf "@ %a = %a"
+                        Fident.print id lam v) in
       let spec ppf spec_args =
-        if not (VarMap.is_empty spec_args)
+        if not (FidentMap.is_empty spec_args)
         then begin
           fprintf ppf "@ with";
-          VarMap.iter (fun id id' -> fprintf ppf "@ %a <- %a"
-                          Variable.print id Variable.print id')
+          FidentMap.iter (fun id id' -> fprintf ppf "@ %a <- %a"
+                          Fident.print id Fident.print id')
             spec_args
         end
       in
@@ -61,10 +61,10 @@ let rec lam ppf = function
   | Flet(str, id, arg, body,_) ->
       let rec letbody ul = match ul with
         | Flet(str, id, arg, body,_) ->
-            fprintf ppf "@ @[<2>%a@ %a@]" Variable.print id lam arg;
+            fprintf ppf "@ @[<2>%a@ %a@]" Fident.print id lam arg;
             letbody body
         | _ -> ul in
-      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a@ %a@]" Variable.print id lam arg;
+      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a@ %a@]" Fident.print id lam arg;
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" lam expr
   | Fletrec(id_arg_list, body,_) ->
@@ -73,7 +73,7 @@ let rec lam ppf = function
         List.iter
           (fun (id, l) ->
              if !spc then fprintf ppf "@ " else spc := true;
-             fprintf ppf "@[<2>%a@ %a@]" Variable.print id lam l)
+             fprintf ppf "@[<2>%a@ %a@]" Fident.print id lam l)
           id_arg_list in
       fprintf ppf
         "@[<2>(letrec@ (@[<hv 1>%a@])@ %a)@]" bindings id_arg_list lam body
@@ -106,24 +106,24 @@ let rec lam ppf = function
         (IntSet.cardinal sw.fs_numconsts)
         (IntSet.cardinal sw.fs_numblocks)
         lam larg switch sw
-  | Fstaticfail (i, ls,_)  ->
+  | Fstaticraise (i, ls,_)  ->
       let lams ppf largs =
         List.iter (fun l -> fprintf ppf "@ %a" lam l) largs in
       fprintf ppf "@[<2>(exit@ %a%a)@]" Static_exception.print i lams ls;
-  | Fcatch(i, vars, lbody, lhandler,_) ->
+  | Fstaticcatch(i, vars, lbody, lhandler,_) ->
       fprintf ppf "@[<2>(catch@ %a@;<1 -1>with (%a%a)@ %a)@]"
         lam lbody Static_exception.print i
         (fun ppf vars -> match vars with
            | [] -> ()
            | _ ->
                List.iter
-                 (fun x -> fprintf ppf " %a" Variable.print x)
+                 (fun x -> fprintf ppf " %a" Fident.print x)
                  vars)
         vars
         lam lhandler
   | Ftrywith(lbody, param, lhandler,_) ->
       fprintf ppf "@[<2>(try@ %a@;<1 -1>with %a@ %a)@]"
-        lam lbody Variable.print param lam lhandler
+        lam lbody Fident.print param lam lhandler
   | Fifthenelse(lcond, lif, lelse,_) ->
       fprintf ppf "@[<2>(if@ %a@ %a@ %a)@]" lam lcond lam lif lam lelse
   | Fsequence(l1, l2,_) ->
@@ -132,11 +132,11 @@ let rec lam ppf = function
       fprintf ppf "@[<2>(while@ %a@ %a)@]" lam lcond lam lbody
   | Ffor(param, lo, hi, dir, body,_) ->
       fprintf ppf "@[<2>(for %a@ %a@ %s@ %a@ %a)@]"
-        Variable.print param lam lo
+        Fident.print param lam lo
         (match dir with Asttypes.Upto -> "to" | Asttypes.Downto -> "downto")
         lam hi lam body
   | Fassign(id, expr,_) ->
-      fprintf ppf "@[<2>(assign@ %a@ %a)@]" Variable.print id lam expr
+      fprintf ppf "@[<2>(assign@ %a@ %a)@]" Fident.print id lam expr
   | Fsend (k, met, obj, largs, _,_) ->
       let args ppf largs =
         List.iter (fun l -> fprintf ppf "@ %a" lam l) largs in

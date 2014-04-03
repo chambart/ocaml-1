@@ -10,7 +10,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
-open Symbol
+open Abstract_identifiers
 open Flambda
 
 let apply_on_subexpressions f = function
@@ -29,22 +29,22 @@ let apply_on_subexpressions f = function
   | Ftrywith (f1,_,f2,_)
   | Fsequence (f1,f2,_)
   | Fwhile (f1,f2,_)
-  | Fcatch (_,_,f1,f2,_) ->
+  | Fstaticcatch (_,_,f1,f2,_) ->
     f f1; f f2;
 
   | Ffor (_,f1,f2,_,f3,_)
   | Fifthenelse (f1,f2,f3,_) ->
     f f1;f f2;f f3
 
-  | Fstaticfail (_,l,_)
+  | Fstaticraise (_,l,_)
   | Fprim (_,l,_,_) ->
     List.iter f l
 
   | Fapply ({ap_function;ap_arg},_) ->
     List.iter f (ap_function::ap_arg)
   | Fclosure ({cl_fun;cl_free_var},_) ->
-    VarMap.iter (fun _ v -> f v) cl_free_var;
-    VarMap.iter (fun _ ffun -> f ffun.body) cl_fun.funs
+    FidentMap.iter (fun _ v -> f v) cl_free_var;
+    FidentMap.iter (fun _ ffun -> f ffun.body) cl_fun.funs
   | Fletrec (defs, body,_) ->
     List.iter (fun (_,l) -> f l) defs;
     f body
@@ -76,14 +76,14 @@ let iter_general ~toplevel f t =
     | Ftrywith (f1,_,f2,_)
     | Fsequence (f1,f2,_)
     | Fwhile (f1,f2,_)
-    | Fcatch (_,_,f1,f2,_) ->
+    | Fstaticcatch (_,_,f1,f2,_) ->
       aux f1; aux f2;
 
     | Ffor (_,f1,f2,_,f3,_)
     | Fifthenelse (f1,f2,f3,_) ->
       aux f1;aux f2;aux f3
 
-    | Fstaticfail (_,l,_)
+    | Fstaticraise (_,l,_)
     | Fprim (_,l,_,_) ->
       iter_list l
 
@@ -91,9 +91,9 @@ let iter_general ~toplevel f t =
       iter_list (f1::fl)
 
     | Fclosure ({cl_fun = funcs; cl_free_var = fv},_) ->
-      VarMap.iter (fun _ v -> aux v) fv;
+      FidentMap.iter (fun _ v -> aux v) fv;
       if not toplevel
-      then VarMap.iter (fun _ ffun -> aux ffun.body) funcs.funs
+      then FidentMap.iter (fun _ ffun -> aux ffun.body) funcs.funs
 
     | Fletrec (defs, body,_) ->
       List.iter (fun (_,l) -> aux l) defs;
@@ -122,7 +122,7 @@ let iter_on_closures f t =
     | Fassign _ | Fvar _
     | Fsymbol _ | Fconst _ | Fapply _ | Ffunction _
     | Fvariable_in_closure _ | Flet _ | Fletrec _
-    | Fprim _ | Fswitch _ | Fstaticfail _ | Fcatch _
+    | Fprim _ | Fswitch _ | Fstaticraise _ | Fstaticcatch _
     | Ftrywith _ | Fifthenelse _ | Fsequence _
     | Fwhile _ | Ffor _ | Fsend _ | Fevent _ | Funreachable _
       -> ()
@@ -146,11 +146,11 @@ let map_general ~toplevel f tree =
             then cl_fun
             else
               { cl_fun with
-                funs = VarMap.map
+                funs = FidentMap.map
                     (fun ffun -> { ffun with body = aux ffun.body })
                     cl_fun.funs } in
           Fclosure ({ cl_fun;
-                      cl_free_var = VarMap.map aux cl_free_var;
+                      cl_free_var = FidentMap.map aux cl_free_var;
                       cl_specialised_arg }, annot)
       | Ffunction ({ fu_closure; fu_fun; fu_relative_to}, annot) ->
           Ffunction ({ fu_closure = aux fu_closure;
@@ -168,13 +168,13 @@ let map_general ~toplevel f tree =
       | Fprim(p, args, dbg, annot) ->
           let args = List.map aux args in
           Fprim (p, args, dbg, annot)
-      | Fstaticfail(i, args, annot) ->
+      | Fstaticraise(i, args, annot) ->
           let args = List.map aux args in
-          Fstaticfail (i, args, annot)
-      | Fcatch (i, vars, body, handler, annot) ->
+          Fstaticraise (i, args, annot)
+      | Fstaticcatch (i, vars, body, handler, annot) ->
           let body = aux body in
           let handler = aux handler in
-          Fcatch (i, vars, body, handler, annot)
+          Fstaticcatch (i, vars, body, handler, annot)
       | Ftrywith(body, id, handler, annot) ->
           let body = aux body in
           let handler = aux handler in
@@ -227,27 +227,27 @@ let map f tree = map_general ~toplevel:false f tree
 let map_toplevel f tree = map_general ~toplevel:true f tree
 
 let free_variables tree =
-  let free = ref VarSet.empty in
-  let bound = ref VarSet.empty in
+  let free = ref FidentSet.empty in
+  let bound = ref FidentSet.empty in
   let add id =
-    if not (VarSet.mem id !free) then free := VarSet.add id !free in
+    if not (FidentSet.mem id !free) then free := FidentSet.add id !free in
   let aux = function
     | Fvar (id,_) -> add id
     | Fassign (id,_,_) -> add id
     | Fclosure ({cl_specialised_arg},_) ->
-        VarMap.iter (fun _ id -> add id) cl_specialised_arg
+        FidentMap.iter (fun _ id -> add id) cl_specialised_arg
     | Ftrywith(_,id,_,_)
     | Ffor(id, _, _, _, _, _)
     | Flet ( _, id, _, _,_) ->
-        bound := VarSet.add id !bound
+        bound := FidentSet.add id !bound
     | Fletrec (l, _,_) ->
-        List.iter (fun (id,_) -> bound := VarSet.add id !bound) l
-    | Fcatch (_,ids,_,_,_) ->
-        List.iter (fun id -> bound := VarSet.add id !bound) ids
+        List.iter (fun (id,_) -> bound := FidentSet.add id !bound) l
+    | Fstaticcatch (_,ids,_,_,_) ->
+        List.iter (fun id -> bound := FidentSet.add id !bound) ids
     | _ -> ()
   in
   iter_toplevel aux tree;
-  VarSet.diff !free !bound
+  FidentSet.diff !free !bound
 
 let map_data (type t1) (type t2) (f:t1 -> t2) (tree:t1 flambda) : t2 flambda =
   let rec mapper : t1 flambda -> t2 flambda = function
@@ -267,11 +267,11 @@ let map_data (type t1) (type t2) (f:t1 -> t2) (tree:t1 flambda) : t2 flambda =
                   cl_specialised_arg }, v) ->
         let cl_fun =
           { cl_fun with
-            funs = VarMap.map
+            funs = FidentMap.map
                 (fun ffun -> { ffun with body = mapper ffun.body })
                 cl_fun.funs } in
         Fclosure ({ cl_fun;
-                    cl_free_var = VarMap.map mapper cl_free_var;
+                    cl_free_var = FidentMap.map mapper cl_free_var;
                     cl_specialised_arg }, f v)
     | Ffunction ({ fu_closure; fu_fun; fu_relative_to}, v) ->
         Ffunction ({ fu_closure = mapper fu_closure;
@@ -289,10 +289,10 @@ let map_data (type t1) (type t2) (f:t1 -> t2) (tree:t1 flambda) : t2 flambda =
         Fsend(kind, mapper met, mapper obj, list_mapper args, dbg, f v)
     | Fprim(prim, args, dbg, v) ->
         Fprim(prim, list_mapper args, dbg, f v)
-    | Fstaticfail (i, args, v) ->
-        Fstaticfail (i, list_mapper args, f v)
-    | Fcatch (i, vars, body, handler, v) ->
-        Fcatch (i, vars, mapper body, mapper handler, f v)
+    | Fstaticraise (i, args, v) ->
+        Fstaticraise (i, list_mapper args, f v)
+    | Fstaticcatch (i, vars, body, handler, v) ->
+        Fstaticcatch (i, vars, mapper body, mapper handler, f v)
     | Ftrywith(body, id, handler, v) ->
         Ftrywith(mapper body, id, mapper handler, f v)
     | Fifthenelse(arg, ifso, ifnot, v) ->
@@ -311,14 +311,14 @@ let map_data (type t1) (type t2) (f:t1 -> t2) (tree:t1 flambda) : t2 flambda =
   mapper tree
 
 let toplevel_substitution sb tree =
-  let sb v = try VarMap.find v sb with Not_found -> v in
+  let sb v = try FidentMap.find v sb with Not_found -> v in
   let aux = function
     | Fvar (id,e) -> Fvar (sb id,e)
     | Fassign (id,e,d) -> Fassign (sb id,e,d)
     | Fclosure (cl,d) ->
         Fclosure ({cl with
                    cl_specialised_arg =
-                     VarMap.map sb cl.cl_specialised_arg},
+                     FidentMap.map sb cl.cl_specialised_arg},
                   d)
     | e -> e
   in

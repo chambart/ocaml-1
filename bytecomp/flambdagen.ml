@@ -10,8 +10,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Symbol
 open Lambda
+open Abstract_identifiers
 open Flambda
 
 let rec add_debug_info ev f =
@@ -31,49 +31,53 @@ let rec add_debug_info ev f =
   | _ -> f
 
 let rec subst sb id =
-  try subst sb (VarMap.find id sb)
+  try subst sb (FidentMap.find id sb)
   with Not_found -> id
 
 let add_subst sb ~replace ~by =
-  VarMap.add replace by sb
+  FidentMap.add replace by sb
 
 let nid = ExprId.create
 
 type 'param_id function_declaration =
-  { let_bound_var : variable;
-    closure_bound_var : variable;
+  { let_bound_var : Fident.t;
+    closure_bound_var : Fident.t;
     kind : function_kind;
     params : 'param_id list;
     body : lambda }
 
-let to_flambda ~for_bytecode ~compilation_unit ~current_unit_id ~symbol_for_global' lam =
+let to_flambda
+    ~for_bytecode
+    ~current_compilation_unit ~current_unit_id
+    ~symbol_for_global'
+    lam =
 
-  let make_var id = Variable.create ~compilation_unit id in
+  let wrap_id id = Fident.wrap_ident ~current_compilation_unit id in
 
-  let rename_var var = Variable.rename ~compilation_unit var in
+  let rename_var var = Fident.rename ~current_compilation_unit var in
 
   let rec close sb = function
     | Lvar id ->
-        let var = make_var id in
+        let var = wrap_id id in
         Fvar (subst sb var,
-              nid ~name:(Format.asprintf "var_%a" Variable.print var) ())
+              nid ~name:(Format.asprintf "var_%a" Fident.print var) ())
     | Lconst cst -> close_const sb cst
     | Llet(str, id, lam, body) ->
         let str =
           match str with
           | Variable -> Assigned
           | _ -> Not_assigned in
-        let var = make_var id in
+        let var = wrap_id id in
         Flet(str, var,
              close_named var sb lam,
              close sb body, nid ~name:"let" ())
     | Lfunction(kind, params, body) ->
-        let let_bound_var = Variable.make ~compilation_unit "fun" in
+        let let_bound_var = Fident.create ~current_compilation_unit "fun" in
         let closure_bound_var = rename_var let_bound_var in
         let decl = { let_bound_var; closure_bound_var; kind; params; body } in
         Ffunction(
           { fu_closure = close_functions sb [decl];
-            fu_fun = Closure_function.create closure_bound_var;
+            fu_fun = Closure_function.wrap closure_bound_var;
             fu_relative_to = None },
           nid ~name:"function" ())
     | Lapply(funct, args, loc) ->
@@ -84,7 +88,7 @@ let to_flambda ~for_bytecode ~compilation_unit ~current_unit_id ~symbol_for_glob
             ap_dbg = Debuginfo.none },
           nid ~name:"apply" ())
     | Lletrec(defs, body) ->
-        let defs = List.map (fun (id,lam) -> make_var id, lam) defs in
+        let defs = List.map (fun (id,lam) -> wrap_id id, lam) defs in
         let function_declarations =
           List.map (function
               | let_bound_var, Lfunction(kind, params, body) ->
@@ -98,12 +102,12 @@ let to_flambda ~for_bytecode ~compilation_unit ~current_unit_id ~symbol_for_glob
             (* When all the binding are functions, we build a single closure
                  for all the functions *)
             let clos = close_functions sb function_declarations in
-            let clos_var = Variable.make ~compilation_unit "clos" in
+            let clos_var = Fident.create ~current_compilation_unit "clos" in
             let body = List.fold_left (fun body decl ->
                 Flet(Not_assigned, decl.let_bound_var,
                      Ffunction(
                        { fu_closure = Fvar (clos_var, nid ());
-                         fu_fun = Closure_function.create decl.closure_bound_var;
+                         fu_fun = Closure_function.wrap decl.closure_bound_var;
                          fu_relative_to = None },
                        nid ()),
                      body, nid ()))
@@ -154,12 +158,12 @@ let to_flambda ~for_bytecode ~compilation_unit ~current_unit_id ~symbol_for_glob
                   fs_failaction = Misc.may_map (close sb) sw.sw_failaction },
                 nid ~name:"switch" ())
     | Lstaticraise (i, args) ->
-        Fstaticfail (Static_exception.of_int i, close_list sb args, nid ())
+        Fstaticraise (Static_exception.of_int i, close_list sb args, nid ())
     | Lstaticcatch(body, (i, vars), handler) ->
-        Fcatch (Static_exception.of_int i, List.map make_var vars,
+        Fstaticcatch (Static_exception.of_int i, List.map wrap_id vars,
                 close sb body, close sb handler, nid ())
     | Ltrywith(body, id, handler) ->
-        Ftrywith(close sb body, make_var id, close sb handler, nid ())
+        Ftrywith(close sb body, wrap_id id, close sb handler, nid ())
     | Lifthenelse(arg, ifso, ifnot) ->
         Fifthenelse(close sb arg, close sb ifso, close sb ifnot,
                     nid ~name:"if" ())
@@ -169,9 +173,9 @@ let to_flambda ~for_bytecode ~compilation_unit ~current_unit_id ~symbol_for_glob
     | Lwhile(cond, body) ->
         Fwhile(close sb cond, close sb body, nid ())
     | Lfor(id, lo, hi, dir, body) ->
-        Ffor(make_var id, close sb lo, close sb hi, dir, close sb body, nid ())
+        Ffor(wrap_id id, close sb lo, close sb hi, dir, close sb body, nid ())
     | Lassign(id, lam) ->
-        Fassign(make_var id, close sb lam, nid ())
+        Fassign(wrap_id id, close sb lam, nid ())
     | Levent(lam, ev) ->
         let lam = add_debug_info ev (close sb lam) in
         if for_bytecode then Fevent(lam, ev, nid ()) else lam
@@ -179,40 +183,40 @@ let to_flambda ~for_bytecode ~compilation_unit ~current_unit_id ~symbol_for_glob
         assert false
 
   and close_functions
-      (original_substitution:variable VarMap.t) function_declarations =
+      (original_substitution:Fident.t FidentMap.t) function_declarations =
     let function_declarations = List.map
-        (fun decl -> { decl with params = List.map make_var decl.params })
+        (fun decl -> { decl with params = List.map wrap_id decl.params })
         function_declarations in
     let used_variables_per_function =
-      VarMap.of_list
+      FidentMap.of_list
         (List.map (fun {closure_bound_var;body} ->
              closure_bound_var,
-             VarSet.of_ident_set ~compilation_unit (Lambda.free_variables body))
+             FidentSet.of_ident_set ~current_compilation_unit (Lambda.free_variables body))
             function_declarations) in
     let all_functions_arguments =
-      List.fold_right (fun {params} -> VarSet.union (VarSet.of_list params))
-        function_declarations VarSet.empty in
+      List.fold_right (fun {params} -> FidentSet.union (FidentSet.of_list params))
+        function_declarations FidentSet.empty in
     let all_used_variables =
-      VarMap.fold (fun _ -> VarSet.union)
-        used_variables_per_function VarSet.empty in
+      FidentMap.fold (fun _ -> FidentSet.union)
+        used_variables_per_function FidentSet.empty in
     let function_variables =
-      VarSet.of_list
+      FidentSet.of_list
         (List.map (fun {let_bound_var} -> let_bound_var)
            function_declarations) in
     let variables_in_closure =
-      VarSet.diff all_used_variables
-        (VarSet.union function_variables all_functions_arguments) in
+      FidentSet.diff all_used_variables
+        (FidentSet.union function_variables all_functions_arguments) in
     let sb =
       List.fold_right (fun {let_bound_var;closure_bound_var} ->
           add_subst ~replace:let_bound_var ~by:closure_bound_var)
         function_declarations original_substitution in
     let sb, free_variables_original_name =
-      VarSet.fold
+      FidentSet.fold
         (fun var (sb,map) ->
            let renamed = rename_var var in
            add_subst sb ~replace:var ~by:renamed,
-           VarMap.add renamed var map)
-        variables_in_closure (sb, VarMap.empty) in
+           FidentMap.add renamed var map)
+        variables_in_closure (sb, FidentMap.empty) in
 
     let close_one_function map { closure_bound_var; kind; params; body } =
       let dbg = match body with
@@ -222,41 +226,41 @@ let to_flambda ~for_bytecode ~compilation_unit ~current_unit_id ~symbol_for_glob
       let ffunction =
         { stub = false; params; dbg;
           free_variables =
-            VarSet.map (subst sb)
-              (VarMap.find closure_bound_var used_variables_per_function);
+            FidentSet.map (subst sb)
+              (FidentMap.find closure_bound_var used_variables_per_function);
           body = close sb body } in
       match kind with
       | Curried ->
-          VarMap.add closure_bound_var ffunction map
+          FidentMap.add closure_bound_var ffunction map
       | Tupled ->
           let tuplified_version = rename_var closure_bound_var in
           let generic_function_stub =
             tupled_function_call_stub
               closure_bound_var params tuplified_version in
-          let map = VarMap.add closure_bound_var generic_function_stub map in
-          VarMap.add tuplified_version ffunction map
+          let map = FidentMap.add closure_bound_var generic_function_stub map in
+          FidentMap.add tuplified_version ffunction map
     in
     let ffunctions =
-      { ident = FunId.create compilation_unit;
+      { ident = FunId.create current_compilation_unit;
         funs =
-          List.fold_left close_one_function VarMap.empty function_declarations;
-        compilation_unit } in
+          List.fold_left close_one_function FidentMap.empty function_declarations;
+        compilation_unit = current_compilation_unit } in
     let closure =
       { cl_fun = ffunctions;
         cl_free_var =
-          VarMap.map (fun var -> Fvar(subst original_substitution var, nid ()))
+          FidentMap.map (fun var -> Fvar(subst original_substitution var, nid ()))
             free_variables_original_name;
-        cl_specialised_arg = VarMap.empty } in
+        cl_specialised_arg = FidentMap.empty } in
 
     Fclosure (closure, nid ())
 
   and tupled_function_call_stub id original_params tuplified_version =
-    let tuple_param = Variable.make ~compilation_unit "tupled_stub_param" in
+    let tuple_param = Fident.create ~current_compilation_unit "tupled_stub_param" in
     let params = List.map (fun p -> rename_var p) original_params in
     let call = Fapply(
         { ap_function = Fvar(tuplified_version,nid ());
           ap_arg = List.map (fun p' -> Fvar(p',nid ())) params;
-          ap_kind = Direct (Closure_function.create tuplified_version);
+          ap_kind = Direct (Closure_function.wrap tuplified_version);
           ap_dbg = Debuginfo.none },
         nid ()) in
     let _, body =
@@ -268,7 +272,7 @@ let to_flambda ~for_bytecode ~compilation_unit ~current_unit_id ~symbol_for_glob
         (0,call) params in
     { stub = true;
       params = [tuple_param];
-      free_variables = VarSet.of_list [tuple_param;tuplified_version];
+      free_variables = FidentSet.of_list [tuple_param;tuplified_version];
       body;
       dbg = Debuginfo.none }
 
@@ -281,7 +285,7 @@ let to_flambda ~for_bytecode ~compilation_unit ~current_unit_id ~symbol_for_glob
           { let_bound_var; closure_bound_var; kind; params; body } in
         Ffunction(
           { fu_closure = close_functions sb [function_declaration];
-            fu_fun = Closure_function.create closure_bound_var;
+            fu_fun = Closure_function.wrap closure_bound_var;
             fu_relative_to = None },
           nid ())
     | lam ->
@@ -299,7 +303,7 @@ let to_flambda ~for_bytecode ~compilation_unit ~current_unit_id ~symbol_for_glob
     in
     aux cst
   in
-  close VarMap.empty lam
+  close FidentMap.empty lam
 
 (** String lifting to toplevel of expressions *)
 
@@ -408,7 +412,7 @@ let lift_strings_to_toplevel lam =
            lam))
     lam bindings
 
-let intro ?(for_bytecode = false) ~compilation_unit ~current_unit_id
+let intro ?(for_bytecode = false) ~current_compilation_unit ~current_unit_id
     ~symbol_for_global' lam =
   (* Strings are the only expressions that can't be duplicated without
      changing the semantics. So we lift them to toplevel to avoid
@@ -416,5 +420,5 @@ let intro ?(for_bytecode = false) ~compilation_unit ~current_unit_id
      There is no runtime cost to this transformation: strings are
      constants, they will not appear in the closures *)
   let lam = if for_bytecode then lam else lift_strings_to_toplevel lam in
-  to_flambda ~for_bytecode ~compilation_unit ~current_unit_id
+  to_flambda ~for_bytecode ~current_compilation_unit ~current_unit_id
     ~symbol_for_global' lam

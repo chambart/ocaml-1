@@ -26,9 +26,12 @@
    * apply and revapply primitives are removed
  *)
 
+open Symbol
+open Abstract_identifiers
+
 val intro:
   ?for_bytecode:bool ->
-  compilation_unit:Symbol.compilation_unit ->
+  current_compilation_unit:compilation_unit ->
   current_unit_id:Ident.t ->
-  symbol_for_global':(Ident.t -> Symbol.symbol) ->
-  Lambda.lambda -> Symbol.ExprId.t Flambda.flambda
+  symbol_for_global':(Ident.t -> Symbol.t) ->
+  Lambda.lambda -> ExprId.t Flambda.flambda

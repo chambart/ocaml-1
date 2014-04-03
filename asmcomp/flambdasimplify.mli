@@ -18,5 +18,6 @@
 - build an explicit closure for partial direct applications *)
 
 open Flambda
+open Abstract_identifiers
 
-val simplify : Symbol.ExprId.t flambda -> Symbol.ExprId.t flambda
+val simplify : ExprId.t flambda -> ExprId.t flambda

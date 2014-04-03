@@ -12,6 +12,7 @@
 
 open Ext_types
 open Symbol
+open Abstract_identifiers
 open Flambda
 
 module Innerid = Id(struct end)
@@ -41,14 +42,14 @@ and value_closure =
 and approx =
   | Value_unknown
   | Value_id of ExportId.t
-  | Value_symbol of symbol
+  | Value_symbol of Symbol.t
 
 type exported = {
   ex_functions : unit function_declarations FunMap.t;
   ex_functions_off : unit function_declarations ClosureFunctionMap.t;
   ex_values : descr EidMap.t;
   ex_globals : approx IdentMap.t;
-  ex_id_symbol : symbol EidMap.t;
+  ex_id_symbol : Symbol.t EidMap.t;
   ex_symbol_id : ExportId.t SymbolMap.t;
   ex_offset_fun : int ClosureFunctionMap.t;
   ex_offset_fv : int ClosureVariableMap.t;
@@ -199,15 +200,15 @@ let import_code_for_pack units pack expr =
 
 let import_ffunctions_for_pack units pack ffuns =
   { ffuns with
-    funs = VarMap.map (fun ffun ->
+    funs = FidentMap.map (fun ffun ->
         {ffun with body = import_code_for_pack units pack ffun.body})
         ffuns.funs }
 
 let ex_functions_off ex_functions =
   let aux_fun ffunctions function_id _ map =
     ClosureFunctionMap.add
-      (Closure_function.create function_id) ffunctions map in
-  let aux _ f map = VarMap.fold (aux_fun f) f.funs map in
+      (Closure_function.wrap function_id) ffunctions map in
+  let aux _ f map = FidentMap.fold (aux_fun f) f.funs map in
   FunMap.fold aux ex_functions ClosureFunctionMap.empty
 
 let import_eidmap_for_pack units pack f map =
@@ -226,7 +227,7 @@ let import_for_pack ~pack_units ~pack exp =
       exp.ex_functions in
   (* The only reachable global identifier of a pack is the pack itself *)
   let globals = IdentMap.filter (fun unit _ ->
-      Ident.same (ident_of_compilation_unit pack) unit)
+      Ident.same (Compilation_unit.get_persistent_ident pack) unit)
       exp.ex_globals in
   let res =
     { ex_functions;

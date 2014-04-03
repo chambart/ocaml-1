@@ -10,12 +10,17 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Symbol
+open Abstract_identifiers
+
 type constant_result = {
-  not_constant_id : Symbol.VarSet.t;
-  not_constant_closure : Symbol.FunSet.t;
+  not_constant_id : FidentSet.t;
+  not_constant_closure : FunSet.t;
 }
 
-val not_constants : for_clambda:bool -> compilation_unit:Symbol.compilation_unit -> 'a Flambda.flambda -> constant_result
+val not_constants :
+  for_clambda:bool -> compilation_unit:compilation_unit ->
+  'a Flambda.flambda -> constant_result
 (** [not_constant ~for_clambda expr]
     If for_clambda is true, are marked constant only expressions that can
     effectively be compiled to constants by Clambdagen.

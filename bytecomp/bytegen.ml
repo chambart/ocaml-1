@@ -13,6 +13,7 @@
 (*  bytegen.ml : translation of lambda terms to lists of instructions. *)
 
 open Misc
+open Ext_types
 open Asttypes
 open Primitive
 open Types
@@ -21,7 +22,7 @@ open Flambda
 open Switch
 open Instruct
 open Symbol
-open Ext_types
+open Abstract_identifiers
 
 (**** Label generation ****)
 
@@ -33,16 +34,16 @@ let new_label () =
 (**** Operations on compilation environments. ****)
 
 let empty_env =
-  { ce_stack = VarMap.empty;
-    ce_heap = VarMap.empty;
-    ce_rec = VarMap.empty;
+  { ce_stack = FidentMap.empty;
+    ce_heap = FidentMap.empty;
+    ce_rec = FidentMap.empty;
     ce_closures = ClosureFunctionMap.empty;
   }
 
 (* Add a stack-allocated variable *)
 
 let add_var id pos env =
-  { env with ce_stack = VarMap.add id pos env.ce_stack }
+  { env with ce_stack = FidentMap.add id pos env.ce_stack }
 
 let rec add_vars idlist pos env =
   match idlist with
@@ -52,7 +53,7 @@ let rec add_vars idlist pos env =
 let add_recclosure id pos env =
   { env with
     ce_closures =
-      ClosureFunctionMap.add (Closure_function.create id) pos env.ce_closures }
+      ClosureFunctionMap.add (Closure_function.wrap id) pos env.ce_closures }
 
 let rec add_recclosures idlist pos env =
   match idlist with
@@ -176,9 +177,9 @@ let rec check_recordwith_updates id e =
 
 let rec size_of_lambda = function
   | Ffunction ({ fu_closure = Fclosure (clos, _)}, _) ->
-      if VarMap.cardinal clos.cl_fun.funs <> 1 then
+      if FidentMap.cardinal clos.cl_fun.funs <> 1 then
         fatal_error ("Bytegen.comp_expr: recclosure");
-      RHS_block (1 + VarMap.cardinal clos.cl_free_var)
+      RHS_block (1 + FidentMap.cardinal clos.cl_free_var)
   | Fclosure _ ->
       fatal_error ("Bytegen.size_of_lambda: unexpected closure")
   | Ffunction _->
@@ -293,7 +294,7 @@ let find_raise_label i =
 
 (* Will the translation of l lead to a jump to label ? *)
 let code_as_jump l sz = match l with
-| Fstaticfail (i, [], _) ->
+| Fstaticraise (i, [], _) ->
     let label, size = find_raise_label i in
     if sz = size then
       Some label
@@ -304,12 +305,12 @@ let code_as_jump l sz = match l with
 (* Function bodies that remain to be compiled *)
 
 type function_to_compile =
-  { params: Variable.t list;            (* function parameters *)
+  { params: Fident.t list;            (* function parameters *)
     body: ExprId.t flambda;     (* the function body *)
     label: label;                       (* the label of the function entry *)
-    free_vars: Variable.t list;         (* free variables of the function  *)
+    free_vars: Fident.t list;         (* free variables of the function  *)
     num_defs: int;             (* number of mutually recursive definitions *)
-    rec_vars: Variable.t list;          (* mutually recursive fn names     *)
+    rec_vars: Fident.t list;          (* mutually recursive fn names     *)
     rec_pos: int }                      (* rank in recursive definition    *)
 
 let functions_to_compile  = (Stack.create () : function_to_compile Stack.t)
@@ -462,14 +463,14 @@ let rebind_recclosure id funid env =
     let pos = ClosureFunctionMap.find funid env.ce_closures in
     add_var id pos env
   with Not_found ->
-    fatal_error ("Bytegen.comp_expr: recclosure " ^ Variable.unique_name id)
+    fatal_error ("Bytegen.comp_expr: recclosure " ^ Fident.unique_name id)
 
 (*** GRGR comment *)
 
 let ignore_compunit map =
   (* GRGR FIXME: check compilation_unit... *)
-  VarMap.fold
-    (fun v pos s -> Ident.add (Variable.to_ident v) pos s)
+  FidentMap.fold
+    (fun v pos s -> Ident.add (Fident.unwrap v) pos s)
     map Ident.empty
 
 let debug_compenv env =
@@ -501,15 +502,15 @@ let compute_offset_tables exp =
 
   and iter_closure functs fv =
 
-    let funct = VarMap.bindings functs.funs in
-    let fv = VarMap.bindings fv in
+    let funct = FidentMap.bindings functs.funs in
+    let fv = FidentMap.bindings fv in
 
     (* build the table mapping the function to the offset of its code
        pointer inside the closure value *)
     let aux_fun_offset (map,env_pos) (id, func) =
       let pos = env_pos + 1 in
       let env_pos = env_pos + 2 in
-      let map = ClosureFunctionMap.add (Closure_function.create id) pos map in
+      let map = ClosureFunctionMap.add (Closure_function.wrap id) pos map in
       (map, env_pos)
     in
     let fun_offset, fv_pos =
@@ -520,7 +521,7 @@ let compute_offset_tables exp =
        substituted here. But if the function is inlined, it is
        possible that the closure is accessed from outside its body. *)
     let aux_fv_offset (map,pos) (id, _) =
-      let off = Closure_variable.create id in
+      let off = Closure_variable.wrap id in
       assert(not (ClosureVariableMap.mem off map));
       let map = ClosureVariableMap.add off pos map in
       (map,pos + 1)
@@ -548,19 +549,19 @@ let comp_block offset_tables env exp sz cont =
     match exp with
     | Fvar (var, _) ->
         begin try
-          let pos = VarMap.find var env.ce_stack in
+          let pos = FidentMap.find var env.ce_stack in
           Kacc(sz - pos) :: cont
         with Not_found ->
           try
-            let pos = VarMap.find var env.ce_heap in
+            let pos = FidentMap.find var env.ce_heap in
             Kenvacc pos :: cont
           with Not_found ->
             try
-              let pos = VarMap.find var env.ce_rec in
+              let pos = FidentMap.find var env.ce_rec in
               Koffsetclosure pos :: cont
             with Not_found ->
-              Format.eprintf "%a@." Variable.print var;
-              fatal_error ("Bytegen.comp_expr: var " ^ Variable.unique_name var)
+              Format.eprintf "%a@." Fident.print var;
+              fatal_error ("Bytegen.comp_expr: var " ^ Fident.unique_name var)
         end
     | Fvariable_in_closure (var, _) ->
         begin try
@@ -619,11 +620,11 @@ let comp_block offset_tables env exp sz cont =
         end
     | Ffunction ({ fu_closure = Fclosure (clos, _); fu_fun;
                    fu_relative_to = None }, _) -> begin
-        let functs = VarMap.bindings clos.cl_fun.funs in
-        let fv = VarMap.bindings clos.cl_free_var in
+        let functs = FidentMap.bindings clos.cl_fun.funs in
+        let fv = FidentMap.bindings clos.cl_free_var in
         match functs with
         | [id, funct] ->
-            assert (Closure_function.equal fu_fun (Closure_function.create id));
+            assert (Closure_function.equal fu_fun (Closure_function.wrap id));
             let lbl = new_label() in
             let to_compile =
               { params = funct.params; body = funct.body; label = lbl;
@@ -636,8 +637,8 @@ let comp_block offset_tables env exp sz cont =
             fatal_error ("Bytegen.comp_expr: recclosure arity")
       end
     | Flet(Not_assigned, clos_id, Fclosure (clos, _), body, _) ->
-        let functs = VarMap.bindings clos.cl_fun.funs in
-        let fv = VarMap.bindings clos.cl_free_var in
+        let functs = FidentMap.bindings clos.cl_fun.funs in
+        let fv = FidentMap.bindings clos.cl_free_var in
         let ndecl = List.length functs in
         let rec_idents = List.map fst functs in
         let rec comp_fun pos = function
@@ -784,7 +785,7 @@ let comp_block offset_tables env exp sz cont =
         with Not_constant ->
           comp_args env args sz (comp_primitive p args :: cont)
       end
-    | Fcatch (exn, vars, body, handler, _) ->
+    | Fstaticcatch (exn, vars, body, handler, _) ->
         let nvars = List.length vars in
         let branch1, cont1 = make_branch cont in
         let r =
@@ -812,7 +813,7 @@ let comp_block offset_tables env exp sz cont =
           end in
         sz_static_raises := StaticExceptionMap.remove exn !sz_static_raises ;
         r
-    | Fstaticfail (exn, args, _) ->
+    | Fstaticraise (exn, args, _) ->
         let cont = discard_dead_code cont in
         let label,size = find_raise_label exn in
         begin match args with
@@ -891,7 +892,7 @@ let comp_block offset_tables env exp sz cont =
         comp_expr env arg sz (Kswitch(lbl_consts, lbl_blocks) :: !c)
     | Fassign(var, expr, _) ->
         begin try
-          let pos = VarMap.find var env.ce_stack in
+          let pos = FidentMap.find var env.ce_stack in
           comp_expr env expr sz (Kassign(sz - pos) :: cont)
         with Not_found ->
           fatal_error "Bytegen.comp_expr: assign"
@@ -1009,8 +1010,8 @@ let comp_block offset_tables env exp sz cont =
 let comp_function offset_tables tc cont =
   let arity = List.length tc.params in
   let rec positions pos delta = function
-      [] -> VarMap.empty
-    | id :: rem -> VarMap.add id pos (positions (pos + delta) delta rem) in
+      [] -> FidentMap.empty
+    | id :: rem -> FidentMap.add id pos (positions (pos + delta) delta rem) in
   let env =
     { ce_stack = positions arity (-1) tc.params;
       ce_heap = positions (2 * (tc.num_defs - tc.rec_pos) - 1) 1 tc.free_vars;
@@ -1040,11 +1041,12 @@ let comp_remainder offset_tables cont =
 
 let compile_implementation modulename expr =
   let current_unit_id = Ident.create_persistent modulename in
-  let compilation_unit =
-    Compilation_unit.create current_unit_id
-      (linkage_name "__dummy_linkage__") in
-  let flam = Flambdagen.intro ~for_bytecode:true ~compilation_unit
-      ~current_unit_id
+  let current_compilation_unit =
+    Compilation_unit.create modulename (linkage_name "__dummy_linkage__") in
+  let flam =
+    Flambdagen.intro
+      ~for_bytecode:true
+      ~current_compilation_unit ~current_unit_id
       ~symbol_for_global':(fun _ -> assert false)
       expr in
   if !Clflags.dump_flambda
@@ -1062,12 +1064,13 @@ let compile_implementation modulename expr =
     init_code
 
 let compile_phrase expr =
-  let current_unit_id = Ident.create_persistent "" in
-  let compilation_unit =
-    Compilation_unit.create current_unit_id
-      (linkage_name "__dummy_linkage__") in
-  let flam = Flambdagen.intro ~for_bytecode:true ~compilation_unit
-      ~current_unit_id
+  let current_unit_id = Ident.create_persistent "__TOPLEVEL__" in
+  let current_compilation_unit =
+    Compilation_unit.create "__TOPLEVEL__"(linkage_name "__dummy_linkage__") in
+  let flam =
+    Flambdagen.intro
+      ~for_bytecode:true
+      ~current_compilation_unit ~current_unit_id
       ~symbol_for_global':(fun _ -> assert false)
       expr in
   if !Clflags.dump_flambda

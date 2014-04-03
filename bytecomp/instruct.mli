@@ -13,15 +13,16 @@
 (* The type of the instructions of the abstract machine *)
 
 open Lambda
-open Symbol
+open Abstract_identifiers
 
 (* Structure of compilation environments *)
 
 type compilation_env =
-  { ce_stack: int VarMap.t;            (* Positions of variables in the stack *)
-    ce_heap: int VarMap.t;             (* Structure of the heap-allocated env *)
-    ce_rec: int VarMap.t;              (* Functions bound by the same let rec *)
-    ce_closures: int ClosureFunctionMap.t } (* Recursives closures in the stack, but yet unbound *)
+  { ce_stack: int FidentMap.t;        (* Positions of variables in the stack *)
+    ce_heap: int FidentMap.t;         (* Structure of the heap-allocated env *)
+    ce_rec: int FidentMap.t;          (* Functions bound by the same let rec *)
+    ce_closures: int ClosureFunctionMap.t } (* Recursives closures in the stack,
+                                               but yet unbound *)
 
 (* The ce_stack component gives locations of variables residing
    in the stack. The locations are offsets w.r.t. the origin of the

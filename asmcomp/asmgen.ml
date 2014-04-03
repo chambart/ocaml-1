@@ -105,14 +105,16 @@ let compile_genfuns ppf f =
     (Cmmgen.generic_functions true [Compilenv.current_unit_infos ()])
 
 let test ppf lam =
-  let compilation_unit = Compilenv.current_unit () in
-  let flam = Flambdagen.intro ~compilation_unit
+  let current_compilation_unit = Compilenv.current_unit () in
+  let flam =
+    Flambdagen.intro
+      ~current_compilation_unit
       ~current_unit_id:(Compilenv.current_unit_id ())
       ~symbol_for_global':Compilenv.symbol_for_global'
       lam in
   if !Clflags.dump_flambda
   then Format.fprintf ppf "%a@." Printflambda.flambda flam;
-  (try Flambdacheck.check ~current_compilation_unit:compilation_unit flam
+  (try Flambdacheck.check ~current_compilation_unit flam
    with e ->
      Format.fprintf ppf "%a@."
        Printflambda.flambda flam;
@@ -120,12 +122,13 @@ let test ppf lam =
   let flam = Flambdasimplify.simplify flam in
   if !Clflags.dump_flambda
   then Format.fprintf ppf "%a@." Printflambda.flambda flam;
-  (try Flambdacheck.check ~current_compilation_unit:compilation_unit flam
+  (try Flambdacheck.check ~current_compilation_unit flam
    with e ->
      Format.fprintf ppf "%a@."
        Printflambda.flambda flam;
      raise e);
-  let fl_sym = Flambdasym.convert ~compilation_unit flam in
+  let fl_sym =
+    Flambdasym.convert ~compilation_unit:current_compilation_unit flam in
   let fl,const,export = fl_sym in
   Compilenv.set_export_info export;
   if !Clflags.dump_flambda
@@ -133,7 +136,7 @@ let test ppf lam =
     Format.fprintf ppf "%a@." Printflambda.flambda fl;
     Symbol.SymbolMap.iter (fun sym lam ->
         Format.fprintf ppf "sym: %a@ %a@."
-          Symbol.Symbol.print sym
+          Symbol.print sym
           Printflambda.flambda lam)
       const
   end;

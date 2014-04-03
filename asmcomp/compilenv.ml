@@ -15,6 +15,8 @@
 open Config
 open Misc
 open Clambda
+open Symbol
+open Abstract_identifiers
 open Cmx_format
 
 type error =
@@ -30,8 +32,8 @@ let export_infos_table =
   (Hashtbl.create 10 : (string, Flambdaexport.exported) Hashtbl.t)
 
 let imported_closure_table =
-  (Symbol.FunTbl.create 10
-   : Symbol.ExprId.t Flambda.function_declarations Symbol.FunTbl.t)
+  (FunTbl.create 10
+   : ExprId.t Flambda.function_declarations FunTbl.t)
 
 let structured_constants =
   ref ([] : (string * bool * Clambda.ustructured_constant) list)
@@ -70,7 +72,7 @@ let unit_id_from_name name = Ident.create_persistent name
 
 let reset ?packname name =
   Hashtbl.clear global_infos_table;
-  Symbol.FunTbl.clear imported_closure_table;
+  FunTbl.clear imported_closure_table;
   let symbol = symbolname_for_pack packname name in
   current_unit_id := unit_id_from_name name;
   current_unit.ui_name <- name;
@@ -192,8 +194,16 @@ let symbol_for_global id =
   end
 
 let unit_for_global id =
-  let sym_label = Symbol.linkage_name (symbol_for_global id) in
-  Symbol.Compilation_unit.create id sym_label
+  let sym_label = linkage_name (symbol_for_global id) in
+  Compilation_unit.create (Ident.name id) sym_label
+
+let predefined_exception_compilation_unit =
+  Compilation_unit.create "__dummy__" (linkage_name "__dummy__")
+
+let is_predefined_exception sym =
+  Compilation_unit.equal
+    predefined_exception_compilation_unit
+    sym.sym_unit
 
 let symbol_for_global' id =
   let open Symbol in
@@ -206,7 +216,7 @@ let symbol_for_global' id =
       sym_label }
 
 let current_unit_linkage_name () =
-  Symbol.linkage_name
+  linkage_name
     (make_symbol ~unitname:current_unit.ui_symbol None)
 
 (* Register the approximation of the module being compiled *)
@@ -220,9 +230,9 @@ let set_export_info export_info =
   current_unit.ui_export_info <- export_info
 
 let approx_for_global comp_unit =
-  let id = Symbol.ident_of_compilation_unit comp_unit in
-  if (Symbol.Compilation_unit.equal
-      Symbol.predefined_exception_compilation_unit
+  let id = Compilation_unit.get_persistent_ident comp_unit in
+  if (Compilation_unit.equal
+      predefined_exception_compilation_unit
       comp_unit)
      || Ident.is_predef_exn id
      || not (Ident.global id)
@@ -269,15 +279,16 @@ let save_unit_info filename =
   write_unit_info current_unit filename
 
 let current_unit_linkage_name () =
-  Symbol.linkage_name
+  linkage_name
     (make_symbol ~unitname:current_unit.ui_symbol None)
 
 let current_unit () =
-  Symbol.Compilation_unit.create (current_unit_id ())
+  Compilation_unit.create
+    (Ident.name (current_unit_id ()))
     (current_unit_linkage_name ())
 
 let current_unit_symbol () =
-  { Symbol.sym_unit = current_unit ();
+  { sym_unit = current_unit ();
     sym_label = current_unit_linkage_name () }
 
 let const_label = ref 0
@@ -292,28 +303,27 @@ let new_const_symbol () =
 
 let new_const_symbol' () =
   let sym_label = new_const_symbol () in
-  { Symbol.sym_unit = current_unit ();
-    sym_label = Symbol.linkage_name sym_label }
+  { sym_unit = current_unit ();
+    sym_label = linkage_name sym_label }
 
 let closure_symbol fv =
-  let open Symbol in
-  let compilation_unit = Closure_function.compilation_unit fv in
-  let fun_id = ident_of_function_within_closure fv in
-  let unitname = string_of_linkage_name
-      (linkage_name_of_compilation_unit compilation_unit) in
-  {sym_unit = compilation_unit;
-   sym_label =
-     linkage_name
-       (make_symbol ~unitname (Some ((Ident.unique_name fun_id) ^ "_closure"))) }
+  let compilation_unit = Closure_function.get_compilation_unit fv in
+  let unitname =
+    Symbol.string_of_linkage_name
+      (Compilation_unit.get_linkage_name compilation_unit) in
+  { Symbol.sym_unit = compilation_unit;
+    sym_label =
+      linkage_name
+        (make_symbol ~unitname
+           (Some ((Closure_function.unique_name fv) ^ "_closure"))) }
 
 let function_label fv =
   let open Symbol in
-  let compilation_unit = Closure_function.compilation_unit fv in
-  let unitname = string_of_linkage_name
-      (linkage_name_of_compilation_unit compilation_unit) in
-  let fun_id = ident_of_function_within_closure fv in
-  make_symbol ~unitname
-    (Some (Ident.unique_name fun_id))
+  let compilation_unit = Closure_function.get_compilation_unit fv in
+  let unitname =
+    string_of_linkage_name
+      (Compilation_unit.get_linkage_name compilation_unit) in
+  make_symbol ~unitname (Some (Closure_function.unique_name fv))
 
 
 let new_structured_constant cst global =
@@ -334,9 +344,9 @@ let imported_closure =
   let import_closure clos =
 
     let orig_var_map clos =
-      VarMap.fold
+      FidentMap.fold
         (fun id _ acc ->
-           let fun_id = Closure_function.create id in
+           let fun_id = Closure_function.wrap id in
            let sym = closure_symbol fun_id in
            SymbolMap.add sym id acc)
         clos.funs SymbolMap.empty in
@@ -351,7 +361,7 @@ let imported_closure =
 
     { clos with
       funs =
-        VarMap.map
+        FidentMap.map
           (fun ff ->
              let body = Flambdaiter.map_toplevel f ff.body in
              let body = Flambdaiter.map_data ExprId.create body in

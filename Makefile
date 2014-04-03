@@ -66,7 +66,7 @@ COMP=bytecomp/lambda.cmo bytecomp/printlambda.cmo \
   bytecomp/translclass.cmo bytecomp/translmod.cmo \
   bytecomp/simplif.cmo bytecomp/runtimedef.cmo \
   bytecomp/debuginfo.cmo \
-  bytecomp/symbol.cmo \
+  bytecomp/symbol.cmo bytecomp/abstract_identifiers.cmo \
   bytecomp/flambda.cmo bytecomp/printflambda.cmo \
   bytecomp/flambdaiter.cmo bytecomp/flambdacheck.cmo \
   bytecomp/flambdaconstants.cmo \

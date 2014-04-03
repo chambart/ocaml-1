@@ -50,10 +50,11 @@
 
 open Ext_types
 open Symbol
+open Abstract_identifiers
 open Flambda
 
 type constant_result = {
-  not_constant_id : VarSet.t;
+  not_constant_id : FidentSet.t;
   not_constant_closure : FunSet.t;
 }
 
@@ -72,17 +73,17 @@ module NotConstants(P:Param) = struct
 
   type dep =
     | Closure of FunId.t
-    | Var of variable
+    | Var of Fident.t
     | Global of int (* position of the global *)
 
   (* Sets representing NC *)
-  let variables = ref VarSet.empty
+  let variables = ref FidentSet.empty
   let closures = ref FunSet.empty
   let globals = ref IntSet.empty
 
   (* if the table associates [v1;v2;...;vn] to v, it represents
      v in NC => v1 in NC /\ v2 in NC ... /\ vn in NC *)
-  let id_dep_table : dep list VarTbl.t = VarTbl.create 100
+  let id_dep_table : dep list FidentTbl.t = FidentTbl.create 100
   let fun_dep_table : dep list FunTbl.t = FunTbl.create 100
   let glob_dep_table : dep list IntTbl.t = IntTbl.create 100
 
@@ -91,9 +92,9 @@ module NotConstants(P:Param) = struct
     List.iter (fun curr ->
       match dep with
       | Var id ->
-        let t = try VarTbl.find id_dep_table id
+        let t = try FidentTbl.find id_dep_table id
         with Not_found -> [] in
-        VarTbl.replace id_dep_table id (curr :: t)
+        FidentTbl.replace id_dep_table id (curr :: t)
       | Closure cl ->
         let t = try FunTbl.find fun_dep_table cl
         with Not_found -> [] in
@@ -108,8 +109,8 @@ module NotConstants(P:Param) = struct
   let mark_curr curr =
     List.iter (function
       | Var id ->
-        if not (VarSet.mem id !variables)
-        then variables := VarSet.add id !variables
+        if not (FidentSet.mem id !variables)
+        then variables := FidentSet.add id !variables
       | Closure cl ->
         if not (FunSet.mem cl !closures)
         then closures := FunSet.add cl !closures
@@ -154,9 +155,9 @@ module NotConstants(P:Param) = struct
       (* adds 'funcs in NC => curr in NC' *)
       register_implication ~in_nc:(Closure funcs.ident) ~implies_in_nc:curr;
       (* a closure is constant if its free variables are constants. *)
-      VarMap.iter (fun inner_id lam ->
+      FidentMap.iter (fun inner_id lam ->
         mark_loop [Closure funcs.ident; Var inner_id] lam) fv;
-      VarMap.iter (fun fun_id ffunc ->
+      FidentMap.iter (fun fun_id ffunc ->
         (* for each function f in a closure c 'c in NC => f' *)
         register_implication ~in_nc:(Closure funcs.ident) ~implies_in_nc:[Var fun_id];
         (* function parameters are in NC *)
@@ -218,7 +219,7 @@ module NotConstants(P:Param) = struct
            then a.(0) cannot be compiled. There must be a specialisation
            phase after that eliminating the then branch and a dead code
            elimination eliminating potential reference to a.(0) *)
-      if Ident.same id (ident_of_compilation_unit compilation_unit)
+      if Ident.same id (Compilation_unit.get_persistent_ident compilation_unit)
       then register_implication ~in_nc:(Global i) ~implies_in_nc:curr
       else mark_curr curr
 
@@ -242,7 +243,7 @@ module NotConstants(P:Param) = struct
       mark_loop [] f1;
       mark_loop [] f2
 
-    | Fcatch (_,ids,f1,f2,_) ->
+    | Fstaticcatch (_,ids,f1,f2,_) ->
       List.iter (fun id -> mark_curr [Var id]) ids;
       mark_curr curr;
       mark_loop [] f1;
@@ -267,7 +268,7 @@ module NotConstants(P:Param) = struct
       mark_loop [] f2;
       mark_loop [] f3
 
-    | Fstaticfail (_,l,_)
+    | Fstaticraise (_,l,_)
     | Fprim (_,l,_,_) ->
       mark_curr curr;
       List.iter (mark_loop []) l
@@ -300,18 +301,18 @@ module NotConstants(P:Param) = struct
   let propagate () =
     (* Set of variables/closures added to NC but not their dependencies *)
     let q = Queue.create () in
-    VarSet.iter (fun v -> Queue.push (Var v) q) !variables;
+    FidentSet.iter (fun v -> Queue.push (Var v) q) !variables;
     FunSet.iter (fun v -> Queue.push (Closure v) q) !closures;
     while not (Queue.is_empty q) do
       let deps = try match Queue.take q with
-        | Var e -> VarTbl.find id_dep_table e
+        | Var e -> FidentTbl.find id_dep_table e
         | Closure cl -> FunTbl.find fun_dep_table cl
         | Global i -> IntTbl.find glob_dep_table i
       with Not_found -> [] in
       List.iter (function
         | Var id as e ->
-          if not (VarSet.mem id !variables)
-          then (variables := VarSet.add id !variables;
+          if not (FidentSet.mem id !variables)
+          then (variables := FidentSet.add id !variables;
             Queue.push e q)
         | Closure cl as e ->
           if not (FunSet.mem cl !closures)

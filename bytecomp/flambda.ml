@@ -11,8 +11,9 @@
 (***********************************************************************)
 
 open Misc
-open Symbol
 open Ext_types
+open Symbol
+open Abstract_identifiers
 
 type let_kind =
   | Not_assigned
@@ -23,26 +24,29 @@ type call_kind =
   | Direct of function_within_closure
 
 type 'a flambda =
-  | Fsymbol of symbol * 'a
-  | Fvar of variable * 'a
+    Fsymbol of Symbol.t * 'a
+  | Fvar of Fident.t * 'a
   | Fconst of const * 'a
-  | Fapply of 'a apply * 'a
-  | Fclosure of 'a closure * 'a
-  | Ffunction of 'a funct * 'a
-  | Fvariable_in_closure of 'a variable_in_closure * 'a
-  | Flet of let_kind * variable * 'a flambda * 'a flambda * 'a
-  | Fletrec of (variable * 'a flambda) list * 'a flambda * 'a
+  | Fapply of 'a fapply * 'a
+  | Fclosure of 'a fclosure * 'a
+  | Ffunction of 'a ffunction * 'a
+  | Fvariable_in_closure of 'a fvariable_in_closure * 'a
+  | Flet of let_kind * Fident.t * 'a flambda * 'a flambda * 'a
+  | Fletrec of (Fident.t * 'a flambda) list * 'a flambda * 'a
   | Fprim of Lambda.primitive * 'a flambda list * Debuginfo.t * 'a
-  | Fswitch of 'a flambda * 'a flambda_switch * 'a
-  | Fstaticfail of static_exception * 'a flambda list * 'a
-  | Fcatch of static_exception * variable list * 'a flambda * 'a flambda * 'a
-  | Ftrywith of 'a flambda * variable * 'a flambda * 'a
+  | Fswitch of 'a flambda * 'a fswitch * 'a
+  | Fstaticraise of static_exception * 'a flambda list * 'a
+  | Fstaticcatch of
+      static_exception * Fident.t list * 'a flambda * 'a flambda * 'a
+  | Ftrywith of 'a flambda * Fident.t * 'a flambda * 'a
   | Fifthenelse of 'a flambda * 'a flambda * 'a flambda * 'a
   | Fsequence of 'a flambda * 'a flambda * 'a
   | Fwhile of 'a flambda * 'a flambda * 'a
-  | Ffor of variable * 'a flambda * 'a flambda * Asttypes.direction_flag * 'a flambda * 'a
-  | Fassign of variable * 'a flambda * 'a
-  | Fsend of Lambda.meth_kind * 'a flambda * 'a flambda * 'a flambda list * Debuginfo.t * 'a
+  | Ffor of Fident.t * 'a flambda * 'a flambda * Asttypes.direction_flag *
+            'a flambda * 'a
+  | Fassign of Fident.t * 'a flambda * 'a
+  | Fsend of Lambda.meth_kind * 'a flambda * 'a flambda * 'a flambda list *
+             Debuginfo.t * 'a
   | Fevent of 'a flambda * Lambda.lambda_event * 'a
   | Funreachable of 'a
 
@@ -52,63 +56,63 @@ and const =
   | Fconst_float_array of string list
   | Fconst_immstring of string
 
-and 'a flambda_switch =
+and 'a fapply =
+  { ap_function: 'a flambda;
+    ap_arg: 'a flambda list;
+    ap_kind: call_kind;
+    ap_dbg: Debuginfo.t }
+
+and 'a fclosure =
+  { cl_fun : 'a function_declarations;
+    cl_free_var : 'a flambda FidentMap.t;
+    cl_specialised_arg : Fident.t FidentMap.t }
+
+and 'a function_declarations = {
+  ident : FunId.t;
+  funs : 'a function_declaration FidentMap.t;
+  compilation_unit : compilation_unit;
+}
+
+and 'a function_declaration = {
+  stub : bool;
+  params : Fident.t list;
+  free_variables : FidentSet.t;
+  body : 'a flambda;
+  dbg : Debuginfo.t;
+}
+
+and 'a ffunction = {
+  fu_closure: 'a flambda;
+  fu_fun: function_within_closure;
+  fu_relative_to: function_within_closure option;
+}
+
+and 'a fvariable_in_closure = {
+  vc_closure : 'a flambda;
+  vc_fun : function_within_closure;
+  vc_var : variable_within_closure;
+}
+
+and 'a fswitch =
   { fs_numconsts: IntSet.t;
     fs_consts: (int * 'a flambda) list;
     fs_numblocks: IntSet.t;
     fs_blocks: (int * 'a flambda) list;
     fs_failaction : 'a flambda option }
 
-and 'a apply =
-  { ap_function: 'a flambda;
-    ap_arg: 'a flambda list;
-    ap_kind: call_kind;
-    ap_dbg: Debuginfo.t }
-
-and 'a closure =
-  { cl_fun : 'a function_declarations;
-    cl_free_var : 'a flambda VarMap.t;
-    cl_specialised_arg : variable VarMap.t }
-
-and 'a function_declaration = {
-  stub   : bool;
-  params : variable list;
-  free_variables : VarSet.t;
-  body   : 'a flambda;
-  dbg    : Debuginfo.t;
-}
-
-and 'a function_declarations = {
-  ident  : FunId.t;
-  funs   : 'a function_declaration VarMap.t;
-  compilation_unit : compilation_unit;
-}
-
-and 'a funct = {
-  fu_closure: 'a flambda;
-  fu_fun: function_within_closure;
-  fu_relative_to: function_within_closure option;
-}
-
-and 'a variable_in_closure = {
-  vc_closure : 'a flambda;
-  vc_fun : function_within_closure;
-  vc_var : variable_within_closure;
-}
-
 (* access functions *)
 
 let find_declaration cf { funs } =
-  VarMap.find (Closure_function.to_var cf) funs
+  FidentMap.find (Closure_function.unwrap cf) funs
 
 let find_declaration_variable cf { funs } =
-  let var = Closure_function.to_var cf in
-  if not (VarMap.mem var funs)
+  let var = Closure_function.unwrap cf in
+  if not (FidentMap.mem var funs)
   then raise Not_found
   else var
 
 let find_free_variable cv { cl_free_var } =
-  VarMap.find (Closure_variable.to_var cv) cl_free_var
+  FidentMap.find (Closure_variable.unwrap cv) cl_free_var
 
 (* utility functions *)
 
@@ -116,10 +120,10 @@ let function_arity f = List.length f.params
 
 let variables_bound_by_the_closure cf decls =
   let func = find_declaration cf decls in
-  let params = VarSet.of_list func.params in
-  let functions = VarMap.keys decls.funs in
-  VarSet.diff
-    (VarSet.diff func.free_variables params)
+  let params = FidentSet.of_list func.params in
+  let functions = FidentMap.keys decls.funs in
+  FidentSet.diff
+    (FidentSet.diff func.free_variables params)
     functions
 
 let data_at_toplevel_node = function
@@ -135,8 +139,8 @@ let data_at_toplevel_node = function
   | Fswitch(_,_,data)
   | Fsend(_,_,_,_,_,data)
   | Fprim(_,_,_,data)
-  | Fstaticfail (_,_,data)
-  | Fcatch (_,_,_,_,data)
+  | Fstaticraise (_,_,data)
+  | Fstaticcatch (_,_,_,_,data)
   | Ftrywith(_,_,_,data)
   | Fifthenelse(_,_,_,data)
   | Fsequence(_,_,data)
@@ -149,11 +153,11 @@ let data_at_toplevel_node = function
 let description_of_toplevel_node = function
   | Fsymbol ({sym_label},_) ->
       Printf.sprintf "%%%s" (string_of_linkage_name sym_label)
-  | Fvar (id,data) -> Variable.to_string id
+  | Fvar (id,data) -> Fident.to_string id
   | Fconst (cst,data) -> "const"
   | Flet(str, id, lam, body,data) ->
       Printf.sprintf "let %s"
-        (Variable.to_string id)
+        (Fident.to_string id)
   | Fletrec(defs, body,data) -> "letrec"
   | Fclosure(_,data) -> "closure"
   | Ffunction(_,data) -> "function"
@@ -162,8 +166,8 @@ let description_of_toplevel_node = function
   | Fswitch(arg, sw,data) -> "switch"
   | Fsend(kind, met, obj, args, _,data) -> "send"
   | Fprim(_, args, _,data) -> "prim"
-  | Fstaticfail (i, args,data) -> "staticfail"
-  | Fcatch (i, vars, body, handler,data) -> "catch"
+  | Fstaticraise (i, args,data) -> "staticraise"
+  | Fstaticcatch (i, vars, body, handler,data) -> "catch"
   | Ftrywith(body, id, handler,data) -> "trywith"
   | Fifthenelse(arg, ifso, ifnot,data) -> "if"
   | Fsequence(lam1, lam2,data) -> "seq"
@@ -174,26 +178,26 @@ let description_of_toplevel_node = function
   | Funreachable _ -> "unreachable"
 
 let recursive_functions { funs } =
-  let function_variables = VarMap.keys funs in
+  let function_variables = FidentMap.keys funs in
   let directed_graph =
-    VarMap.map
-      (fun ffun -> VarSet.inter ffun.free_variables function_variables)
+    FidentMap.map
+      (fun ffun -> FidentSet.inter ffun.free_variables function_variables)
       funs in
   let connected_components =
-    Var_connected_components.connected_components_sorted_from_roots_to_leaf
+    Fident_connected_components.connected_components_sorted_from_roots_to_leaf
       directed_graph in
   Array.fold_left (fun rec_fun -> function
-      | Var_connected_components.No_loop _ ->
+      | Fident_connected_components.No_loop _ ->
           rec_fun
-      | Var_connected_components.Has_loop elts ->
-          List.fold_right VarSet.add elts rec_fun)
-    VarSet.empty connected_components
+      | Fident_connected_components.Has_loop elts ->
+          List.fold_right FidentSet.add elts rec_fun)
+    FidentSet.empty connected_components
 
 let rec same l1 l2 =
   match (l1, l2) with
   | Fsymbol(s1, _), Fsymbol(s2, _) -> Symbol.equal s1 s2
   | Fsymbol _, _ | _, Fsymbol _ -> false
-  | Fvar(v1, _), Fvar(v2, _) -> Variable.equal v1 v2
+  | Fvar(v1, _), Fvar(v2, _) -> Fident.equal v1 v2
   | Fvar _, _ | _, Fvar _ -> false
   | Fconst(c1, _), Fconst(c2, _) -> begin
       let open Asttypes in
@@ -214,7 +218,7 @@ let rec same l1 l2 =
   | Fapply _, _ | _, Fapply _ -> false
   | Fclosure (c1, _), Fclosure (c2, _) ->
       samelist sameclosure
-        (VarMap.bindings c1.cl_fun.funs) (VarMap.bindings c2.cl_fun.funs)
+        (FidentMap.bindings c1.cl_fun.funs) (FidentMap.bindings c2.cl_fun.funs)
   | Fclosure _, _ | _, Fclosure _ -> false
   | Ffunction (f1, _), Ffunction (f2, _) ->
       same f1.fu_closure f2.fu_closure &&
@@ -227,7 +231,7 @@ let rec same l1 l2 =
       Closure_variable.equal v1.vc_var v2.vc_var
   | Fvariable_in_closure _, _ | _, Fvariable_in_closure _ -> false
   | Flet (k1, v1, a1, b1, _), Flet (k2, v2, a2, b2, _) ->
-      k1 = k2 && Variable.equal v1 v2 && same a1 a2 && same b1 b2
+      k1 = k2 && Fident.equal v1 v2 && same a1 a2 && same b1 b2
   | Flet _, _ | _, Flet _ -> false
   | Fletrec (bl1, a1, _), Fletrec (bl2, a2, _) ->
       samelist samebinding bl1 bl2 && same a1 a2
@@ -238,15 +242,15 @@ let rec same l1 l2 =
   | Fswitch (a1, s1, _), Fswitch (a2, s2, _) ->
       same a1 a2 && sameswitch s1 s2
   | Fswitch _, _ | _, Fswitch _ -> false
-  | Fstaticfail (e1, a1, _), Fstaticfail (e2, a2, _) ->
+  | Fstaticraise (e1, a1, _), Fstaticraise (e2, a2, _) ->
       Static_exception.equal e1 e2 && samelist same a1 a2
-  | Fstaticfail _, _ | _, Fstaticfail _ -> false
-  | Fcatch (s1, v1, a1, b1, _), Fcatch (s2, v2, a2, b2, _) ->
-      Static_exception.equal s1 s2 && samelist Variable.equal v1 v2 &&
+  | Fstaticraise _, _ | _, Fstaticraise _ -> false
+  | Fstaticcatch (s1, v1, a1, b1, _), Fstaticcatch (s2, v2, a2, b2, _) ->
+      Static_exception.equal s1 s2 && samelist Fident.equal v1 v2 &&
       same a1 a2 && same b1 b2
-  | Fcatch _, _ | _, Fcatch _ -> false
+  | Fstaticcatch _, _ | _, Fstaticcatch _ -> false
   | Ftrywith (a1, v1, b1, _), Ftrywith (a2, v2, b2, _) ->
-      same a1 a2 && Variable.equal v1 v2 && same b1 b2
+      same a1 a2 && Fident.equal v1 v2 && same b1 b2
   | Ftrywith _, _ | _, Ftrywith _ -> false
   | Fifthenelse (a1, b1, c1, _), Fifthenelse (a2, b2, c2, _) ->
       same a1 a2 && same b1 b2 && same c1 c2
@@ -258,11 +262,11 @@ let rec same l1 l2 =
       same a1 a2 && same b1 b2
   | Fwhile _, _ | _, Fwhile _ -> false
   | Ffor(v1, a1, b1, df1, c1, _), Ffor(v2, a2, b2, df2, c2, _) ->
-      Variable.equal v1 v2 &&  same a1 a2 &&
+      Fident.equal v1 v2 &&  same a1 a2 &&
       same b1 b2 && df1 = df2 && same c1 c2
   | Ffor _, _ | _, Ffor _ -> false
   | Fassign(v1, a1, _), Fassign(v2, a2, _) ->
-      Variable.equal v1 v2 && same a1 a2
+      Fident.equal v1 v2 && same a1 a2
   | Fassign _, _ | _, Fassign _ -> false
   | Fsend(k1, a1, b1, cl1, _, _), Fsend(k2, a2, b2, cl2, _, _) ->
       k1 = k2 && same a1 a2 && same b1 b2 && samelist same cl1 cl2
@@ -272,11 +276,11 @@ let rec same l1 l2 =
   | Fevent _, Fevent _ -> false
 
 and sameclosure (_, c1) (_, c2) =
-  samelist Variable.equal c1.params c2.params &&
+  samelist Fident.equal c1.params c2.params &&
   same c1.body c2.body
 
 and samebinding (v1, c1) (v2, c2) =
-  Variable.equal v1 v2 && same c1 c2
+  Fident.equal v1 v2 && same c1 c2
 
 and sameswitch fs1 fs2 =
   let samecase (n1, a1) (n2, a2) = n1 = n2 && same a1 a2 in
