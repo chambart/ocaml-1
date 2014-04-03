@@ -488,9 +488,7 @@ let debug_compenv env =
       function into (recursive) closures.
 
       These "global" tables are required only when some functions have
-      been inlined.
-
- *)
+      been inlined (i.e. only used in [Fvariable_in_closure]). *)
 
 type offset_tables = {
   freevars: int ClosureVariableMap.t;
@@ -583,8 +581,10 @@ let comp_block offset_tables env exp sz cont =
         end
     | Fvariable_in_closure (var, _) ->
         begin try
-          let var_offset = ClosureVariableMap.find var.vc_var offset_tables.freevars in
-          let fun_offset = ClosureFunctionMap.find var.vc_fun offset_tables.funs in
+          let var_offset =
+            ClosureVariableMap.find var.vc_var offset_tables.freevars in
+          let fun_offset =
+            ClosureFunctionMap.find var.vc_fun offset_tables.funs in
           let pos = var_offset - fun_offset in
           comp_expr env var.vc_closure sz (Kgetfield pos :: cont)
         with Not_found ->
@@ -758,8 +758,9 @@ let comp_block offset_tables env exp sz cont =
                                    comp_expr env exp2 sz cont)
         | Kbranchifnot lbl :: cont1 ->
             let (lbl2, cont2) = label_code cont1 in
-            comp_expr env exp1 sz (Kbranchif lbl2 ::
-                                   comp_expr env exp2 sz (Kbranchifnot lbl :: cont2))
+            comp_expr env exp1 sz
+              (Kbranchif lbl2 ::
+               comp_expr env exp2 sz (Kbranchifnot lbl :: cont2))
         | _ ->
             let (lbl, cont1) = label_code cont in
             comp_expr env exp1 sz (Kstrictbranchif lbl ::
@@ -846,9 +847,10 @@ let comp_block offset_tables env exp sz cont =
         let (branch1, cont1) = make_branch cont in
         let lbl_handler = new_label() in
         Kpushtrap lbl_handler ::
-        comp_expr env body (sz+4) (Kpoptrap :: branch1 ::
-                                   Klabel lbl_handler :: Kpush ::
-                                   comp_expr (add_var id (sz+1) env) handler (sz+1) (add_pop 1 cont1))
+        comp_expr env body (sz+4)
+          (Kpoptrap :: branch1 ::
+           Klabel lbl_handler :: Kpush ::
+           comp_expr (add_var id (sz+1) env) handler (sz+1) (add_pop 1 cont1))
     | Fifthenelse(cond, ifso, ifnot, _) ->
         comp_binary_test env cond ifso ifnot sz cont
     | Fsequence(exp1, exp2, _) ->
@@ -1077,7 +1079,8 @@ let compile_implementation modulename expr =
   let init_code = comp_block offset_tables empty_env flam 0 [] in
   if Stack.length functions_to_compile > 0 then begin
     let lbl_init = new_label() in
-    Kbranch lbl_init :: comp_remainder offset_tables (Klabel lbl_init :: init_code)
+    Kbranch lbl_init ::
+    comp_remainder offset_tables (Klabel lbl_init :: init_code)
   end else
     init_code
 

@@ -14,19 +14,25 @@ open Ext_types
 open Symbol
 open Abstract_identifiers
 
-(** A variant of lambda code with explicit closures, where every dependency
-    is explicit
+(** A variant of lambda code with explicit closures, where every
+    dependency is explicit.
 
     The particularities are:
-    * symbolic closure: closure fields are referenced
-        by unique identifiers (type offset)
-    * explicit external constants access: (type symbol)
-    * direct calls are explicit, but still keep an explicit
-      reference to the closure.
-    * recursive closure are annotated to avoid traversal to check
-    * each node carry a value that can be used for term identifiers
-    * no structured constants (represented as prim(makeblock) )
-*)
+
+    * Symbolic closures: fields are referenced by unique identifiers
+      (types [Closure_function.t] and [Closure_variable.t], see
+      [Abstract_identifiers]);
+
+    * Explicit external constants access (type [Symbol.t]);
+
+    * Direct calls are explicit;
+
+    * Each node carry a value that can be used for term identifiers;
+
+    * No structured constants: they are converted into
+      [Fprim (Pmakeblock(...), ...)].
+
+  *)
 
   (** There are 2 kind of closures: specified and unspecified ones.
       A closure is first build as unspecified using the Fclosure constructor.
@@ -37,28 +43,36 @@ open Abstract_identifiers
       closure can't be directly used, we first need to select (specify)
       which function the closure represents using Ffunction. The 2
       constructors that can be applied on specified closures are
+
       - Fapply: call the selected function
+
       - Fvariable_in_closure: access the free variables
 
       Typical usage when compiling
+
       {[let rec f x = ...
         and g x = ... ]}
 
       is to represent it as:
+
       {[Flet( closure, Fclosure { id_f -> ...; id_g -> ... },
               Flet( f, Ffunction { fu_closure = closure; fu_fun = id_f },
               Flet( g, Ffunction { fu_closure = closure; fu_fun = id_g }, ...)))]}
 
       Accessing a variable from a closure is done
-      - with Fvar inside a function declared in the closure
-      - with Fvariable_in_closure from outside.
-        This kind of access is generated when inlining a function.
 
-      It is possible to specify an already specified closure. This can happen
-      when inlining a function that access other functions from the same closure:
-      For instance, if f from the previous example access g and is inlined, calling
-      g will use the closure:
+      - with [Fvar] inside a function declared in the closure
+
+      - with [Fvariable_in_closure] from outside. This kind of access
+        is generated when inlining a function.
+
+      It is possible to specify an already specified closure. This can
+      happen when inlining a function that access other functions from
+      the same closure: For instance, if f from the previous example
+      access g and is inlined, calling g will use the closure:
+
       {[ Ffunction { fu_closure = f; fu_fun = id_g; fu_relative_to = Some id_f } ]}
+
   *)
 
 type let_kind =
@@ -95,8 +109,12 @@ type 'a flambda =
   | Fassign of Variable.t * 'a flambda * 'a
   | Fsend of Lambda.meth_kind * 'a flambda * 'a flambda * 'a flambda list *
              Debuginfo.t * 'a
-  | Fevent of 'a flambda * Lambda.lambda_event * 'a (** Only with -g in bytecode. *)
-  | Funreachable of 'a (** Represent a code that has been proved to be unreachable. *)
+
+  | Fevent of 'a flambda * Lambda.lambda_event * 'a
+      (** Only with -g in bytecode. *)
+
+  | Funreachable of 'a
+      (** Represent a code that has been proved to be unreachable. *)
 
 and const =
   (* no structured constant *)

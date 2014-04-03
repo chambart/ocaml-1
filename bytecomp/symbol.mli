@@ -12,16 +12,24 @@
 
 open Ext_types
 
+(** A symbol is an identifier of a constant provided by another
+    compilation unit or of top level module.
 
-(** Un nom dans l'assembleur généré
-    (en particulier il contient le préfixe -for-pack...) *)
+    * [sym_unit] is the compilation unit containing the value.
+    * [sym_label] is the linking name of the variable.
+
+    The label must be globaly unique: two compilation units linked
+    in the same program must not share labels *)
+
+
+(***********************************************************************)
 
 type linkage_name
 val linkage_name : string -> linkage_name
 val string_of_linkage_name : linkage_name -> string
 
 
-(** ... *)
+(***********************************************************************)
 
 module Compilation_unit : sig
 
@@ -43,12 +51,7 @@ module CompilationUnitMap : ExtMap with module M := Compilation_unit
 module CompilationUnitTbl : ExtHashtbl with module M := Compilation_unit
 
 
-(** A symbol is an identifier of a constant provided by another
-    compilation unit or of top level module.
-    [sym_unit] is the compilation unit containing the value.
-    [sym_lablel] is the linking name of the variable.
-    The label must be globaly unique: two compilation units linked
-    in the same program must not share labels *)
+(***********************************************************************)
 
 type t = { sym_unit : compilation_unit; sym_label : linkage_name }
 

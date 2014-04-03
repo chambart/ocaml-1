@@ -13,17 +13,20 @@
 open Ext_types
 open Symbol
 
-(** Various "abstract" identifiers to be used in [Flambda]
+(** Various "abstract" identifiers to be used in [Flambda].
 
-    * [Variable.t] should be used in place of non-persistent
-      [Ident.t]. It wraps an [Ident.t] together with its source
-      [compilation_unit]. It helps tracing the source of identifier
+    * [Variable.t] is the equivalent of of non-persistent [Ident.t] in
+      the [Flambda] tree. It wraps an [Ident.t] together with its
+      source [compilation_unit].
+
+      Introducing a new type helps tracing the source of identifier
       when debugging the inliner; and, avoids ident renaming when
       importing cmx files.
 
     * [ExprId.t] is used to identify nodes in the Flambda tree.
 
-    * [FunId.t] is used to identify closures in the Flambda tree.
+    * [FunId.t] is used to identify a set of recursive functions in
+      the Flambda tree.
 
     The remaining types are abstracted aliases, introduced to avoid
     misconfusion between different usages.
