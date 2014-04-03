@@ -79,6 +79,7 @@ OTHEROBJS=\
   $(OTOPDIR)/bytecomp/runtimedef.cmo \
   $(OTOPDIR)/bytecomp/debuginfo.cmo \
   $(OTOPDIR)/bytecomp/symbol.cmo \
+  $(OTOPDIR)/bytecomp/abstract_identifiers.cmo \
   $(OTOPDIR)/bytecomp/flambda.cmo \
   $(OTOPDIR)/bytecomp/printflambda.cmo \
   $(OTOPDIR)/bytecomp/flambdaiter.cmo \

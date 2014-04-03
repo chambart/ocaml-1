@@ -1,23 +1,22 @@
 open Symbol
+open Abstract_identifiers
 open Flambda
 
-let compilation_unit_id = Ident.create_persistent "unit"
+let compilation_unit_id = "unit"
 
 let compilation_unit =
   Compilation_unit.create compilation_unit_id
     (linkage_name "test")
 
 let other_compilation_unit =
-  Compilation_unit.create (Ident.create_persistent "other")
+  Compilation_unit.create "other"
     (linkage_name "other_test")
 
 let new_var name =
-  let id = Ident.create name in
-  Variable.create ~compilation_unit id
+  Fident.create ~current_compilation_unit:compilation_unit name
 
 let new_var_other_unit name =
-  let id = Ident.create name in
-  Variable.create ~compilation_unit:other_compilation_unit id
+  Fident.create ~current_compilation_unit:other_compilation_unit name
 
 let nid () = ExprId.create ()
 
@@ -40,15 +39,18 @@ let ftry body v handler =
   Ftrywith(body,v,handler,nid ())
 
 let fcatch exn vars body handler =
-  Fcatch(exn,vars,body,handler,nid ())
+  Fstaticcatch(exn,vars,body,handler,nid ())
 
 let fassign v exp =
   Fassign(v, exp, nid ())
 
+let fadd e1 e2 =
+  Fprim(Lambda.Paddint, [e1;e2], Debuginfo.none, nid ())
+
 let fun_decl params fv body =
   { stub = false;
     params;
-    free_variables = VarSet.of_list (params @ fv);
+    free_variables = FidentSet.of_list (params @ fv);
     body;
     dbg = Debuginfo.none }
 
@@ -57,8 +59,8 @@ let fun_decls lst fv =
   let funs =
     List.fold_left (fun map (var,params,body) ->
         let decl = fun_decl params (fv@functs) body in
-        VarMap.add var decl map)
-      VarMap.empty lst in
+        FidentMap.add var decl map)
+      FidentMap.empty lst in
   { ident = FunId.create compilation_unit;
     funs;
     compilation_unit }
@@ -67,8 +69,8 @@ let fclosure lst fv =
   let fv_var = List.map fst fv in
   Fclosure
     ({ cl_fun = fun_decls lst fv_var;
-       cl_free_var = VarMap.of_list fv;
-       cl_specialised_arg = VarMap.empty },
+       cl_free_var = FidentMap.of_list fv;
+       cl_specialised_arg = FidentMap.empty },
      nid ())
 
 let fun_decl' params body =
@@ -80,8 +82,8 @@ let fun_decls' lst =
   let funs =
     List.fold_left (fun map (var,params,body) ->
         let decl = fun_decl' params body in
-        VarMap.add var decl map)
-      VarMap.empty lst in
+        FidentMap.add var decl map)
+      FidentMap.empty lst in
   { ident = FunId.create compilation_unit;
     funs;
     compilation_unit }
@@ -94,16 +96,16 @@ let fapply ?(kind=Indirect) f args =
       ap_kind = kind},nid ())
 
 type env =
-  { var : variable VarMap.t }
+  { var : Fident.t FidentMap.t }
 
 let empty_env =
-  { var = VarMap.empty }
+  { var = FidentMap.empty }
 
 let add_var v v' env =
-  { var = VarMap.add v v' env.var }
+  { var = FidentMap.add v v' env.var }
 
 let equal_var env v v' =
-  try Variable.equal (VarMap.find v env.var) v'
+  try Fident.equal (FidentMap.find v env.var) v'
   with Not_found -> false
 
 let equal_let_kind k1 k2 = match k1, k2 with
@@ -131,7 +133,7 @@ let rec equal env t1 t2 = match t1, t2 with
 
   | (Fassign _ | Fclosure _
     | Fapply _ | Fletrec _ | Ffunction _ | Fvariable_in_closure _
-    | Fswitch _ | Fstaticfail _ | Fcatch _
+    | Fswitch _ | Fstaticraise _ | Fstaticcatch _
     | Ftrywith _ | Fifthenelse _ | Fsequence _
     | Fwhile _ | Ffor _ | Fsend _ | Funreachable _), _ ->
       let e = Format.asprintf "equal: Not implemented %a"

@@ -77,6 +77,7 @@ OTHEROBJS=\
   $(OTOPDIR)/bytecomp/runtimedef.cmo \
   $(OTOPDIR)/bytecomp/debuginfo.cmo \
   $(OTOPDIR)/bytecomp/symbol.cmo \
+  $(OTOPDIR)/bytecomp/abstract_identifiers.cmo \
   $(OTOPDIR)/bytecomp/flambda.cmo \
   $(OTOPDIR)/bytecomp/printflambda.cmo \
   $(OTOPDIR)/bytecomp/flambdaiter.cmo \
@@ -116,7 +117,7 @@ OTHEROBJS=\
   $(OTOPDIR)/asmcomp/printclambda.cmo \
   $(OTOPDIR)/asmcomp/asmgen.cmo
 
-OBJS=test_utils.cmo test_flambdacheck.cmo test_flambdagen.cmo test_connected_components.cmo
+OBJS=test_utils.cmo test_flambdacheck.cmo test_flambdagen.cmo test_connected_components.cmo test_kept_parameters.cmo test_recursives.cmo
 
 ADD_COMPFLAGS=$(INCLUDES) -g
 
