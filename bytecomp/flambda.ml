@@ -151,8 +151,8 @@ let data_at_toplevel_node = function
   | Funreachable data -> data
 
 let description_of_toplevel_node = function
-  | Fsymbol ({sym_label},_) ->
-      Printf.sprintf "%%%s" (string_of_linkage_name sym_label)
+  | Fsymbol (sym,_) ->
+      Format.asprintf "%%%a" Symbol.print sym
   | Fvar (id,data) -> Fident.to_string id
   | Fconst (cst,data) -> "const"
   | Flet(str, id, lam, body,data) ->
