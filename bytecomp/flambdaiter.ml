@@ -323,3 +323,71 @@ let toplevel_substitution sb tree =
     | e -> e
   in
   map_toplevel aux tree
+
+let arguments_kept_in_recursion' decl fun_var =
+  let function_escape = ref false in
+  let not_kept = ref Ext_types.IntSet.empty in
+  let mark pos = not_kept := Ext_types.IntSet.add pos !not_kept in
+  let arity = function_arity decl in
+  let _, variable_at_position =
+    List.fold_left
+      (fun (pos,map) var ->
+       pos + 1,
+       Ext_types.IntMap.add pos var map)
+      (0,Ext_types.IntMap.empty) decl.params in
+  let check_argument pos arg =
+    if pos < arity
+    (* ignore overapplied parameters: they are applied to another function *)
+    then
+      match arg with
+      | Fvar(var,_) ->
+         let expected_var =
+           try Ext_types.IntMap.find pos variable_at_position
+           with Not_found -> assert false in
+         if not (Fident.equal var expected_var)
+         then mark pos
+      | _ -> mark pos
+  in
+  let test_escape var =
+    if Fident.equal fun_var var
+    then function_escape := true
+  in
+  let rec loop = function
+    | Fvar (var,_) -> test_escape var
+    | Fapply ({ ap_function = Fvar(call_fun_var,_); ap_arg }, _) ->
+       if Fident.equal call_fun_var fun_var
+       then begin
+           let num_args = List.length ap_arg in
+           for pos = num_args to arity - 1 do
+             mark pos
+           (* if a function is partially aplied, consider all missing
+              arguments as not kept*)
+           done;
+           List.iteri check_argument ap_arg;
+         end;
+       List.iter loop ap_arg
+    | e ->
+       apply_on_subexpressions loop e
+  in
+  loop decl.body;
+  let _, kept_parameters =
+    List.fold_left
+      (fun (pos,set) var ->
+       let set =
+         if Ext_types.IntSet.mem pos !not_kept
+         then set
+         else FidentSet.add var set in
+       pos + 1, set)
+      (0,FidentSet.empty) decl.params in
+  kept_parameters, !function_escape
+
+let arguments_kept_in_recursion decls =
+  if FidentMap.cardinal decls.funs = 1
+  then
+    let fun_var, decl = FidentMap.choose decls.funs in
+    let kept_parameters, function_escape =
+      arguments_kept_in_recursion' decl fun_var in
+    if function_escape
+    then FidentSet.empty
+    else kept_parameters
+  else FidentSet.empty

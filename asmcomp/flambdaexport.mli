@@ -67,6 +67,7 @@ type exported = {
   (** Symbols that are effectively constants (the top-level module is
       not always a constant for instance) *)
   ex_constant_closures : FunSet.t;
+  ex_kept_arguments : FidentSet.t FunMap.t;
 }
 
 val empty_export : exported

@@ -44,14 +44,18 @@ let constant_closures constant_result expr =
 let functions not_constants expr =
   let cf_map = ref ClosureFunctionMap.empty in
   let fun_id_map = ref FunMap.empty in
+  let argument_kept = ref FunMap.empty in
   let aux ({ cl_fun } as cl) _ =
     let add var _ map =
       ClosureFunctionMap.add (Closure_function.wrap var) cl_fun map in
     cf_map := FidentMap.fold add cl_fun.funs !cf_map;
-    fun_id_map := FunMap.add cl.cl_fun.ident cl.cl_fun !fun_id_map
+    fun_id_map := FunMap.add cl.cl_fun.ident cl.cl_fun !fun_id_map;
+    argument_kept :=
+      FunMap.add cl.cl_fun.ident
+                 (Flambdaiter.arguments_kept_in_recursion cl_fun) !argument_kept
   in
   Flambdaiter.iter_on_closures aux expr;
-  !fun_id_map, !cf_map
+  !fun_id_map, !cf_map, !argument_kept
 
 let list_used_variable_withing_closure expr =
   let used = ref ClosureVariableSet.empty in
@@ -109,7 +113,7 @@ let new_descr descr infos =
 module Conv(P:Param1) = struct
   open Flambdaexport
 
-  let functions, closures = functions P.not_constants P.expr
+  let functions, closures, ex_kept_arguments = functions P.not_constants P.expr
 
   (* functions comming from a linked module *)
   let ex_closures =
@@ -857,7 +861,8 @@ let convert (type a) ~compilation_unit (expr:a Flambda.flambda) =
       ex_id_symbol = C2.ex_id_symbol;
       ex_functions = C2.ex_functions;
       ex_functions_off = C2.ex_functions_off;
-      ex_constant_closures = constant_closures}
+      ex_constant_closures = constant_closures;
+      ex_kept_arguments = C.ex_kept_arguments }
   in
   C2.expr, C2.constants, export
 

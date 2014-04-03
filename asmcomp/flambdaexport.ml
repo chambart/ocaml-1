@@ -55,6 +55,7 @@ type exported = {
   ex_offset_fv : int ClosureVariableMap.t;
   ex_constants : SymbolSet.t;
   ex_constant_closures : FunSet.t;
+  ex_kept_arguments : FidentSet.t FunMap.t;
 }
 
 let empty_export = {
@@ -68,6 +69,7 @@ let empty_export = {
   ex_offset_fv = ClosureVariableMap.empty;
   ex_constants = SymbolSet.empty;
   ex_constant_closures = FunSet.empty;
+  ex_kept_arguments = FunMap.empty;
 }
 
 let print_approx ppf export =
@@ -144,7 +146,9 @@ let merge e1 e2 =
         ~eq:int_eq e1.ex_offset_fv e2.ex_offset_fv;
     ex_constants = SymbolSet.union e1.ex_constants e2.ex_constants;
     ex_constant_closures =
-      FunSet.union e1.ex_constant_closures e2.ex_constant_closures }
+      FunSet.union e1.ex_constant_closures e2.ex_constant_closures;
+    ex_kept_arguments =
+      FunMap.disjoint_union e1.ex_kept_arguments e2.ex_kept_arguments }
 
 (* importing informations to build a pack: the global identifying the
    compilation unit of symbols is changed to be the pack one *)
@@ -240,6 +244,7 @@ let import_for_pack ~pack_units ~pack exp =
       ex_symbol_id = SymbolMap.map_keys import_sym
           (SymbolMap.map import_eid exp.ex_symbol_id);
       ex_constants = SymbolSet.map import_sym exp.ex_constants;
-      ex_constant_closures = exp.ex_constant_closures } in
+      ex_constant_closures = exp.ex_constant_closures;
+      ex_kept_arguments = exp.ex_kept_arguments } in
   EidTbl.clear rename_id_state;
   res

@@ -37,3 +37,6 @@ val map_data : ('a -> 'b) -> 'a flambda -> 'b flambda
 
 val toplevel_substitution : Fident.t FidentMap.t ->
   'a flambda -> 'a flambda
+
+val arguments_kept_in_recursion : 'a function_declarations ->
+  FidentSet.t

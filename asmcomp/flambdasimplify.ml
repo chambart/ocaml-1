@@ -40,7 +40,7 @@ and value_offset =
 and value_closure =
   { ffunctions : ExprId.t function_declarations;
     bound_var : approx ClosureVariableMap.t;
-    kept_params : FidentSet.t ClosureFunctionMap.t;
+    kept_params : FidentSet.t;
     fv_subst_renaming : variable_within_closure ClosureVariableMap.t;
     fun_subst_renaming : function_within_closure ClosureFunctionMap.t }
 
@@ -94,20 +94,28 @@ module Import = struct
           value_block (tag, Array.map import_approx fields)
       | Value_closure { fun_id; closure = { closure_id; bound_var } } ->
         let bound_var = ClosureVariableMap.map import_approx bound_var in
+        let kept_params =
+          try FunMap.find closure_id ex_info.ex_kept_arguments with
+          | Not_found -> assert false
+        in
         value_closure
           { fun_id;
             closure =
               { ffunctions = Compilenv.imported_closure closure_id;
                 bound_var;
-                kept_params = ClosureFunctionMap.empty; (* XXX TODO *)
+                kept_params = kept_params;
                 fv_subst_renaming = ClosureVariableMap.empty;
                 fun_subst_renaming = ClosureFunctionMap.empty } }
       | Value_unoffseted_closure { closure_id; bound_var } ->
         let bound_var = ClosureVariableMap.map import_approx bound_var in
+        let kept_params =
+          try FunMap.find closure_id ex_info.ex_kept_arguments with
+          | Not_found -> assert false
+        in
         value_unoffseted_closure
           { ffunctions = Compilenv.imported_closure closure_id;
             bound_var;
-            kept_params = ClosureFunctionMap.empty; (* XXX TODO *)
+            kept_params = kept_params;
             fv_subst_renaming = ClosureVariableMap.empty;
             fun_subst_renaming = ClosureFunctionMap.empty }
       | _ ->
@@ -1209,7 +1217,7 @@ and closure env r cl annot =
       bound_var = FidentMap.fold (fun id (_,desc) map ->
           ClosureVariableMap.add (Closure_variable.wrap id) desc map)
           fv ClosureVariableMap.empty;
-      kept_params = ClosureFunctionMap.empty; (* XXX TODO *)
+      kept_params = FidentSet.empty;
       fv_subst_renaming = off_sb.os_fv;
       fun_subst_renaming = off_sb.os_fun } in
   let closure_env = FidentMap.fold
@@ -1256,7 +1264,6 @@ and closure env r cl annot =
           then FidentSet.add id acc
           else acc) used_params ffun.params in
 
-      (* XXXXXXXXXXXXXXxx not reused yet *)
       let kept_params =
         if (FidentMap.cardinal ffuns.funs = 1) &&
            (* multiply recursive functions are not handled yet *)
@@ -1288,6 +1295,9 @@ and closure env r cl annot =
   let spec_args = FidentMap.filter
       (fun id _ -> FidentSet.mem id used_params)
       spec_args in
+
+  let kept_params =
+    ClosureFunctionMap.fold (fun _ -> FidentSet.union) kept_params FidentSet.empty in
 
   let r = FidentMap.fold (fun id' v acc ->
       (* Format.printf "use %a (for %a)@." Fident.print v Fident.print id'; *)
@@ -1466,9 +1476,9 @@ and direct_apply env r ~local clos funct fun_id func fapprox closure (args,appro
         (* let () = Format.printf "current functions: %a@ %a@." *)
         (*     FunId.print clos.ident *)
         (*     FunSet.print env.current_functions in *)
-        let kept_params =
-          try ClosureFunctionMap.find fun_id closure.kept_params
-          with Not_found -> FidentSet.empty
+        let kept_params = closure.kept_params
+          (* try ClosureFunctionMap.find fun_id closure.kept_params *)
+          (* with Not_found -> FidentSet.empty *)
         in
 
         (* let () = *)
@@ -1481,10 +1491,6 @@ and direct_apply env r ~local clos funct fun_id func fapprox closure (args,appro
         (*       Closure_function.print fun_id *)
         (* in *)
 
-      (* if false *)
-(*      XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-        need kept_param
-*)
       if
         recursive && not (FunSet.mem clos.ident env.current_functions)
         && not (FidentSet.is_empty kept_params)
