@@ -447,7 +447,6 @@ module Conv(P:Param1) = struct
               ap_arg = args;
               ap_kind = Direct direc;
               ap_dbg = dbg}, _) ->
-        List.iter (fun arg -> Format.printf "%a" Printflambda.flambda arg) args;
         assert (Closure_function.equal off direc);
         let uargs, args_approx = conv_list_approx env args in
         let func =
