@@ -60,7 +60,6 @@ module Fident = struct
       Compilation_unit.print v.var_unit
       Ident.print v.var_var
 
-  let to_string var = Format.asprintf "%a" print var
   let unique_name var = Ident.unique_name var.var_var
 
 end

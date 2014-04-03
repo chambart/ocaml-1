@@ -13,8 +13,27 @@
 open Ext_types
 open Symbol
 
+(** Various "abstract" identifiers to be used in [Flambda]
 
-(** *)
+    * [Fident.t] should be used in place of non-persistent
+      [Ident.t]. It wraps an [Ident.t] together with its source
+      [compilation_unit]. It helps tracing the source of identifier
+      when debugging the inliner; and, avoids ident renaming when
+      importing cmx files.
+
+    * [ExprId.t] is used to identify nodes in the Flambda tree.
+
+    * [FunId.t] is used to identify closures in the Flambda tree.
+
+    The remaining types are abstracted aliases, introduced to avoid
+    misconfusion between different usages.
+
+    * [Closure_function.t] and [Closure_variable.t] are abstract aliases
+      of [Fident.t] (see [Flambda] for more details).
+
+    * [Static_exception.t] is an abstract alias for [int].
+
+*)
 
 module Fident : sig
 
@@ -25,7 +44,7 @@ module Fident : sig
 
   val unwrap : t -> Ident.t (* For bytecode debugger only *)
   val unique_ident : t -> Ident.t (* For clambdagen only *)
-    (* Should we propagate Fident.t into clamba ??? *)
+    (* Should we propagate Fident.t into clambda ??? *)
 
   val rename : current_compilation_unit:compilation_unit -> t -> t
 
@@ -33,7 +52,6 @@ module Fident : sig
 
   include PrintableHashOrdered with type t := t
 
-  val to_string : t -> string
   val unique_name : t -> string
 
 end
@@ -49,7 +67,7 @@ module FidentTbl : ExtHashtbl with module M := Fident
 module IdentMap : ExtMap with module M := Ident
 
 
-(** *)
+(***********************************************************************)
 
 module Closure_function : sig
 
@@ -74,7 +92,7 @@ module ClosureFunctionMap : ExtMap with module M := Closure_function
 module ClosureFunctionTbl : ExtHashtbl with module M := Closure_function
 
 
-(** *)
+(***********************************************************************)
 
 module Closure_variable : sig
 
@@ -99,7 +117,7 @@ module ClosureVariableMap : ExtMap with module M := Closure_variable
 module ClosureVariableTbl : ExtHashtbl with module M := Closure_variable
 
 
-(** *)
+(***********************************************************************)
 
 module ExprId : Id
 module FunId : UnitId with module Compilation_unit := Compilation_unit
@@ -113,7 +131,7 @@ module FunMap : ExtMap with module M := FunId
 module FunTbl : ExtHashtbl with module M := FunId
 
 
-(** *)
+(***********************************************************************)
 
 module Static_exception : sig
 
@@ -134,7 +152,8 @@ module StaticExceptionSet : ExtSet with module M := Static_exception
 module StaticExceptionMap : ExtMap with module M := Static_exception
 module StaticExceptionTbl : ExtHashtbl with module M := Static_exception
 
-(**/**)
+
+(***********************************************************************)
 
 module Fident_connected_components :
   Sort_connected_components.S with module Id := Fident

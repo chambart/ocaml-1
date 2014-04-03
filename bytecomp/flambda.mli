@@ -158,23 +158,22 @@ and 'a fswitch =
     fs_consts: (int * 'a flambda) list; (** Integer cases *)
     fs_numblocks: IntSet.t; (** Number of tag block cases *)
     fs_blocks: (int * 'a flambda) list; (** Tag block cases *)
-    fs_failaction : 'a flambda option } (** Action to take if none matched *)
+    fs_failaction: 'a flambda option } (** Action to take if none matched *)
 
 
 
+(** Access functions *)
 
-(* access functions *)
-
-val find_declaration : function_within_closure ->
-  'a function_declarations -> 'a function_declaration
+val find_declaration :
+  function_within_closure -> 'a function_declarations -> 'a function_declaration
 (** [find_declaration f decl] raises Not_found if [f] is not in [decl] *)
 
-val find_declaration_variable : function_within_closure ->
-  'a function_declarations -> Fident.t
+val find_declaration_variable :
+  function_within_closure -> 'a function_declarations -> Fident.t
 (** [find_declaration_variable f decl] raises Not_found if [f] is not in [decl] *)
 
-val find_free_variable : variable_within_closure ->
-  'a fclosure -> 'a flambda
+val find_free_variable :
+  variable_within_closure -> 'a fclosure -> 'a flambda
 (** [find_free_variable v clos] raises Not_found if [c] is not in [clos] *)
 
 
@@ -182,8 +181,8 @@ val find_free_variable : variable_within_closure ->
 
 val function_arity : 'a function_declaration -> int
 
-val variables_bound_by_the_closure : function_within_closure ->
-  'a function_declarations -> FidentSet.t
+val variables_bound_by_the_closure :
+  function_within_closure -> 'a function_declarations -> FidentSet.t
 
 val can_be_merged : 'a flambda -> 'a flambda -> bool
 (** If [can_be_merged f1 f2] is true, it is safe to merge switch

@@ -465,10 +465,16 @@ let rebind_recclosure id funid env =
   with Not_found ->
     fatal_error ("Bytegen.comp_expr: recclosure " ^ Fident.unique_name id)
 
-(*** GRGR comment *)
+(*** Simpify the compilation environment passed to the debugger.
+
+     We convert [Fident.t] back to [Ident.t] as all variables come
+     from the same compilation unit, and it's easiest to simplify this
+     rather than adapt ocamldebug and others tools. *)
 
 let ignore_compunit map =
-  (* GRGR FIXME: check compilation_unit... *)
+  (* TODO: filter out ident from external compilation_unit...  if ever
+     some inter-module inlining is allowed in bytecode (maybe useful
+     for js_of_ocaml ?) *)
   FidentMap.fold
     (fun v pos s -> Ident.add (Fident.unwrap v) pos s)
     map Ident.empty
@@ -478,7 +484,13 @@ let debug_compenv env =
     dce_heap = ignore_compunit env.ce_heap;
     dce_rec = ignore_compunit env.ce_rec }
 
-(**** GRGR comment *)
+(**** First-pass: compute the offset of freevars and recursives
+      function into (recursive) closures.
+
+      These "global" tables are required only when some functions have
+      been inlined.
+
+ *)
 
 type offset_tables = {
   freevars: int ClosureVariableMap.t;
@@ -532,13 +544,19 @@ let compute_offset_tables exp =
     fun_offset_table := fun_offset;
     fv_offset_table := fv_offset;
 
-    List.iter (fun (_,{Flambda.body}) -> Flambdaiter.iter_toplevel iter body) funct in
+    List.iter
+      (fun (_,{Flambda.body}) -> Flambdaiter.iter_toplevel iter body)
+      funct
+
+  in
 
   Flambdaiter.iter_toplevel iter exp;
 
   { freevars = !fv_offset_table;
     funs = !fun_offset_table;
   }
+
+(* Second-pass: bytecode generation. *)
 
 let comp_block offset_tables env exp sz cont =
 

@@ -12,6 +12,7 @@
 
 open Ext_types
 
+
 (** Un nom dans l'assembleur généré
     (en particulier il contient le préfixe -for-pack...) *)
 
@@ -19,20 +20,23 @@ type linkage_name
 val linkage_name : string -> linkage_name
 val string_of_linkage_name : linkage_name -> string
 
-(** ... *)
 
-type compilation_unit
+(** ... *)
 
 module Compilation_unit : sig
 
-  val create : string -> linkage_name -> compilation_unit
+  type t
 
-  val get_persistent_ident : compilation_unit -> Ident.t
-  val get_linkage_name : compilation_unit -> linkage_name
+  val create : string -> linkage_name -> t
 
-  include PrintableHashOrdered with type t = compilation_unit
+  val get_persistent_ident : t -> Ident.t
+  val get_linkage_name : t -> linkage_name
+
+  include PrintableHashOrdered with type t := t
 
 end
+
+type compilation_unit = Compilation_unit.t
 
 module CompilationUnitSet : ExtSet with module M := Compilation_unit
 module CompilationUnitMap : ExtMap with module M := Compilation_unit

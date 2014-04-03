@@ -153,11 +153,11 @@ let data_at_toplevel_node = function
 let description_of_toplevel_node = function
   | Fsymbol (sym,_) ->
       Format.asprintf "%%%a" Symbol.print sym
-  | Fvar (id,data) -> Fident.to_string id
+  | Fvar (id,data) ->
+      Format.asprintf "var %a" Fident.print id
   | Fconst (cst,data) -> "const"
   | Flet(str, id, lam, body,data) ->
-      Printf.sprintf "let %s"
-        (Fident.to_string id)
+      Format.asprintf "let %a" Fident.print id
   | Fletrec(defs, body,data) -> "letrec"
   | Fclosure(_,data) -> "closure"
   | Ffunction(_,data) -> "function"
