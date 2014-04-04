@@ -195,8 +195,10 @@ module NotConstants(P:Param) = struct
     | Fprim(Lambda.Pmakeblock(tag, Asttypes.Immutable), args, dbg, _) ->
       List.iter (mark_loop curr) args
 
-    | Ffunction ({fu_closure}, _) ->
-      mark_loop curr fu_closure
+    | Ffunction ({fu_closure; fu_fun}, _) ->
+      if Closure_function.in_compilation_unit compilation_unit fu_fun
+      then mark_loop curr fu_closure
+      else mark_curr curr
 
     | Fvariable_in_closure ({vc_closure = f1},_)
     | Fprim(Lambda.Pfield _, [f1], _, _) ->

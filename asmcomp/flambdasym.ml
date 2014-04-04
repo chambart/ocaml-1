@@ -156,6 +156,15 @@ module Conv(P:Param1) = struct
         fatal_error (Format.asprintf "missing closure %a"
                        Closure_function.print cf)
 
+  let is_local_function_constant cf =
+    match function_declaration_position cf with
+    | Local { ident } ->
+        FunSet.mem ident P.constant_closures
+    | External _ -> false
+    | Not_declared ->
+        fatal_error (Format.asprintf "missing closure %a"
+                       Closure_function.print cf)
+
   let is_closure_constant fid =
     match functions_declaration_position fid with
     | Local { ident } ->
@@ -399,7 +408,7 @@ module Conv(P:Param1) = struct
 
     | Ffunction({ fu_closure = lam; fu_fun = id; fu_relative_to = rel }, _) as expr ->
         let ulam, fun_approx = conv_approx env lam in
-        if is_function_constant id
+        if is_local_function_constant id
         then
           let sym = Compilenv.closure_symbol id in
           Fsymbol (sym,()),
