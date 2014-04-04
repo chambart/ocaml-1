@@ -358,7 +358,7 @@ module Conv(P:Param2) = struct
       then 0
       else Ext_types.IntSet.max_elt num_keys + 1 in
     let index = Array.create num_keys 0
-    and store = Switch.mk_store Flambda.can_be_merged in
+    and store = Switch.mk_store (fun lam -> lam) Flambda.can_be_merged in
 
     (* First default case *)
     begin match default with

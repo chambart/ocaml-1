@@ -859,7 +859,7 @@ let comp_block offset_tables env exp sz cont =
         let (branch, cont1) = make_branch cont in
         let c = ref (discard_dead_code cont1) in
         (* Build indirection vectors *)
-        let store = mk_store Flambda.can_be_merged in
+        let store = mk_store (fun lam -> lam) Flambda.can_be_merged in
         let act_consts = Array.create (IntSet.cardinal sw.fs_numconsts) 0
         and act_blocks = Array.create (IntSet.cardinal sw.fs_numblocks) 0 in
         begin match sw.fs_failaction with (* default is index 0 *)

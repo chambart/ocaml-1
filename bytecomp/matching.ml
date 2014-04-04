@@ -428,21 +428,42 @@ let pretty_precompiled_res first nexts =
 
 
 
-(* A slight attempt to identify semantically equivalent lambda-expressions *)
+(* A slight attempt to identify semantically equivalent lambda-expressions,
+   We could have used Lambda.same, but our goal here is also to
+   find alpha-equivalent (simple) terms *)
+(* However, PR#6359 such sharing may hinders the invariant
+   of lambda-code 'Bound variable are unique', when code is finaly
+   not shared (eg. in test trees).
+   As a patch we only share expresssions with no lets
+   (cf. calls to mk_store below)
+*)
+
+
 exception Not_simple
 
-let rec raw_rec env : lambda -> lambda = function
-  | Llet(Alias,x,ex, body) -> raw_rec ((x,raw_rec env ex)::env) body
+let raw_rec =
+  let seen = ref [] in
+  let rec do_raw env e = match e with
+  | Llet(Alias,x,ex, body) ->
+      do_raw ((x,do_raw env ex)::env) body
   | Lvar id as l ->
-      begin try List.assoc id env with
-      | Not_found -> l
-      end
+      if List.mem id !seen then raise Not_simple
+      else
+        begin
+          seen := id :: !seen ;
+          try List.assoc id env with
+          | Not_found -> l
+        end
   | Lprim (Pfield i,args) ->
-      Lprim (Pfield i, List.map (raw_rec env) args)
+      Lprim (Pfield i, List.map (do_raw env) args)
+  | Lconst  (Const_base (Const_string _)) ->
+      raise Not_simple (* do not share strings *)
   | Lconst _ as l -> l
   | Lstaticraise (i,args) ->
-        Lstaticraise (i, List.map (raw_rec env) args)
-  | _ -> raise Not_simple
+        Lstaticraise (i, List.map (do_raw env) args)
+  | _ -> raise Not_simple in
+  do_raw
+
 
 let raw_action l = try raw_rec [] l with Not_simple -> l
 
@@ -1707,6 +1728,7 @@ module SArg = struct
   let make_isin h arg = Lprim (Pnot,[make_isout h arg])
   let make_if cond ifso ifnot = Lifthenelse (cond, ifso, ifnot)
   let make_switch = make_switch_switcher
+  let alpha act = act
 end
 
 module Switcher = Switch.Make(SArg)
@@ -1725,7 +1747,7 @@ let get_edges low high l = match l with
 
 
 let as_interval_canfail fail low high l =
-  let store = mk_store equal_action in
+  let store = mk_store raw_action equal_action in
   let rec nofail_rec cur_low cur_high cur_act = function
     | [] ->
         if cur_high = high then
@@ -1771,7 +1793,7 @@ let as_interval_canfail fail low high l =
   Array.of_list r,  store.act_get ()
 
 let as_interval_nofail l =
-  let store = mk_store equal_action in
+  let store = mk_store raw_action equal_action in
 
   let rec i_rec cur_low cur_high cur_act = function
     | [] ->
