@@ -943,6 +943,17 @@ and loop_direct (env:env) r tree : 'a flambda * ret =
         else Fprim(Pfield i, [arg'], dbg, annot) in
       let approx = get_field i [r.approx] in
       check_var_and_constant_result env r expr approx
+  | Fprim(Psetfield _ as p, [arg], dbg, annot) ->
+      let arg, r = loop env r arg in
+      begin match r.approx.descr with
+      | Value_unknown
+      | Value_bottom -> ()
+      | Value_block _ ->
+          Misc.fatal_error "setfield on an non mutable block"
+      | _ ->
+          Misc.fatal_error "setfield on something strange"
+      end;
+      Fprim(p, [arg], dbg, annot), ret r value_unknown
   | Fprim(p, args, dbg, annot) as expr ->
       let (args', approxs, r) = loop_list env r args in
       let expr = if args' == args then expr else Fprim(p, args', dbg, annot) in
