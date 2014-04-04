@@ -410,6 +410,9 @@ module Conv(P:Param1) = struct
         let ulam, fun_approx = conv_approx env lam in
         if is_local_function_constant id
         then
+          (* Only function declared in the current module may need
+             rewritting to a symbol. For external function it should
+             already have been done at the original declaration. *)
           let sym = Compilenv.closure_symbol id in
           Fsymbol (sym,()),
           Value_symbol sym
