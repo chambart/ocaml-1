@@ -20,8 +20,8 @@ let rec add_debug_info ev f =
     begin match f with
       | Fapply(ap,v) ->
         Fapply({ ap with ap_dbg = Debuginfo.from_call ev}, v)
-      | Fprim(Praise, args, dinfo, v) ->
-        Fprim(Praise, args, Debuginfo.from_call ev, v)
+      | Fprim(p, args, dinfo, v) ->
+        Fprim(p, args, Debuginfo.from_call ev, v)
       | Fsend(kind, f1, f2, args, dinfo, v) ->
         Fsend(kind, f1, f2, args, Debuginfo.from_call ev, v)
       | Fsequence(f1, f2, v) ->
