@@ -909,11 +909,11 @@ and loop_direct (env:env) r tree : 'a flambda * ret =
           add_approx id value_unknown env_acc)
           env defs
       in
-      let defs, body_env, r = List.fold_left (fun (defs, env_acc, r) (id,lam) ->
+      let defs, body_env, r = List.fold_right (fun (id,lam) (defs, env_acc, r) ->
           let lam, r = loop def_env r lam in
           let defs = (id,lam) :: defs in
           let env_acc = add_approx id r.approx env_acc in
-          defs, env_acc, r) ([],env,r) defs in
+          defs, env_acc, r) defs ([],env,r) in
       let body, r = loop body_env r body in
       let r = List.fold_left (fun r (id,_) -> exit_scope r id) r defs in
       Fletrec (defs, body, annot),
