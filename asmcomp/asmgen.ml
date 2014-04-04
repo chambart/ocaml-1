@@ -106,7 +106,7 @@ let compile_genfuns ppf f =
 
 let test ppf lam =
   let current_compilation_unit = Compilenv.current_unit () in
-  let flam =
+  let _, flam =
     Flambdagen.intro
       ~current_compilation_unit
       ~current_unit_id:(Compilenv.current_unit_id ())

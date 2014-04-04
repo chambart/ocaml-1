@@ -21,10 +21,6 @@ module Variable = struct
     { var_unit = current_compilation_unit;
       var_var = Ident.create name }
 
-  let wrap_ident ~current_compilation_unit id =
-    { var_unit = current_compilation_unit;
-      var_var = id }
-
   let unwrap var = var.var_var
   let unique_ident var =
     let open Ident in
@@ -64,13 +60,7 @@ module Variable = struct
 
 end
 
-module VarSet = struct
-  include ExtSet(Variable)
-  let of_ident_set ~current_compilation_unit idset =
-    Lambda.IdentSet.fold (fun id set ->
-        add (Variable.wrap_ident ~current_compilation_unit id) set)
-      idset empty
-end
+module VarSet = ExtSet(Variable)
 module VarMap = ExtMap(Variable)
 module VarTbl = ExtHashtbl(Variable)
 
@@ -122,11 +112,7 @@ module StaticExceptionSet = ExtSet(Static_exception)
 module StaticExceptionMap = ExtMap(Static_exception)
 module StaticExceptionTbl = ExtHashtbl(Static_exception)
 
-
 module IdentMap = ExtMap(Ident)
-
-
-
 
 (* let ident_of_function_within_closure { ce_id } = ce_id *)
 module Variable_connected_components =

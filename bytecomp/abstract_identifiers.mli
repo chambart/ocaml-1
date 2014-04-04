@@ -43,7 +43,6 @@ module Variable : sig
   type t
 
   val create : current_compilation_unit:compilation_unit -> string ->  t
-  val wrap_ident : current_compilation_unit:compilation_unit -> Ident.t -> t
 
   val unwrap : t -> Ident.t (* For bytecode debugger only *)
   val unique_ident : t -> Ident.t (* For clambdagen only *)
@@ -59,11 +58,7 @@ module Variable : sig
 
 end
 
-module VarSet : sig
-  include ExtSet with module M := Variable
-  val of_ident_set :
-    current_compilation_unit:compilation_unit -> Lambda.IdentSet.t -> t
-end
+module VarSet : ExtSet with module M := Variable
 module VarMap : ExtMap with module M := Variable
 module VarTbl : ExtHashtbl with module M := Variable
 

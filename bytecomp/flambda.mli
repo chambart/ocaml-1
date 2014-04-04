@@ -83,6 +83,13 @@ type call_kind =
   | Indirect
   | Direct of function_within_closure
 
+type const =
+  (* no structured constant *)
+  | Fconst_base of Asttypes.constant
+  | Fconst_pointer of int
+  | Fconst_float_array of string list
+  | Fconst_immstring of string
+
 (* A data is attached to each node. It is often used to uniquely
    identify an expression *)
 type 'a flambda =
@@ -115,13 +122,6 @@ type 'a flambda =
 
   | Funreachable of 'a
       (** Represent a code that has been proved to be unreachable. *)
-
-and const =
-  (* no structured constant *)
-  | Fconst_base of Asttypes.constant
-  | Fconst_pointer of int
-  | Fconst_float_array of string list
-  | Fconst_immstring of string
 
 and 'a fapply =
   { ap_function: 'a flambda;

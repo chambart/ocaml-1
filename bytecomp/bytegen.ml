@@ -465,24 +465,22 @@ let rebind_recclosure id funid env =
   with Not_found ->
     fatal_error ("Bytegen.comp_expr: recclosure " ^ Variable.unique_name id)
 
-(*** Simpify the compilation environment passed to the debugger.
+(*** Simpify the compilation environment stored in debug event.
 
-     We convert [Variable.t] back to [Ident.t] as all variables come
-     from the same compilation unit, and it's easiest to simplify this
-     rather than adapt ocamldebug and others tools. *)
+     We convert [Variable.t] back to [Ident.t] in order to allow
+     ocamldebug to retrieve positions into the stack. *)
 
-let ignore_compunit map =
-  (* TODO: filter out ident from external compilation_unit...  if ever
-     some inter-module inlining is allowed in bytecode (maybe useful
-     for js_of_ocaml ?) *)
+let ignore_compunit identmap offsetmap =
   VarMap.fold
-    (fun v pos s -> Ident.add (Variable.unwrap v) pos s)
-    map Ident.empty
+    (fun v pos s ->
+       try Ident.add (VarMap.find v identmap) pos s
+       with Not_found -> s)
+    offsetmap Ident.empty
 
-let debug_compenv env =
-  { dce_stack = ignore_compunit env.ce_stack;
-    dce_heap = ignore_compunit env.ce_heap;
-    dce_rec = ignore_compunit env.ce_rec }
+let debug_compenv map env =
+  { dce_stack = ignore_compunit map env.ce_stack;
+    dce_heap = ignore_compunit map env.ce_heap;
+    dce_rec = ignore_compunit map env.ce_rec }
 
 (**** First-pass: compute the offset of freevars and recursives
       function into (recursive) closures.
@@ -556,7 +554,7 @@ let compute_offset_tables exp =
 
 (* Second-pass: bytecode generation. *)
 
-let comp_block offset_tables env exp sz cont =
+let comp_block offset_tables debugger_map env exp sz cont =
 
   (**** Compilation of a code block (with tracking of stack usage) ****)
 
@@ -929,7 +927,7 @@ let comp_block offset_tables env exp sz cont =
             ev_info = info;
             ev_typenv = lev.lev_env;
             ev_typsubst = Subst.identity;
-            ev_compenv = debug_compenv env;
+            ev_compenv = debug_compenv debugger_map env;
             ev_stacksize = sz;
             ev_repr =
               begin match lev.lev_repr with
@@ -1027,7 +1025,7 @@ let comp_block offset_tables env exp sz cont =
 
 (**** Compilation of functions ****)
 
-let comp_function offset_tables tc cont =
+let comp_function offset_tables debugger_map tc cont =
   let arity = List.length tc.params in
   let rec positions pos delta = function
       [] -> VarMap.empty
@@ -1040,17 +1038,21 @@ let comp_function offset_tables tc cont =
     }
   in
   let cont =
-    comp_block offset_tables env tc.body arity (Kreturn arity :: cont) in
+    comp_block
+      offset_tables debugger_map env
+      tc.body arity (Kreturn arity :: cont) in
   if arity > 1 then
     Krestart :: Klabel tc.label :: Kgrab(arity - 1) :: cont
   else
     Klabel tc.label :: cont
 
-let comp_remainder offset_tables cont =
+let comp_remainder offset_tables debugger_map cont =
   let c = ref cont in
   begin try
     while true do
-      c := comp_function offset_tables (Stack.pop functions_to_compile) !c
+      c :=
+        comp_function
+          offset_tables debugger_map (Stack.pop functions_to_compile) !c
     done
   with Stack.Empty ->
     ()
@@ -1063,7 +1065,7 @@ let compile_implementation modulename expr =
   let current_unit_id = Ident.create_persistent modulename in
   let current_compilation_unit =
     Compilation_unit.create modulename (linkage_name "__dummy_linkage__") in
-  let flam =
+  let debugger_map, flam =
     Flambdagen.intro
       ~for_bytecode:true
       ~current_compilation_unit ~current_unit_id
@@ -1076,11 +1078,11 @@ let compile_implementation modulename expr =
   sz_static_raises := StaticExceptionMap.empty;
   compunit_name := modulename;
   let offset_tables = compute_offset_tables flam in
-  let init_code = comp_block offset_tables empty_env flam 0 [] in
+  let init_code = comp_block offset_tables debugger_map empty_env flam 0 [] in
   if Stack.length functions_to_compile > 0 then begin
     let lbl_init = new_label() in
     Kbranch lbl_init ::
-    comp_remainder offset_tables (Klabel lbl_init :: init_code)
+    comp_remainder offset_tables debugger_map (Klabel lbl_init :: init_code)
   end else
     init_code
 
@@ -1088,7 +1090,7 @@ let compile_phrase expr =
   let current_unit_id = Ident.create_persistent "__TOPLEVEL__" in
   let current_compilation_unit =
     Compilation_unit.create "__TOPLEVEL__"(linkage_name "__dummy_linkage__") in
-  let flam =
+  let debugger_map, flam =
     Flambdagen.intro
       ~for_bytecode:true
       ~current_compilation_unit ~current_unit_id
@@ -1100,6 +1102,7 @@ let compile_phrase expr =
   label_counter := 0;
   sz_static_raises := StaticExceptionMap.empty;
   let offset_tables = compute_offset_tables flam in
-  let init_code = comp_block offset_tables empty_env flam 1 [Kreturn 1] in
-  let fun_code = comp_remainder offset_tables [] in
+  let init_code =
+    comp_block offset_tables debugger_map empty_env flam 1 [Kreturn 1] in
+  let fun_code = comp_remainder offset_tables debugger_map [] in
   (init_code, fun_code)
