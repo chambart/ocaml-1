@@ -327,7 +327,11 @@ module Conv(P:Param1) = struct
 
     | Flet(str, id, lam, body, _) ->
         let lam, approx = conv_approx env lam in
-        let env = add_approx id approx env in
+        let env =
+          if is_constant id || str = Not_assigned
+          then add_approx id approx env
+          else add_approx id Value_unknown env
+        in
         if not (is_constant id)
         then
           let ubody, body_approx = conv_approx env body in
