@@ -13,11 +13,11 @@
 (* Elimination of useless Llet(Alias) bindings.
    Also transform let-bound references into variables. *)
 
-open Asttypes
+(* open Asttypes *)
 open Lambda
 
 (* To transform let-bound references into variables *)
-
+(*
 exception Real_reference
 
 let rec eliminate_ref id = function
@@ -80,6 +80,7 @@ let rec eliminate_ref id = function
       Levent(eliminate_ref id l, ev)
   | Lifused(v, e) ->
       Lifused(v, eliminate_ref id e)
+*)
 
 (* Simplification of exits *)
 
@@ -425,6 +426,7 @@ let simplify_lets lam =
   | Llet(str, v, Lvar w, l2) when optimize ->
       Hashtbl.add subst v (simplif (Lvar w));
       simplif l2
+(*
   | Llet(Strict, v, Lprim(Pmakeblock(0, Mutable), [linit]), lbody)
     when optimize ->
       let slinit = simplif linit in
@@ -434,6 +436,7 @@ let simplify_lets lam =
       with Real_reference ->
         mklet(Strict, v, Lprim(Pmakeblock(0, Mutable), [slinit]), slbody)
       end
+*)
   | Llet(Alias, v, l1, l2) ->
       begin match count_var v with
         0 -> simplif l2

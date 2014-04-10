@@ -1517,3 +1517,69 @@ let simplify tree =
   assert(VarSet.is_empty r.used_variables);
   assert(StaticExceptionSet.is_empty r.used_staticfail);
   result
+
+
+(* To transform let-bound references into variables *)
+
+let directly_used_variables tree =
+  let set = ref VarSet.empty in
+  let rec loop = function
+    | Fvar (v, _) ->
+        set := VarSet.add v !set
+    | Fprim(Pfield 0, [Fvar _], _, _)
+    | Fprim(Poffsetref _, [Fvar _], _, _) ->
+        ()
+    | Fprim(Psetfield(0, _), [Fvar _; e], _, _) ->
+        loop e
+    | Fclosure _ | Flet _ | Fassign _
+    | Fsymbol _ | Fconst _ | Fapply _ | Ffunction _
+    | Fvariable_in_closure _ | Fletrec _
+    | Fprim _ | Fswitch _ | Fstaticraise _ | Fstaticcatch _
+    | Ftrywith _ | Fifthenelse _ | Fsequence _
+    | Fwhile _ | Ffor _ | Fsend _ | Fevent _ | Funreachable _ as exp ->
+        Flambdaiter.apply_on_subexpressions loop exp in
+  loop tree;
+  !set
+
+let variables_containing_ref lam =
+  let set = ref VarSet.empty in
+  let aux = function
+    | Flet(Not_assigned, v,
+           Fprim(Pmakeblock(0, Asttypes.Mutable), [_], _, _), _, _) ->
+        set := VarSet.add v !set
+    | _ -> ()
+  in
+  Flambdaiter.iter aux lam;
+  !set
+
+let eliminate_ref lam =
+  let convertible_variables =
+    VarSet.diff
+      (variables_containing_ref lam)
+      (directly_used_variables lam) in
+  let convertible_variable v = VarSet.mem v convertible_variables in
+  let aux = function
+    | Flet(Not_assigned, v,
+           Fprim(Pmakeblock(0, Asttypes.Mutable), [init], dbg, d1), body, d2)
+      when convertible_variable v ->
+        Flet(Assigned, v, init, body, d2)
+    | Fprim(Pfield 0, [Fvar (v,d)], _, _)
+      when convertible_variable v ->
+        Fvar (v,d)
+    | Fprim(Poffsetref delta, [Fvar (v,d1)], dbg, d2)
+      when convertible_variable v ->
+        Fassign(v, Fprim(Poffsetint delta, [Fvar (v,d1)], dbg, d2),
+                ExprId.create ())
+    | Fprim(Psetfield(0, _), [Fvar (v,d1); e], dbg, d2)
+      when convertible_variable v ->
+        Fassign(v, e, d2)
+    | Fclosure _ | Flet _
+    | Fassign _ | Fvar _
+    | Fsymbol _ | Fconst _ | Fapply _ | Ffunction _
+    | Fvariable_in_closure _ | Fletrec _
+    | Fprim _ | Fswitch _ | Fstaticraise _ | Fstaticcatch _
+    | Ftrywith _ | Fifthenelse _ | Fsequence _
+    | Fwhile _ | Ffor _ | Fsend _ | Fevent _ | Funreachable _ as exp ->
+        exp
+  in
+  Flambdaiter.map aux lam

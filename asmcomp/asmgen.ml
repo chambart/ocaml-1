@@ -123,6 +123,8 @@ let test ppf lam =
   dump_and_check flam;
   let flam = Flambdasimplify.simplify flam in
   dump_and_check flam;
+  let flam = Flambdasimplify.eliminate_ref flam in
+  dump_and_check flam;
   let fl_sym =
     Flambdasym.convert ~compilation_unit:current_compilation_unit flam in
   let fl,const,export = fl_sym in
