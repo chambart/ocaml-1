@@ -1526,10 +1526,10 @@ let directly_used_variables tree =
   let rec loop = function
     | Fvar (v, _) ->
         set := VarSet.add v !set
-    | Fprim(Pfield 0, [Fvar _], _, _)
+    | Fprim(Pfield _, [Fvar _], _, _)
     | Fprim(Poffsetref _, [Fvar _], _, _) ->
         ()
-    | Fprim(Psetfield(0, _), [Fvar _; e], _, _) ->
+    | Fprim(Psetfield(_, _), [Fvar _; e], _, _) ->
         loop e
     | Fclosure _ | Flet _ | Fassign _
     | Fsymbol _ | Fconst _ | Fapply _ | Ffunction _
@@ -1542,37 +1542,74 @@ let directly_used_variables tree =
   !set
 
 let variables_containing_ref lam =
-  let set = ref VarSet.empty in
+  let map = ref VarMap.empty in
   let aux = function
     | Flet(Not_assigned, v,
-           Fprim(Pmakeblock(0, Asttypes.Mutable), [_], _, _), _, _) ->
-        set := VarSet.add v !set
+           Fprim(Pmakeblock(0, Asttypes.Mutable), l, _, _), _, _) ->
+        map := VarMap.add v (List.length l) !map
     | _ -> ()
   in
   Flambdaiter.iter aux lam;
-  !set
+  !map
+
+let rec interval x y =
+  if x > y
+  then []
+  else x :: (interval (x+1) y)
 
 let eliminate_ref lam =
+  let directly_used_variables = directly_used_variables lam in
   let convertible_variables =
-    VarSet.diff
+    VarMap.filter
+      (fun v _ -> not (VarSet.mem v directly_used_variables))
       (variables_containing_ref lam)
-      (directly_used_variables lam) in
-  let convertible_variable v = VarSet.mem v convertible_variables in
+  in
+  let convertible_variables =
+    VarMap.mapi (fun v size -> Array.init size (fun i -> rename_var v))
+      convertible_variables in
+  let convertible_variable v = VarMap.mem v convertible_variables in
+
+  let get_variable v field =
+    let arr = try VarMap.find v convertible_variables
+      with Not_found -> assert false in
+    if Array.length arr <= field
+    then None (* This case could apply when inlining code containing GADTS *)
+    else Some (arr.(field), Array.length arr)
+  in
+
   let aux = function
     | Flet(Not_assigned, v,
-           Fprim(Pmakeblock(0, Asttypes.Mutable), [init], dbg, d1), body, d2)
+           Fprim(Pmakeblock(0, Asttypes.Mutable), inits, dbg, d1), body, d2)
       when convertible_variable v ->
-        Flet(Assigned, v, init, body, d2)
-    | Fprim(Pfield 0, [Fvar (v,d)], _, _)
+        let _, expr =
+          List.fold_left (fun (field,body) init ->
+              match get_variable v field with
+              | None -> assert false
+              | Some (var, _) ->
+                  field+1,
+                  Flet(Assigned, var, init, body, ExprId.create ()))
+            (0,body) inits in
+        expr
+    | Fprim(Pfield field, [Fvar (v,d)], _, _)
       when convertible_variable v ->
-        Fvar (v,d)
+        (match get_variable v field with
+        | None -> Funreachable d
+        | Some (var,_) -> Fvar (var,d))
     | Fprim(Poffsetref delta, [Fvar (v,d1)], dbg, d2)
       when convertible_variable v ->
-        Fassign(v, Fprim(Poffsetint delta, [Fvar (v,d1)], dbg, d2),
-                ExprId.create ())
-    | Fprim(Psetfield(0, _), [Fvar (v,d1); e], dbg, d2)
+        (match get_variable v 0 with
+        | None -> Funreachable d1
+        | Some (var,size) ->
+            if size = 1
+            then
+              Fassign(var, Fprim(Poffsetint delta, [Fvar (var,d1)], dbg, d2),
+                      ExprId.create ())
+            else Funreachable d1)
+    | Fprim(Psetfield(field, _), [Fvar (v,d1); e], dbg, d2)
       when convertible_variable v ->
-        Fassign(v, e, d2)
+        (match get_variable v field with
+         | None -> Funreachable d1
+         | Some (var,_) -> Fassign(var, e, d2))
     | Fclosure _ | Flet _
     | Fassign _ | Fvar _
     | Fsymbol _ | Fconst _ | Fapply _ | Ffunction _
