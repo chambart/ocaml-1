@@ -6,7 +6,7 @@ let lx = Ident.create "x"
 let fx = new_var "x"
 
 let test_equal l f =
-  let fl =
+  let _, fl =
     Flambdagen.intro
       ~current_compilation_unit:compilation_unit
       ~current_unit_id:(Ident.create_persistent compilation_unit_id)
