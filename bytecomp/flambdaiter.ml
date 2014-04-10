@@ -43,8 +43,8 @@ let apply_on_subexpressions f = function
   | Fapply ({ap_function;ap_arg},_) ->
     List.iter f (ap_function::ap_arg)
   | Fclosure ({cl_fun;cl_free_var},_) ->
-    FidentMap.iter (fun _ v -> f v) cl_free_var;
-    FidentMap.iter (fun _ ffun -> f ffun.body) cl_fun.funs
+    VarMap.iter (fun _ v -> f v) cl_free_var;
+    VarMap.iter (fun _ ffun -> f ffun.body) cl_fun.funs
   | Fletrec (defs, body,_) ->
     List.iter (fun (_,l) -> f l) defs;
     f body
@@ -91,9 +91,9 @@ let iter_general ~toplevel f t =
       iter_list (f1::fl)
 
     | Fclosure ({cl_fun = funcs; cl_free_var = fv},_) ->
-      FidentMap.iter (fun _ v -> aux v) fv;
+      VarMap.iter (fun _ v -> aux v) fv;
       if not toplevel
-      then FidentMap.iter (fun _ ffun -> aux ffun.body) funcs.funs
+      then VarMap.iter (fun _ ffun -> aux ffun.body) funcs.funs
 
     | Fletrec (defs, body,_) ->
       List.iter (fun (_,l) -> aux l) defs;
@@ -146,11 +146,11 @@ let map_general ~toplevel f tree =
             then cl_fun
             else
               { cl_fun with
-                funs = FidentMap.map
+                funs = VarMap.map
                     (fun ffun -> { ffun with body = aux ffun.body })
                     cl_fun.funs } in
           Fclosure ({ cl_fun;
-                      cl_free_var = FidentMap.map aux cl_free_var;
+                      cl_free_var = VarMap.map aux cl_free_var;
                       cl_specialised_arg }, annot)
       | Ffunction ({ fu_closure; fu_fun; fu_relative_to}, annot) ->
           Ffunction ({ fu_closure = aux fu_closure;
@@ -227,27 +227,27 @@ let map f tree = map_general ~toplevel:false f tree
 let map_toplevel f tree = map_general ~toplevel:true f tree
 
 let free_variables tree =
-  let free = ref FidentSet.empty in
-  let bound = ref FidentSet.empty in
+  let free = ref VarSet.empty in
+  let bound = ref VarSet.empty in
   let add id =
-    if not (FidentSet.mem id !free) then free := FidentSet.add id !free in
+    if not (VarSet.mem id !free) then free := VarSet.add id !free in
   let aux = function
     | Fvar (id,_) -> add id
     | Fassign (id,_,_) -> add id
     | Fclosure ({cl_specialised_arg},_) ->
-        FidentMap.iter (fun _ id -> add id) cl_specialised_arg
+        VarMap.iter (fun _ id -> add id) cl_specialised_arg
     | Ftrywith(_,id,_,_)
     | Ffor(id, _, _, _, _, _)
     | Flet ( _, id, _, _,_) ->
-        bound := FidentSet.add id !bound
+        bound := VarSet.add id !bound
     | Fletrec (l, _,_) ->
-        List.iter (fun (id,_) -> bound := FidentSet.add id !bound) l
+        List.iter (fun (id,_) -> bound := VarSet.add id !bound) l
     | Fstaticcatch (_,ids,_,_,_) ->
-        List.iter (fun id -> bound := FidentSet.add id !bound) ids
+        List.iter (fun id -> bound := VarSet.add id !bound) ids
     | _ -> ()
   in
   iter_toplevel aux tree;
-  FidentSet.diff !free !bound
+  VarSet.diff !free !bound
 
 let map_data (type t1) (type t2) (f:t1 -> t2) (tree:t1 flambda) : t2 flambda =
   let rec mapper : t1 flambda -> t2 flambda = function
@@ -267,11 +267,11 @@ let map_data (type t1) (type t2) (f:t1 -> t2) (tree:t1 flambda) : t2 flambda =
                   cl_specialised_arg }, v) ->
         let cl_fun =
           { cl_fun with
-            funs = FidentMap.map
+            funs = VarMap.map
                 (fun ffun -> { ffun with body = mapper ffun.body })
                 cl_fun.funs } in
         Fclosure ({ cl_fun;
-                    cl_free_var = FidentMap.map mapper cl_free_var;
+                    cl_free_var = VarMap.map mapper cl_free_var;
                     cl_specialised_arg }, f v)
     | Ffunction ({ fu_closure; fu_fun; fu_relative_to}, v) ->
         Ffunction ({ fu_closure = mapper fu_closure;
@@ -311,14 +311,14 @@ let map_data (type t1) (type t2) (f:t1 -> t2) (tree:t1 flambda) : t2 flambda =
   mapper tree
 
 let toplevel_substitution sb tree =
-  let sb v = try FidentMap.find v sb with Not_found -> v in
+  let sb v = try VarMap.find v sb with Not_found -> v in
   let aux = function
     | Fvar (id,e) -> Fvar (sb id,e)
     | Fassign (id,e,d) -> Fassign (sb id,e,d)
     | Fclosure (cl,d) ->
         Fclosure ({cl with
                    cl_specialised_arg =
-                     FidentMap.map sb cl.cl_specialised_arg},
+                     VarMap.map sb cl.cl_specialised_arg},
                   d)
     | e -> e
   in
@@ -344,18 +344,18 @@ let arguments_kept_in_recursion' decl fun_var =
          let expected_var =
            try Ext_types.IntMap.find pos variable_at_position
            with Not_found -> assert false in
-         if not (Fident.equal var expected_var)
+         if not (Variable.equal var expected_var)
          then mark pos
       | _ -> mark pos
   in
   let test_escape var =
-    if Fident.equal fun_var var
+    if Variable.equal fun_var var
     then function_escape := true
   in
   let rec loop = function
     | Fvar (var,_) -> test_escape var
     | Fapply ({ ap_function = Fvar(call_fun_var,_); ap_arg }, _) ->
-       if Fident.equal call_fun_var fun_var
+       if Variable.equal call_fun_var fun_var
        then begin
            let num_args = List.length ap_arg in
            for pos = num_args to arity - 1 do
@@ -376,18 +376,18 @@ let arguments_kept_in_recursion' decl fun_var =
        let set =
          if Ext_types.IntSet.mem pos !not_kept
          then set
-         else FidentSet.add var set in
+         else VarSet.add var set in
        pos + 1, set)
-      (0,FidentSet.empty) decl.params in
+      (0,VarSet.empty) decl.params in
   kept_parameters, !function_escape
 
 let arguments_kept_in_recursion decls =
-  if FidentMap.cardinal decls.funs = 1
+  if VarMap.cardinal decls.funs = 1
   then
-    let fun_var, decl = FidentMap.choose decls.funs in
+    let fun_var, decl = VarMap.choose decls.funs in
     let kept_parameters, function_escape =
       arguments_kept_in_recursion' decl fun_var in
     if function_escape
-    then FidentSet.empty
+    then VarSet.empty
     else kept_parameters
-  else FidentSet.empty
+  else VarSet.empty

@@ -13,7 +13,7 @@
 open Ext_types
 open Symbol
 
-module Fident = struct
+module Variable = struct
 
   type t = { var_unit : compilation_unit; var_var : Ident.t }
 
@@ -64,15 +64,15 @@ module Fident = struct
 
 end
 
-module FidentSet = struct
-  include ExtSet(Fident)
+module VarSet = struct
+  include ExtSet(Variable)
   let of_ident_set ~current_compilation_unit idset =
     Lambda.IdentSet.fold (fun id set ->
-        add (Fident.wrap_ident ~current_compilation_unit id) set)
+        add (Variable.wrap_ident ~current_compilation_unit id) set)
       idset empty
 end
-module FidentMap = ExtMap(Fident)
-module FidentTbl = ExtHashtbl(Fident)
+module VarMap = ExtMap(Variable)
+module VarTbl = ExtHashtbl(Variable)
 
 module ExprId : Id = Id(struct end)
 module ExprMap = ExtMap(ExprId)
@@ -97,15 +97,15 @@ end
 
 module Closure_element = struct
 
-  include Fident
+  include Variable
 
   let wrap x = x
   let unwrap x = x
 
 end
 
-type function_within_closure = Fident.t
-type variable_within_closure = Fident.t
+type function_within_closure = Variable.t
+type variable_within_closure = Variable.t
 
 module Closure_function = Closure_element
 module Closure_variable = Closure_element
@@ -129,6 +129,6 @@ module IdentMap = ExtMap(Ident)
 
 
 (* let ident_of_function_within_closure { ce_id } = ce_id *)
-module Fident_connected_components =
-  Sort_connected_components.Make(Fident)
+module Variable_connected_components =
+  Sort_connected_components.Make(Variable)
 

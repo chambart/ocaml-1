@@ -73,26 +73,26 @@ type call_kind =
    identify an expression *)
 type 'a flambda =
     Fsymbol of Symbol.t * 'a
-  | Fvar of Fident.t * 'a
+  | Fvar of Variable.t * 'a
   | Fconst of const * 'a
   | Fapply of 'a fapply * 'a
   | Fclosure of 'a fclosure * 'a
   | Ffunction of 'a ffunction * 'a
   | Fvariable_in_closure of 'a fvariable_in_closure * 'a
-  | Flet of let_kind * Fident.t * 'a flambda * 'a flambda * 'a
-  | Fletrec of (Fident.t * 'a flambda) list * 'a flambda * 'a
+  | Flet of let_kind * Variable.t * 'a flambda * 'a flambda * 'a
+  | Fletrec of (Variable.t * 'a flambda) list * 'a flambda * 'a
   | Fprim of Lambda.primitive * 'a flambda list * Debuginfo.t * 'a
   | Fswitch of 'a flambda * 'a fswitch * 'a
   | Fstaticraise of static_exception * 'a flambda list * 'a
   | Fstaticcatch of
-      static_exception * Fident.t list * 'a flambda * 'a flambda * 'a
-  | Ftrywith of 'a flambda * Fident.t * 'a flambda * 'a
+      static_exception * Variable.t list * 'a flambda * 'a flambda * 'a
+  | Ftrywith of 'a flambda * Variable.t * 'a flambda * 'a
   | Fifthenelse of 'a flambda * 'a flambda * 'a flambda * 'a
   | Fsequence of 'a flambda * 'a flambda * 'a
   | Fwhile of 'a flambda * 'a flambda * 'a
-  | Ffor of Fident.t * 'a flambda * 'a flambda * Asttypes.direction_flag *
+  | Ffor of Variable.t * 'a flambda * 'a flambda * Asttypes.direction_flag *
             'a flambda * 'a
-  | Fassign of Fident.t * 'a flambda * 'a
+  | Fassign of Variable.t * 'a flambda * 'a
   | Fsend of Lambda.meth_kind * 'a flambda * 'a flambda * 'a flambda list *
              Debuginfo.t * 'a
   | Fevent of 'a flambda * Lambda.lambda_event * 'a (** Only with -g in bytecode. *)
@@ -113,12 +113,12 @@ and 'a fapply =
 
 and 'a fclosure =
   { cl_fun : 'a function_declarations;
-    cl_free_var : 'a flambda FidentMap.t;
-    cl_specialised_arg : Fident.t FidentMap.t }
+    cl_free_var : 'a flambda VarMap.t;
+    cl_specialised_arg : Variable.t VarMap.t }
 
 and 'a function_declarations = {
   ident : FunId.t;
-  funs : 'a function_declaration FidentMap.t;
+  funs : 'a function_declaration VarMap.t;
   (** The ident key correspond to off_id of offset type *)
   compilation_unit : compilation_unit;
 }
@@ -130,8 +130,8 @@ and 'a function_declaration = {
       with a special call convention. For instance indirect calls to
       tuplified function must go through a stub. Stubs will be
       unconditionnaly inlined. *)
-  params : Fident.t list;
-  free_variables : FidentSet.t;
+  params : Variable.t list;
+  free_variables : VarSet.t;
   (** All free variables used in body, including function parameters,
       functions and variables declared in the closure.
       It is present for efficiency reasons. *)
@@ -169,7 +169,7 @@ val find_declaration :
 (** [find_declaration f decl] raises Not_found if [f] is not in [decl] *)
 
 val find_declaration_variable :
-  function_within_closure -> 'a function_declarations -> Fident.t
+  function_within_closure -> 'a function_declarations -> Variable.t
 (** [find_declaration_variable f decl] raises Not_found if [f] is not in [decl] *)
 
 val find_free_variable :
@@ -182,7 +182,7 @@ val find_free_variable :
 val function_arity : 'a function_declaration -> int
 
 val variables_bound_by_the_closure :
-  function_within_closure -> 'a function_declarations -> FidentSet.t
+  function_within_closure -> 'a function_declarations -> VarSet.t
 
 val can_be_merged : 'a flambda -> 'a flambda -> bool
 (** If [can_be_merged f1 f2] is true, it is safe to merge switch
@@ -192,4 +192,4 @@ val data_at_toplevel_node : 'a flambda -> 'a
 
 val description_of_toplevel_node : 'a flambda -> string
 
-val recursive_functions : 'a function_declarations -> FidentSet.t
+val recursive_functions : 'a function_declarations -> VarSet.t

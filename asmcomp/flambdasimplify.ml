@@ -18,7 +18,7 @@ open Flambda
 let fvar id = Fvar(id,ExprId.create ())
 
 let new_var name =
-  Fident.create ~current_compilation_unit:(Compilenv.current_unit ()) name
+  Variable.create ~current_compilation_unit:(Compilenv.current_unit ()) name
 
 type tag = int
 
@@ -40,13 +40,13 @@ and value_offset =
 and value_closure =
   { ffunctions : ExprId.t function_declarations;
     bound_var : approx ClosureVariableMap.t;
-    kept_params : FidentSet.t;
+    kept_params : VarSet.t;
     fv_subst_renaming : variable_within_closure ClosureVariableMap.t;
     fun_subst_renaming : function_within_closure ClosureFunctionMap.t }
 
 and approx =
   { descr : descr;
-    var : Fident.t option;
+    var : Variable.t option;
     symbol : Symbol.t option }
 
 let rec print_descr ppf = function
@@ -64,7 +64,7 @@ let rec print_descr ppf = function
     Format.fprintf ppf "(fun:@ %a)" Closure_function.print fun_id
   | Value_unoffseted_closure { ffunctions = { funs } } ->
     Format.fprintf ppf "(unoffseted:@ %a)"
-      (fun ppf -> FidentMap.iter (fun id _ -> Fident.print ppf id)) funs
+      (fun ppf -> VarMap.iter (fun id _ -> Variable.print ppf id)) funs
 
 and print_approx' ppf { descr } = print_descr ppf descr
 
@@ -164,18 +164,18 @@ end
    - propagating following approximatively the evaluation order ~ bottom-up:
      in the ret type *)
 
-type sb = { sb_var : Fident.t FidentMap.t;
-            sb_sym : Fident.t SymbolMap.t;
+type sb = { sb_var : Variable.t VarMap.t;
+            sb_sym : Variable.t SymbolMap.t;
             sb_exn : static_exception StaticExceptionMap.t;
-            back_var : Fident.t list FidentMap.t;
-            back_sym : Symbol.t list FidentMap.t;
+            back_var : Variable.t list VarMap.t;
+            back_sym : Symbol.t list VarMap.t;
             (* Used to handle substitution sequence: we cannot call
                the substitution recursively because there can be name
                clash *)
           }
 
 type env =
-  { env_approx : approx FidentMap.t;
+  { env_approx : approx VarMap.t;
     global : (int, approx) Hashtbl.t;
     escaping : bool;
     (* Wether the current expression is in a position to escape:
@@ -192,14 +192,14 @@ type env =
     closure_depth : int;
   }
 
-let empty_sb = { sb_var = FidentMap.empty;
+let empty_sb = { sb_var = VarMap.empty;
                  sb_sym = SymbolMap.empty;
                  sb_exn = StaticExceptionMap.empty;
-                 back_var = FidentMap.empty;
-                 back_sym = FidentMap.empty }
+                 back_var = VarMap.empty;
+                 back_sym = VarMap.empty }
 
 let empty_env () =
-  { env_approx = FidentMap.empty;
+  { env_approx = VarMap.empty;
     global = Hashtbl.create 10;
     escaping = true;
     current_functions = FunSet.empty;
@@ -211,16 +211,16 @@ let empty_env () =
 
 let local_env env =
   { env with
-    env_approx = FidentMap.empty;
+    env_approx = VarMap.empty;
     sb = empty_sb }
 
 type ret =
   { approx : approx;
-    used_variables : FidentSet.t;
+    used_variables : VarSet.t;
     used_staticfail : StaticExceptionSet.t;
-    escape_variables : FidentSet.t;
-    tmp_escape_variables : FidentSet.t list;
-    not_kept_param : FidentSet.t
+    escape_variables : VarSet.t;
+    tmp_escape_variables : VarSet.t list;
+    not_kept_param : VarSet.t
     (* Variables used for a recursive call with a different argument
        than the one used to enter the function. *)
   }
@@ -231,24 +231,24 @@ type ret =
 
 let add_sb_sym' sym id' sb =
   let back_sym =
-    let l = try FidentMap.find id' sb.back_sym with Not_found -> [] in
-    FidentMap.add id' (sym :: l) sb.back_sym in
+    let l = try VarMap.find id' sb.back_sym with Not_found -> [] in
+    VarMap.add id' (sym :: l) sb.back_sym in
   { sb with sb_sym = SymbolMap.add sym id' sb.sb_sym;
             back_sym }
 
 let rec add_sb_var' id id' sb =
-  let sb = { sb with sb_var = FidentMap.add id id' sb.sb_var } in
+  let sb = { sb with sb_var = VarMap.add id id' sb.sb_var } in
   let sb =
-    try let pre_vars = FidentMap.find id sb.back_var in
+    try let pre_vars = VarMap.find id sb.back_var in
       List.fold_left (fun sb pre_id -> add_sb_var' pre_id id' sb) sb pre_vars
     with Not_found -> sb in
   let sb =
-    try let pre_sym = FidentMap.find id sb.back_sym in
+    try let pre_sym = VarMap.find id sb.back_sym in
       List.fold_left (fun sb pre_sym -> add_sb_sym' pre_sym id' sb) sb pre_sym
     with Not_found -> sb in
   let back_var =
-    let l = try FidentMap.find id' sb.back_var with Not_found -> [] in
-    FidentMap.add id' (id :: l) sb.back_var in
+    let l = try VarMap.find id' sb.back_var with Not_found -> [] in
+    VarMap.add id' (id :: l) sb.back_var in
   { sb with back_var }
 
 
@@ -267,7 +267,7 @@ let new_subst_exn i env =
   else i, env
 
 let rename_var var =
-  Fident.rename ~current_compilation_unit:(Compilenv.current_unit ()) var
+  Variable.rename ~current_compilation_unit:(Compilenv.current_unit ()) var
 
 let new_subst_id id env =
   if env.substitute
@@ -288,12 +288,12 @@ let new_subst_ids' ids env =
       id' :: ids, env) ids ([],env)
 
 let find_subst' id env =
-  try FidentMap.find id env.sb.sb_var with
+  try VarMap.find id env.sb.sb_var with
   | Not_found ->
-      Misc.fatal_error (Format.asprintf "find_subst': can't find %a@." Fident.print id)
+      Misc.fatal_error (Format.asprintf "find_subst': can't find %a@." Variable.print id)
 
 let subst_var env id =
-  try FidentMap.find id env.sb.sb_var with
+  try VarMap.find id env.sb.sb_var with
   | Not_found -> id
 
 type offset_subst =
@@ -340,17 +340,17 @@ let ret (acc:ret) approx = { acc with approx }
 let escaping ?(b=true) env = { env with escaping = b }
 
 let escape_var acc var =
-  { acc with escape_variables = FidentSet.add var acc.escape_variables }
+  { acc with escape_variables = VarSet.add var acc.escape_variables }
 
 let tmp_escape_var acc var =
   match acc.tmp_escape_variables with
   | [] -> assert false
   | set :: q ->
       { acc with
-        tmp_escape_variables = FidentSet.add var set :: q }
+        tmp_escape_variables = VarSet.add var set :: q }
 
 let start_escape_region acc =
-  { acc with tmp_escape_variables = FidentSet.empty :: acc.tmp_escape_variables }
+  { acc with tmp_escape_variables = VarSet.empty :: acc.tmp_escape_variables }
 
 let end_escape_region acc =
   match acc.tmp_escape_variables with
@@ -358,15 +358,15 @@ let end_escape_region acc =
   | set :: q -> set, { acc with tmp_escape_variables = q }
 
 let merge_escape set acc =
-  { acc with escape_variables = FidentSet.union acc.escape_variables set }
+  { acc with escape_variables = VarSet.union acc.escape_variables set }
 
 let use_var acc var =
-  { acc with used_variables = FidentSet.add var acc.used_variables }
+  { acc with used_variables = VarSet.add var acc.used_variables }
 
 let exit_scope acc var =
   { acc with
-    used_variables = FidentSet.remove var acc.used_variables;
-    escape_variables = FidentSet.remove var acc.escape_variables }
+    used_variables = VarSet.remove var acc.used_variables;
+    escape_variables = VarSet.remove var acc.escape_variables }
 
 let use_staticfail acc i =
   { acc with used_staticfail = StaticExceptionSet.add i acc.used_staticfail }
@@ -375,15 +375,15 @@ let exit_scope_catch acc i =
   { acc with used_staticfail = StaticExceptionSet.remove i acc.used_staticfail }
 
 let not_kept_param id acc =
-  { acc with not_kept_param = FidentSet.add id acc.not_kept_param }
+  { acc with not_kept_param = VarSet.add id acc.not_kept_param }
 
 let init_r () =
   { approx = value_unknown;
-    used_variables = FidentSet.empty;
+    used_variables = VarSet.empty;
     used_staticfail = StaticExceptionSet.empty;
-    escape_variables = FidentSet.empty;
+    escape_variables = VarSet.empty;
     tmp_escape_variables = [];
-    not_kept_param = FidentSet.empty }
+    not_kept_param = VarSet.empty }
 
 let make_const_int r n eid =
   Fconst(Fconst_base(Asttypes.Const_int n),eid), ret r (value_int n)
@@ -391,12 +391,12 @@ let make_const_ptr r n eid = Fconst(Fconst_pointer n,eid), ret r (value_constptr
 let make_const_bool r b eid = make_const_ptr r (if b then 1 else 0) eid
 
 let find id env =
-  try FidentMap.find id env.env_approx
+  try VarMap.find id env.env_approx
   with Not_found ->
     Misc.fatal_error
-      (Format.asprintf "unbound variable %a@." Fident.print id)
+      (Format.asprintf "unbound variable %a@." Variable.print id)
 
-let present id env = FidentMap.mem id env.env_approx
+let present id env = VarMap.mem id env.env_approx
 let add_approx id approx env =
   let approx =
     match approx.var with
@@ -405,7 +405,7 @@ let add_approx id approx env =
     | _ ->
       { approx with var = Some id }
   in
-  { env with env_approx = FidentMap.add id approx env.env_approx }
+  { env with env_approx = VarMap.add id approx env.env_approx }
 
 let inlining_level_up env = { env with inlining_level = env.inlining_level + 1 }
 
@@ -434,13 +434,13 @@ let const_approx = function
 (* Utility function to duplicate an expression and makes a function from it *)
 
 let subst_toplevel sb lam =
-  let subst id = try FidentMap.find id sb with Not_found -> id in
+  let subst id = try VarMap.find id sb with Not_found -> id in
   let f = function
     | Fvar (id,_) -> Fvar (subst id,ExprId.create ())
     | Fclosure (cl,d) ->
         Fclosure (
           { cl with
-            cl_specialised_arg = FidentMap.map subst cl.cl_specialised_arg },
+            cl_specialised_arg = VarMap.map subst cl.cl_specialised_arg },
           ExprId.create ())
     | e -> e
   in
@@ -448,39 +448,39 @@ let subst_toplevel sb lam =
 
 let make_function id lam params =
   let free_variables = Flambdaiter.free_variables lam in
-  let param_set = FidentSet.of_list params in
+  let param_set = VarSet.of_list params in
 
   let sb =
-    FidentSet.fold
-      (fun id sb -> FidentMap.add id (rename_var id) sb)
-      free_variables FidentMap.empty in
+    VarSet.fold
+      (fun id sb -> VarMap.add id (rename_var id) sb)
+      free_variables VarMap.empty in
   let body = subst_toplevel sb lam in
 
-  let subst id = FidentMap.find id sb in
+  let subst id = VarMap.find id sb in
 
   let function_declaration =
     { stub = false;
       params = List.map subst params;
-      free_variables = FidentSet.map subst free_variables;
+      free_variables = VarSet.map subst free_variables;
       body;
       dbg = Debuginfo.none } in
 
   let fv' =
-    FidentMap.fold (fun id id' fv' ->
-        FidentMap.add id' (Fvar(id,ExprId.create ())) fv')
-      (FidentMap.filter (fun id _ -> not (FidentSet.mem id param_set)) sb)
-      FidentMap.empty in
+    VarMap.fold (fun id id' fv' ->
+        VarMap.add id' (Fvar(id,ExprId.create ())) fv')
+      (VarMap.filter (fun id _ -> not (VarSet.mem id param_set)) sb)
+      VarMap.empty in
 
   let function_declarations =
     { ident = FunId.create (Compilenv.current_unit ());
-      funs = FidentMap.singleton id function_declaration;
+      funs = VarMap.singleton id function_declaration;
       compilation_unit = Compilenv.current_unit () }
   in
 
   let closure =
     { cl_fun = function_declarations;
       cl_free_var = fv';
-      cl_specialised_arg = FidentMap.empty } in
+      cl_specialised_arg = VarMap.empty } in
 
   Fclosure(closure, ExprId.create ())
 
@@ -537,8 +537,8 @@ let lambda_smaller' lam threshold =
         let call_cost = match direct with Indirect -> 6 | Direct _ -> 4 in
         size := !size + call_cost; lambda_size fn; lambda_list_size args
     | Fclosure({ cl_fun = ffuns; cl_free_var = fv }, _) ->
-        FidentMap.iter (fun _ -> lambda_size) fv;
-        FidentMap.iter (fun _ ffun -> lambda_size ffun.body) ffuns.funs
+        VarMap.iter (fun _ -> lambda_size) fv;
+        VarMap.iter (fun _ ffun -> lambda_size ffun.body) ffuns.funs
     | Ffunction({ fu_closure = lam }, _) ->
         incr size; lambda_size lam
     | Fvariable_in_closure({ vc_closure }, _) ->
@@ -622,7 +622,7 @@ let rec no_effects = function
       no_effects_prim p &&
       List.for_all no_effects args
   | Fclosure ({ cl_free_var }, _) ->
-      FidentMap.for_all (fun id def -> no_effects def) cl_free_var
+      VarMap.for_all (fun id def -> no_effects def) cl_free_var
   | Ffunction({ fu_closure = lam }, _) ->
       no_effects lam
   | Fvariable_in_closure({ vc_closure }, _) ->
@@ -819,7 +819,7 @@ and loop_direct (env:env) r tree : 'a flambda * ret =
   | Fvar (id,annot) ->
       let id, tree =
         try
-          let id' = FidentMap.find id env.sb.sb_var in
+          let id' = VarMap.find id env.sb.sb_var in
           id', Fvar(id',annot) with
         | Not_found -> id, tree
       in
@@ -892,16 +892,16 @@ and loop_direct (env:env) r tree : 'a flambda * ret =
       let r_body = { r with used_variables = init_used_var } in
       let body, r = loop body_env r_body body in
       let expr, r =
-        if FidentSet.mem id r.used_variables
+        if VarSet.mem id r.used_variables
         then
           Flet (str, id, lam, body, annot),
           { r with used_variables =
-                     FidentSet.union def_used_var r.used_variables }
+                     VarSet.union def_used_var r.used_variables }
         else if no_effects lam
         then body, r
         else Fsequence(lam, body, annot),
              { r with used_variables =
-                        FidentSet.union def_used_var r.used_variables } in
+                        VarSet.union def_used_var r.used_variables } in
       expr, exit_scope r id
   | Fletrec(defs, body, annot) ->
       let defs, env = new_subst_ids defs env in
@@ -1029,7 +1029,7 @@ and loop_direct (env:env) r tree : 'a flambda * ret =
       ret r value_unknown
   | Fassign(id, lam, annot) ->
       let lam, r = loop env r lam in
-      let id = try FidentMap.find id env.sb.sb_var with
+      let id = try VarMap.find id env.sb.sb_var with
         | Not_found -> id in
       let r = use_var r id in
       Fassign(id, lam, annot),
@@ -1078,10 +1078,10 @@ and loop_list env r l = match l with
       else h' :: t', approxs, r
 
 and subst_free_vars fv env =
-  FidentMap.fold (fun id lam (fv, env, off_sb) ->
+  VarMap.fold (fun id lam (fv, env, off_sb) ->
       let id, env, off_sb = new_subst_fv_off id env off_sb in
-      FidentMap.add id lam fv, env, off_sb)
-    fv (FidentMap.empty, env, empty_offset_subst)
+      VarMap.add id lam fv, env, off_sb)
+    fv (VarMap.empty, env, empty_offset_subst)
 
 and ffuns_subst env ffuns off_sb =
   if env.substitute
@@ -1092,8 +1092,8 @@ and ffuns_subst env ffuns off_sb =
       let params, env = new_subst_ids' ffun.params env in
 
       let free_variables =
-        FidentSet.fold (fun id set -> FidentSet.add (find_subst' id env) set)
-          ffun.free_variables FidentSet.empty in
+        VarSet.fold (fun id set -> VarSet.add (find_subst' id env) set)
+          ffun.free_variables VarSet.empty in
 
       (* It is not a problem to share the substitution of parameter
          names between function: There should be no clash *)
@@ -1105,17 +1105,17 @@ and ffuns_subst env ffuns off_sb =
       }, env
     in
     let env, off_sb =
-      FidentMap.fold (fun orig_id ffun (env, off_sb) ->
+      VarMap.fold (fun orig_id ffun (env, off_sb) ->
           let _id, env, off_sb = new_subst_fun_off orig_id env off_sb in
           env, off_sb)
         ffuns.funs (env,off_sb) in
     let funs, env =
-      FidentMap.fold (fun orig_id ffun (funs, env) ->
+      VarMap.fold (fun orig_id ffun (funs, env) ->
           let ffun, env = subst_ffunction orig_id ffun env in
           let id = find_subst' orig_id env in
-          let funs = FidentMap.add id ffun funs in
+          let funs = VarMap.add id ffun funs in
           funs, env)
-        ffuns.funs (FidentMap.empty,env) in
+        ffuns.funs (VarMap.empty,env) in
     { ident = FunId.create (Compilenv.current_unit ());
       compilation_unit = Compilenv.current_unit ();
       funs }, env, off_sb
@@ -1128,16 +1128,16 @@ and closure env r cl annot =
   let spec_args = cl.cl_specialised_arg in
 
   let env = { env with closure_depth = env.closure_depth + 1 } in
-  let spec_args = FidentMap.map (subst_var env) spec_args in
-  let approxs = FidentMap.map (fun id -> find id env) spec_args in
+  let spec_args = VarMap.map (subst_var env) spec_args in
+  let approxs = VarMap.map (fun id -> find id env) spec_args in
 
-  let fv, r = FidentMap.fold (fun id lam (fv,r) ->
+  let fv, r = VarMap.fold (fun id lam (fv,r) ->
       let lam, r = loop env r lam in
-      FidentMap.add id (lam, r.approx) fv, r) fv (FidentMap.empty, r) in
+      VarMap.add id (lam, r.approx) fv, r) fv (VarMap.empty, r) in
 
   let env = local_env env in
 
-  let prev_closure_symbols = FidentMap.fold (fun id _ map ->
+  let prev_closure_symbols = VarMap.fold (fun id _ map ->
       let cf = Closure_function.wrap id in
       let sym = Compilenv.closure_symbol cf in
       SymbolMap.add sym id map) ffuns.funs SymbolMap.empty in
@@ -1145,8 +1145,8 @@ and closure env r cl annot =
   let fv, env, off_sb = subst_free_vars fv env in
   let ffuns, env, off_sb = ffuns_subst env ffuns off_sb in
 
-  let spec_args = FidentMap.map_keys (subst_var env) spec_args in
-  let approxs = FidentMap.map_keys (subst_var env) approxs in
+  let spec_args = VarMap.map_keys (subst_var env) spec_args in
+  let approxs = VarMap.map_keys (subst_var env) approxs in
   let prev_closure_symbols = SymbolMap.map (subst_var env) prev_closure_symbols in
 
   let env = { env with current_functions = FunSet.add ffuns.ident env.current_functions } in
@@ -1156,28 +1156,28 @@ and closure env r cl annot =
 
   let internal_closure =
     { ffunctions = ffuns;
-      bound_var = FidentMap.fold (fun id (_,desc) map ->
+      bound_var = VarMap.fold (fun id (_,desc) map ->
           ClosureVariableMap.add (Closure_variable.wrap id) desc map)
           fv ClosureVariableMap.empty;
-      kept_params = FidentSet.empty;
+      kept_params = VarSet.empty;
       fv_subst_renaming = off_sb.os_fv;
       fun_subst_renaming = off_sb.os_fun } in
-  let closure_env = FidentMap.fold
+  let closure_env = VarMap.fold
       (fun id _ env -> add_approx id
           (value_closure { fun_id = (Closure_function.wrap id);
                            closure = internal_closure }) env)
       ffuns.funs env in
-  let funs, kept_params, used_params, r = FidentMap.fold (fun fid ffun
+  let funs, kept_params, used_params, r = VarMap.fold (fun fid ffun
                                            (funs,kept_params_map,used_params,r) ->
-      let closure_env = FidentMap.fold
+      let closure_env = VarMap.fold
           (fun id (_,desc) env ->
-             if FidentSet.mem id ffun.free_variables
+             if VarSet.mem id ffun.free_variables
              then begin
                add_approx id desc env
              end
              else env) fv closure_env in
       let closure_env = List.fold_left (fun env id ->
-          let approx = try FidentMap.find id approxs
+          let approx = try VarMap.find id approxs
             with Not_found -> value_unknown in
           add_approx id approx env) closure_env ffun.params in
 
@@ -1196,46 +1196,46 @@ and closure env r cl annot =
 
       let body, r = loop closure_env r body in
       let used_params = List.fold_left (fun acc id ->
-          if FidentSet.mem id r.used_variables
-          then FidentSet.add id acc
+          if VarSet.mem id r.used_variables
+          then VarSet.add id acc
           else acc) used_params ffun.params in
 
       let kept_params =
-        if (FidentMap.cardinal ffuns.funs = 1) &&
+        if (VarMap.cardinal ffuns.funs = 1) &&
            (* multiply recursive functions are not handled yet *)
-           FidentSet.mem fid recursive_funs &&
-           not (FidentSet.mem fid r.escape_variables)
+           VarSet.mem fid recursive_funs &&
+           not (VarSet.mem fid r.escape_variables)
         then begin
           let kept_params = List.filter
               (fun id ->
-                 FidentSet.mem id r.used_variables &&
-                 not (FidentSet.mem id r.not_kept_param))
+                 VarSet.mem id r.used_variables &&
+                 not (VarSet.mem id r.not_kept_param))
               ffun.params in
-          FidentSet.of_list kept_params
+          VarSet.of_list kept_params
         end
-        else FidentSet.empty in
+        else VarSet.empty in
 
       let kept_params_map =
         ClosureFunctionMap.add
           (Closure_function.wrap fid) kept_params kept_params_map in
 
-      let r = FidentSet.fold (fun id r -> exit_scope r id)
+      let r = VarSet.fold (fun id r -> exit_scope r id)
           ffun.free_variables r in
-      FidentMap.add fid { ffun with body } funs, kept_params_map, used_params, r)
-      ffuns.funs (FidentMap.empty, ClosureFunctionMap.empty, FidentSet.empty, r) in
+      VarMap.add fid { ffun with body } funs, kept_params_map, used_params, r)
+      ffuns.funs (VarMap.empty, ClosureFunctionMap.empty, VarSet.empty, r) in
 
-  let spec_args = FidentMap.filter
-      (fun id _ -> FidentSet.mem id used_params)
+  let spec_args = VarMap.filter
+      (fun id _ -> VarSet.mem id used_params)
       spec_args in
 
   let kept_params =
-    ClosureFunctionMap.fold (fun _ -> FidentSet.union) kept_params FidentSet.empty in
+    ClosureFunctionMap.fold (fun _ -> VarSet.union) kept_params VarSet.empty in
 
-  let r = FidentMap.fold (fun id' v acc -> use_var acc v) spec_args r in
+  let r = VarMap.fold (fun id' v acc -> use_var acc v) spec_args r in
   let ffuns = { ffuns with funs } in
   let closure = { internal_closure with ffunctions = ffuns; kept_params } in
-  let r = FidentMap.fold (fun id _ r -> exit_scope r id) ffuns.funs r in
-  Fclosure ({cl_fun = ffuns; cl_free_var = FidentMap.map fst fv;
+  let r = VarMap.fold (fun id _ r -> exit_scope r id) ffuns.funs r in
+  Fclosure ({cl_fun = ffuns; cl_free_var = VarMap.map fst fv;
              cl_specialised_arg = spec_args}, annot),
   ret r (value_unoffseted_closure closure)
 
@@ -1337,13 +1337,13 @@ and partial_apply funct fun_id func args ap_dbg eid =
 and functor_like env clos approxs =
   env.closure_depth = 0 &&
   List.for_all (function { descr = Value_unknown } -> false | _ -> true) approxs &&
-  FidentSet.is_empty (recursive_functions clos)
+  VarSet.is_empty (recursive_functions clos)
 
 and direct_apply env r ~local clos funct fun_id func fapprox closure (args,approxs) ap_dbg eid =
   let r =
     List.fold_left2 (fun r approx id ->
         match approx.var with
-        | Some id' when Fident.equal id id' -> r
+        | Some id' when Variable.equal id id' -> r
         | _ -> not_kept_param id r) r approxs func.params
   in
   let max_level = 3 in
@@ -1359,7 +1359,7 @@ and direct_apply env r ~local clos funct fun_id func fapprox closure (args,appro
       ret r value_unknown
   | Some fun_size ->
       let fun_var = find_declaration_variable fun_id clos in
-      let recursive = FidentSet.mem fun_var (recursive_functions clos) in
+      let recursive = VarSet.mem fun_var (recursive_functions clos) in
       let env = { env with inline_threshold = env.inline_threshold - fun_size } in
       if func.stub || functor_like env clos approxs ||
          (not recursive && env.inlining_level <= max_level)
@@ -1382,7 +1382,7 @@ and direct_apply env r ~local clos funct fun_id func fapprox closure (args,appro
         let kept_params = closure.kept_params in
       if
         recursive && not (FunSet.mem clos.ident env.current_functions)
-        && not (FidentSet.is_empty kept_params)
+        && not (VarSet.is_empty kept_params)
         && ClosureVariableMap.is_empty closure.bound_var (* closed *)
 
       then begin
@@ -1391,12 +1391,12 @@ and direct_apply env r ~local clos funct fun_id func fapprox closure (args,appro
           | Value_unknown
           | Value_bottom -> acc
           | _ ->
-              if FidentSet.mem id kept_params
-              then FidentMap.add id approx acc
+              if VarSet.mem id kept_params
+              then VarMap.add id approx acc
               else acc in
-        let worth = List.fold_right2 f func.params approxs FidentMap.empty in
+        let worth = List.fold_right2 f func.params approxs VarMap.empty in
 
-        if not (FidentMap.is_empty worth) && not local
+        if not (VarMap.is_empty worth) && not local
         then
           duplicate_apply env r funct clos fun_id func fapprox closure
             (args,approxs) kept_params ap_dbg
@@ -1417,7 +1417,7 @@ and duplicate_apply env r funct clos fun_id func fapprox closure_approx
   let env = inlining_level_up env in
   let clos_id = new_var "dup_closure" in
   let make_fv var fv =
-    FidentMap.add var
+    VarMap.add var
       (Fvariable_in_closure
          ({ vc_closure = Fvar(clos_id, ExprId.create ());
             vc_fun = fun_id;
@@ -1428,7 +1428,7 @@ and duplicate_apply env r funct clos fun_id func fapprox closure_approx
   let variables_in_closure =
     variables_bound_by_the_closure fun_id clos in
 
-  let fv = FidentSet.fold make_fv variables_in_closure FidentMap.empty in
+  let fv = VarSet.fold make_fv variables_in_closure VarMap.empty in
 
   let env = add_approx clos_id fapprox env in
 
@@ -1444,13 +1444,13 @@ and duplicate_apply env r funct clos fun_id func fapprox closure_approx
         | Value_unknown
         | Value_bottom -> spec_args
         | _ ->
-            if FidentSet.mem id kept_params
-            then FidentMap.add id new_id spec_args
+            if VarSet.mem id kept_params
+            then VarMap.add id new_id spec_args
             else spec_args in
       spec_args, args, env_func
     in
     let params = List.combine func.params args in
-    List.fold_right2 f params approxs (FidentMap.empty,[],env) in
+    List.fold_right2 f params approxs (VarMap.empty,[],env) in
 
   let args_exprs = List.map (fun (id,_) -> Fvar(id,ExprId.create ())) args in
 
@@ -1485,7 +1485,7 @@ and inline env r clos lfunc fun_id func args dbg eid =
     |> List.fold_right2 (fun id arg body ->
         Flet(Not_assigned, id, arg, body, ExprId.create ~name:"inline arg" ()))
       func.params args
-    |> FidentSet.fold (fun id body ->
+    |> VarSet.fold (fun id body ->
         Flet(Not_assigned, id,
              Fvariable_in_closure
                ({ vc_closure = Fvar(clos_id, ExprId.create ());
@@ -1494,7 +1494,7 @@ and inline env r clos lfunc fun_id func args dbg eid =
                 ExprId.create ()),
              body, ExprId.create ()))
       variables_in_closure
-    |> FidentMap.fold (fun id _ body ->
+    |> VarMap.fold (fun id _ body ->
         Flet(Not_assigned, id,
              Ffunction ({ fu_closure = Fvar(clos_id, ExprId.create ());
                           fu_fun = Closure_function.wrap id;
@@ -1508,12 +1508,12 @@ and inline env r clos lfunc fun_id func args dbg eid =
 let simplify tree =
   let env = empty_env () in
   let result, r = loop env (init_r ()) tree in
-  if not (FidentSet.is_empty r.used_variables)
+  if not (VarSet.is_empty r.used_variables)
   then begin
     Format.printf "remaining variables: %a@.%a@."
-      FidentSet.print r.used_variables
+      VarSet.print r.used_variables
       Printflambda.flambda result
   end;
-  assert(FidentSet.is_empty r.used_variables);
+  assert(VarSet.is_empty r.used_variables);
   assert(StaticExceptionSet.is_empty r.used_staticfail);
   result

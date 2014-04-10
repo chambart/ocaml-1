@@ -13,10 +13,10 @@ let other_compilation_unit =
     (linkage_name "other_test")
 
 let new_var name =
-  Fident.create ~current_compilation_unit:compilation_unit name
+  Variable.create ~current_compilation_unit:compilation_unit name
 
 let new_var_other_unit name =
-  Fident.create ~current_compilation_unit:other_compilation_unit name
+  Variable.create ~current_compilation_unit:other_compilation_unit name
 
 let nid () = ExprId.create ()
 
@@ -50,7 +50,7 @@ let fadd e1 e2 =
 let fun_decl params fv body =
   { stub = false;
     params;
-    free_variables = FidentSet.of_list (params @ fv);
+    free_variables = VarSet.of_list (params @ fv);
     body;
     dbg = Debuginfo.none }
 
@@ -59,8 +59,8 @@ let fun_decls lst fv =
   let funs =
     List.fold_left (fun map (var,params,body) ->
         let decl = fun_decl params (fv@functs) body in
-        FidentMap.add var decl map)
-      FidentMap.empty lst in
+        VarMap.add var decl map)
+      VarMap.empty lst in
   { ident = FunId.create compilation_unit;
     funs;
     compilation_unit }
@@ -69,8 +69,8 @@ let fclosure lst fv =
   let fv_var = List.map fst fv in
   Fclosure
     ({ cl_fun = fun_decls lst fv_var;
-       cl_free_var = FidentMap.of_list fv;
-       cl_specialised_arg = FidentMap.empty },
+       cl_free_var = VarMap.of_list fv;
+       cl_specialised_arg = VarMap.empty },
      nid ())
 
 let fun_decl' params body =
@@ -82,8 +82,8 @@ let fun_decls' lst =
   let funs =
     List.fold_left (fun map (var,params,body) ->
         let decl = fun_decl' params body in
-        FidentMap.add var decl map)
-      FidentMap.empty lst in
+        VarMap.add var decl map)
+      VarMap.empty lst in
   { ident = FunId.create compilation_unit;
     funs;
     compilation_unit }
@@ -96,16 +96,16 @@ let fapply ?(kind=Indirect) f args =
       ap_kind = kind},nid ())
 
 type env =
-  { var : Fident.t FidentMap.t }
+  { var : Variable.t VarMap.t }
 
 let empty_env =
-  { var = FidentMap.empty }
+  { var = VarMap.empty }
 
 let add_var v v' env =
-  { var = FidentMap.add v v' env.var }
+  { var = VarMap.add v v' env.var }
 
 let equal_var env v v' =
-  try Fident.equal (FidentMap.find v env.var) v'
+  try Variable.equal (VarMap.find v env.var) v'
   with Not_found -> false
 
 let equal_let_kind k1 k2 = match k1, k2 with

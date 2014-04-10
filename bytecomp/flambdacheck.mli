@@ -24,20 +24,20 @@ type 'a counter_example =
   | Counter_example of 'a
 
 val every_used_identifier_is_bound :
-  'a flambda -> Fident.t counter_example
+  'a flambda -> Variable.t counter_example
 
 val function_free_variables_are_bound_in_the_closure_and_parameters :
-  'a flambda -> FidentSet.t counter_example
+  'a flambda -> VarSet.t counter_example
 
 val no_identifier_bound_multiple_times :
-  'a flambda -> Fident.t counter_example
+  'a flambda -> Variable.t counter_example
 
 val every_bound_variable_is_from_current_compilation_unit :
   current_compilation_unit:compilation_unit -> 'a flambda ->
-  Fident.t counter_example
+  Variable.t counter_example
 
 val no_assign_on_variable_of_kind_Not_assigned :
-  'a flambda -> Fident.t counter_example
+  'a flambda -> Variable.t counter_example
 
 val no_variable_within_closure_is_bound_multiple_times :
   'a flambda -> variable_within_closure counter_example

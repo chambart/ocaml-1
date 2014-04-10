@@ -31,12 +31,12 @@ val map : ('a flambda -> 'a flambda) ->
 val map_toplevel : ('a flambda -> 'a flambda) ->
   'a flambda -> 'a flambda
 
-val free_variables : 'a flambda -> FidentSet.t
+val free_variables : 'a flambda -> VarSet.t
 
 val map_data : ('a -> 'b) -> 'a flambda -> 'b flambda
 
-val toplevel_substitution : Fident.t FidentMap.t ->
+val toplevel_substitution : Variable.t VarMap.t ->
   'a flambda -> 'a flambda
 
 val arguments_kept_in_recursion : 'a function_declarations ->
-  FidentSet.t
+  VarSet.t

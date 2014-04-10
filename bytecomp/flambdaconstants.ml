@@ -54,7 +54,7 @@ open Abstract_identifiers
 open Flambda
 
 type constant_result = {
-  not_constant_id : FidentSet.t;
+  not_constant_id : VarSet.t;
   not_constant_closure : FunSet.t;
 }
 
@@ -73,17 +73,17 @@ module NotConstants(P:Param) = struct
 
   type dep =
     | Closure of FunId.t
-    | Var of Fident.t
+    | Var of Variable.t
     | Global of int (* position of the global *)
 
   (* Sets representing NC *)
-  let variables = ref FidentSet.empty
+  let variables = ref VarSet.empty
   let closures = ref FunSet.empty
   let globals = ref IntSet.empty
 
   (* if the table associates [v1;v2;...;vn] to v, it represents
      v in NC => v1 in NC /\ v2 in NC ... /\ vn in NC *)
-  let id_dep_table : dep list FidentTbl.t = FidentTbl.create 100
+  let id_dep_table : dep list VarTbl.t = VarTbl.create 100
   let fun_dep_table : dep list FunTbl.t = FunTbl.create 100
   let glob_dep_table : dep list IntTbl.t = IntTbl.create 100
 
@@ -92,9 +92,9 @@ module NotConstants(P:Param) = struct
     List.iter (fun curr ->
       match dep with
       | Var id ->
-        let t = try FidentTbl.find id_dep_table id
+        let t = try VarTbl.find id_dep_table id
         with Not_found -> [] in
-        FidentTbl.replace id_dep_table id (curr :: t)
+        VarTbl.replace id_dep_table id (curr :: t)
       | Closure cl ->
         let t = try FunTbl.find fun_dep_table cl
         with Not_found -> [] in
@@ -109,8 +109,8 @@ module NotConstants(P:Param) = struct
   let mark_curr curr =
     List.iter (function
       | Var id ->
-        if not (FidentSet.mem id !variables)
-        then variables := FidentSet.add id !variables
+        if not (VarSet.mem id !variables)
+        then variables := VarSet.add id !variables
       | Closure cl ->
         if not (FunSet.mem cl !closures)
         then closures := FunSet.add cl !closures
@@ -155,9 +155,9 @@ module NotConstants(P:Param) = struct
       (* adds 'funcs in NC => curr in NC' *)
       register_implication ~in_nc:(Closure funcs.ident) ~implies_in_nc:curr;
       (* a closure is constant if its free variables are constants. *)
-      FidentMap.iter (fun inner_id lam ->
+      VarMap.iter (fun inner_id lam ->
         mark_loop [Closure funcs.ident; Var inner_id] lam) fv;
-      FidentMap.iter (fun fun_id ffunc ->
+      VarMap.iter (fun fun_id ffunc ->
         (* for each function f in a closure c 'c in NC => f' *)
         register_implication ~in_nc:(Closure funcs.ident) ~implies_in_nc:[Var fun_id];
         (* function parameters are in NC *)
@@ -303,18 +303,18 @@ module NotConstants(P:Param) = struct
   let propagate () =
     (* Set of variables/closures added to NC but not their dependencies *)
     let q = Queue.create () in
-    FidentSet.iter (fun v -> Queue.push (Var v) q) !variables;
+    VarSet.iter (fun v -> Queue.push (Var v) q) !variables;
     FunSet.iter (fun v -> Queue.push (Closure v) q) !closures;
     while not (Queue.is_empty q) do
       let deps = try match Queue.take q with
-        | Var e -> FidentTbl.find id_dep_table e
+        | Var e -> VarTbl.find id_dep_table e
         | Closure cl -> FunTbl.find fun_dep_table cl
         | Global i -> IntTbl.find glob_dep_table i
       with Not_found -> [] in
       List.iter (function
         | Var id as e ->
-          if not (FidentSet.mem id !variables)
-          then (variables := FidentSet.add id !variables;
+          if not (VarSet.mem id !variables)
+          then (variables := VarSet.add id !variables;
             Queue.push e q)
         | Closure cl as e ->
           if not (FunSet.mem cl !closures)

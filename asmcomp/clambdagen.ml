@@ -30,7 +30,7 @@ let list_closures expr constants =
           ClosureFunctionMap.add
             (Closure_function.wrap off_id)
             functs map in
-        closures := FidentMap.fold add functs.funs !closures;
+        closures := VarMap.fold add functs.funs !closures;
     | e -> ()
   in
   Flambdaiter.iter aux expr;
@@ -88,8 +88,8 @@ module Offsets(P:Param1) = struct
 
   and iter_closure functs fv =
 
-    let funct = FidentMap.bindings functs.funs in
-    let fv = FidentMap.bindings fv in
+    let funct = VarMap.bindings functs.funs in
+    let fv = VarMap.bindings fv in
 
     (* build the table mapping the function to the offset of its code
        pointer inside the closure value *)
@@ -218,11 +218,11 @@ module Conv(P:Param2) = struct
         fatal_error (Format.asprintf "missing closure %a"
                        FunId.print fid)
 
-  type env = ulambda FidentMap.t (* substitution *)
+  type env = ulambda VarMap.t (* substitution *)
 
-  let empty_env () = FidentMap.empty
+  let empty_env () = VarMap.empty
 
-  let add_sb id subst env = FidentMap.add id subst env
+  let add_sb id subst env = VarMap.add id subst env
 
   let rec conv ?(expected_symbol:Symbol.t option) (env : env) = function
     | Fvar (id,_) ->
@@ -231,8 +231,8 @@ module Conv(P:Param2) = struct
              currently being defined: it is replaced by an offset in the
              closure. If the variable is bound by the closure, it is
              replace by a field access inside the closure *)
-          try FidentMap.find id env
-          with Not_found -> Uvar (Fident.unique_ident id)
+          try VarMap.find id env
+          with Not_found -> Uvar (Variable.unique_ident id)
         end
 
     | Fsymbol (sym,_) ->
@@ -244,11 +244,11 @@ module Conv(P:Param2) = struct
         Uconst (conv_const cst, None)
 
     | Flet(str, id, lam, body, _) ->
-        Ulet(Fident.unique_ident id, conv env lam, conv env body)
+        Ulet(Variable.unique_ident id, conv env lam, conv env body)
 
     | Fletrec(defs, body, _) ->
         let udefs = List.map (fun (id,def) ->
-            Fident.unique_ident id, conv env def) defs in
+            Variable.unique_ident id, conv env def) defs in
         Uletrec(udefs, conv env body)
 
     | Fclosure({ cl_fun = funct; cl_free_var = fv }, _) ->
@@ -329,10 +329,10 @@ module Conv(P:Param2) = struct
     | Fstaticraise (i, args, _) ->
         Ustaticfail (Static_exception.to_int i, conv_list env args)
     | Fstaticcatch (i, vars, body, handler, _) ->
-        Ucatch (Static_exception.to_int i, List.map Fident.unique_ident vars,
+        Ucatch (Static_exception.to_int i, List.map Variable.unique_ident vars,
                 conv env body, conv env handler)
     | Ftrywith(body, id, handler, _) ->
-        Utrywith(conv env body, Fident.unique_ident id, conv env handler)
+        Utrywith(conv env body, Variable.unique_ident id, conv env handler)
     | Fifthenelse(arg, ifso, ifnot, _) ->
         Uifthenelse(conv env arg, conv env ifso, conv env ifnot)
     | Fsequence(lam1, lam2, _) ->
@@ -340,9 +340,9 @@ module Conv(P:Param2) = struct
     | Fwhile(cond, body, _) ->
         Uwhile(conv env cond, conv env body)
     | Ffor(id, lo, hi, dir, body, _) ->
-        Ufor(Fident.unique_ident id, conv env lo, conv env hi, dir, conv env body)
+        Ufor(Variable.unique_ident id, conv env lo, conv env hi, dir, conv env body)
     | Fassign(id, lam, _) ->
-        Uassign(Fident.unique_ident id, conv env lam)
+        Uassign(Variable.unique_ident id, conv env lam)
     | Fsend(kind, met, obj, args, dbg, _) ->
         Usend(kind, conv env met, conv env obj, conv_list env args, dbg)
 
@@ -440,8 +440,8 @@ module Conv(P:Param2) = struct
        body, so constant closure still contains their free
        variables. *)
 
-    let funct = FidentMap.bindings functs.funs in
-    let fv = FidentMap.bindings fv in
+    let funct = VarMap.bindings functs.funs in
+    let fv = VarMap.bindings fv in
     let closed = is_closure_constant functs.ident in
 
     (* the environment variable used for non constant closures *)
@@ -465,7 +465,7 @@ module Conv(P:Param2) = struct
 
       (* inside the body of the function, we cannot access variables
          declared outside, so take a clean substitution table. *)
-      let env = FidentMap.empty in
+      let env = VarMap.empty in
 
       let env =
         (* Add to the substitution the value of the free variables *)
@@ -497,7 +497,7 @@ module Conv(P:Param2) = struct
           List.fold_left (add_offset_subst fun_offset) env funct
       in
 
-      let params = List.map Fident.unique_ident func.params in
+      let params = List.map Variable.unique_ident func.params in
 
       { Clambda.label = Compilenv.function_label cf;
         arity = Flambda.function_arity func;

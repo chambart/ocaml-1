@@ -55,7 +55,7 @@ type exported = {
   ex_offset_fv : int ClosureVariableMap.t;
   ex_constants : SymbolSet.t;
   ex_constant_closures : FunSet.t;
-  ex_kept_arguments : FidentSet.t FunMap.t;
+  ex_kept_arguments : VarSet.t FunMap.t;
 }
 
 let empty_export = {
@@ -204,7 +204,7 @@ let import_code_for_pack units pack expr =
 
 let import_ffunctions_for_pack units pack ffuns =
   { ffuns with
-    funs = FidentMap.map (fun ffun ->
+    funs = VarMap.map (fun ffun ->
         {ffun with body = import_code_for_pack units pack ffun.body})
         ffuns.funs }
 
@@ -212,7 +212,7 @@ let ex_functions_off ex_functions =
   let aux_fun ffunctions function_id _ map =
     ClosureFunctionMap.add
       (Closure_function.wrap function_id) ffunctions map in
-  let aux _ f map = FidentMap.fold (aux_fun f) f.funs map in
+  let aux _ f map = VarMap.fold (aux_fun f) f.funs map in
   FunMap.fold aux ex_functions ClosureFunctionMap.empty
 
 let import_eidmap_for_pack units pack f map =

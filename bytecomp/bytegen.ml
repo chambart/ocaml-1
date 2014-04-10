@@ -34,16 +34,16 @@ let new_label () =
 (**** Operations on compilation environments. ****)
 
 let empty_env =
-  { ce_stack = FidentMap.empty;
-    ce_heap = FidentMap.empty;
-    ce_rec = FidentMap.empty;
+  { ce_stack = VarMap.empty;
+    ce_heap = VarMap.empty;
+    ce_rec = VarMap.empty;
     ce_closures = ClosureFunctionMap.empty;
   }
 
 (* Add a stack-allocated variable *)
 
 let add_var id pos env =
-  { env with ce_stack = FidentMap.add id pos env.ce_stack }
+  { env with ce_stack = VarMap.add id pos env.ce_stack }
 
 let rec add_vars idlist pos env =
   match idlist with
@@ -177,9 +177,9 @@ let rec check_recordwith_updates id e =
 
 let rec size_of_lambda = function
   | Ffunction ({ fu_closure = Fclosure (clos, _)}, _) ->
-      if FidentMap.cardinal clos.cl_fun.funs <> 1 then
+      if VarMap.cardinal clos.cl_fun.funs <> 1 then
         fatal_error ("Bytegen.comp_expr: recclosure");
-      RHS_block (1 + FidentMap.cardinal clos.cl_free_var)
+      RHS_block (1 + VarMap.cardinal clos.cl_free_var)
   | Fclosure _ ->
       fatal_error ("Bytegen.size_of_lambda: unexpected closure")
   | Ffunction _->
@@ -305,12 +305,12 @@ let code_as_jump l sz = match l with
 (* Function bodies that remain to be compiled *)
 
 type function_to_compile =
-  { params: Fident.t list;            (* function parameters *)
+  { params: Variable.t list;            (* function parameters *)
     body: ExprId.t flambda;     (* the function body *)
     label: label;                       (* the label of the function entry *)
-    free_vars: Fident.t list;         (* free variables of the function  *)
+    free_vars: Variable.t list;         (* free variables of the function  *)
     num_defs: int;             (* number of mutually recursive definitions *)
-    rec_vars: Fident.t list;          (* mutually recursive fn names     *)
+    rec_vars: Variable.t list;          (* mutually recursive fn names     *)
     rec_pos: int }                      (* rank in recursive definition    *)
 
 let functions_to_compile  = (Stack.create () : function_to_compile Stack.t)
@@ -463,11 +463,11 @@ let rebind_recclosure id funid env =
     let pos = ClosureFunctionMap.find funid env.ce_closures in
     add_var id pos env
   with Not_found ->
-    fatal_error ("Bytegen.comp_expr: recclosure " ^ Fident.unique_name id)
+    fatal_error ("Bytegen.comp_expr: recclosure " ^ Variable.unique_name id)
 
 (*** Simpify the compilation environment passed to the debugger.
 
-     We convert [Fident.t] back to [Ident.t] as all variables come
+     We convert [Variable.t] back to [Ident.t] as all variables come
      from the same compilation unit, and it's easiest to simplify this
      rather than adapt ocamldebug and others tools. *)
 
@@ -475,8 +475,8 @@ let ignore_compunit map =
   (* TODO: filter out ident from external compilation_unit...  if ever
      some inter-module inlining is allowed in bytecode (maybe useful
      for js_of_ocaml ?) *)
-  FidentMap.fold
-    (fun v pos s -> Ident.add (Fident.unwrap v) pos s)
+  VarMap.fold
+    (fun v pos s -> Ident.add (Variable.unwrap v) pos s)
     map Ident.empty
 
 let debug_compenv env =
@@ -514,8 +514,8 @@ let compute_offset_tables exp =
 
   and iter_closure functs fv =
 
-    let funct = FidentMap.bindings functs.funs in
-    let fv = FidentMap.bindings fv in
+    let funct = VarMap.bindings functs.funs in
+    let fv = VarMap.bindings fv in
 
     (* build the table mapping the function to the offset of its code
        pointer inside the closure value *)
@@ -567,19 +567,19 @@ let comp_block offset_tables env exp sz cont =
     match exp with
     | Fvar (var, _) ->
         begin try
-          let pos = FidentMap.find var env.ce_stack in
+          let pos = VarMap.find var env.ce_stack in
           Kacc(sz - pos) :: cont
         with Not_found ->
           try
-            let pos = FidentMap.find var env.ce_heap in
+            let pos = VarMap.find var env.ce_heap in
             Kenvacc pos :: cont
           with Not_found ->
             try
-              let pos = FidentMap.find var env.ce_rec in
+              let pos = VarMap.find var env.ce_rec in
               Koffsetclosure pos :: cont
             with Not_found ->
-              Format.eprintf "%a@." Fident.print var;
-              fatal_error ("Bytegen.comp_expr: var " ^ Fident.unique_name var)
+              Format.eprintf "%a@." Variable.print var;
+              fatal_error ("Bytegen.comp_expr: var " ^ Variable.unique_name var)
         end
     | Fvariable_in_closure (var, _) ->
         begin try
@@ -638,8 +638,8 @@ let comp_block offset_tables env exp sz cont =
         end
     | Ffunction ({ fu_closure = Fclosure (clos, _); fu_fun;
                    fu_relative_to = None }, _) -> begin
-        let functs = FidentMap.bindings clos.cl_fun.funs in
-        let fv = FidentMap.bindings clos.cl_free_var in
+        let functs = VarMap.bindings clos.cl_fun.funs in
+        let fv = VarMap.bindings clos.cl_free_var in
         match functs with
         | [id, funct] ->
             assert (Closure_function.equal fu_fun (Closure_function.wrap id));
@@ -655,8 +655,8 @@ let comp_block offset_tables env exp sz cont =
             fatal_error ("Bytegen.comp_expr: recclosure arity")
       end
     | Flet(Not_assigned, clos_id, Fclosure (clos, _), body, _) ->
-        let functs = FidentMap.bindings clos.cl_fun.funs in
-        let fv = FidentMap.bindings clos.cl_free_var in
+        let functs = VarMap.bindings clos.cl_fun.funs in
+        let fv = VarMap.bindings clos.cl_free_var in
         let ndecl = List.length functs in
         let rec_idents = List.map fst functs in
         let rec comp_fun pos = function
@@ -910,7 +910,7 @@ let comp_block offset_tables env exp sz cont =
         comp_expr env arg sz (Kswitch(lbl_consts, lbl_blocks) :: !c)
     | Fassign(var, expr, _) ->
         begin try
-          let pos = FidentMap.find var env.ce_stack in
+          let pos = VarMap.find var env.ce_stack in
           comp_expr env expr sz (Kassign(sz - pos) :: cont)
         with Not_found ->
           fatal_error "Bytegen.comp_expr: assign"
@@ -1028,8 +1028,8 @@ let comp_block offset_tables env exp sz cont =
 let comp_function offset_tables tc cont =
   let arity = List.length tc.params in
   let rec positions pos delta = function
-      [] -> FidentMap.empty
-    | id :: rem -> FidentMap.add id pos (positions (pos + delta) delta rem) in
+      [] -> VarMap.empty
+    | id :: rem -> VarMap.add id pos (positions (pos + delta) delta rem) in
   let env =
     { ce_stack = positions arity (-1) tc.params;
       ce_heap = positions (2 * (tc.num_defs - tc.rec_pos) - 1) 1 tc.free_vars;

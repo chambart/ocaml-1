@@ -14,9 +14,9 @@ open Lambda
 open Abstract_identifiers
 
 type compilation_env =
-  { ce_stack: int FidentMap.t;
-    ce_heap: int FidentMap.t;
-    ce_rec: int FidentMap.t;
+  { ce_stack: int VarMap.t;
+    ce_heap: int VarMap.t;
+    ce_rec: int VarMap.t;
     ce_closures: int ClosureFunctionMap.t }
 
 type debug_compenv =

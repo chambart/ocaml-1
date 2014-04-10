@@ -344,7 +344,7 @@ let imported_closure =
   let import_closure clos =
 
     let orig_var_map clos =
-      FidentMap.fold
+      VarMap.fold
         (fun id _ acc ->
            let fun_id = Closure_function.wrap id in
            let sym = closure_symbol fun_id in
@@ -361,7 +361,7 @@ let imported_closure =
 
     { clos with
       funs =
-        FidentMap.map
+        VarMap.map
           (fun ff ->
              let body = Flambdaiter.map_toplevel f ff.body in
              let body = Flambdaiter.map_data ExprId.create body in

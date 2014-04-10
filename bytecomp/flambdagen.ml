@@ -31,17 +31,17 @@ let rec add_debug_info ev f =
   | _ -> f
 
 let rec subst sb id =
-  try subst sb (FidentMap.find id sb)
+  try subst sb (VarMap.find id sb)
   with Not_found -> id
 
 let add_subst sb ~replace ~by =
-  FidentMap.add replace by sb
+  VarMap.add replace by sb
 
 let nid = ExprId.create
 
 type 'param_id function_declaration =
-  { let_bound_var : Fident.t;
-    closure_bound_var : Fident.t;
+  { let_bound_var : Variable.t;
+    closure_bound_var : Variable.t;
     kind : function_kind;
     params : 'param_id list;
     body : lambda }
@@ -52,15 +52,15 @@ let to_flambda
     ~symbol_for_global'
     lam =
 
-  let wrap_id id = Fident.wrap_ident ~current_compilation_unit id in
+  let wrap_id id = Variable.wrap_ident ~current_compilation_unit id in
 
-  let rename_var var = Fident.rename ~current_compilation_unit var in
+  let rename_var var = Variable.rename ~current_compilation_unit var in
 
   let rec close sb = function
     | Lvar id ->
         let var = wrap_id id in
         Fvar (subst sb var,
-              nid ~name:(Format.asprintf "var_%a" Fident.print var) ())
+              nid ~name:(Format.asprintf "var_%a" Variable.print var) ())
     | Lconst cst -> close_const sb cst
     | Llet(str, id, lam, body) ->
         let str =
@@ -72,7 +72,7 @@ let to_flambda
              close_named var sb lam,
              close sb body, nid ~name:"let" ())
     | Lfunction(kind, params, body) ->
-        let let_bound_var = Fident.create ~current_compilation_unit "fun" in
+        let let_bound_var = Variable.create ~current_compilation_unit "fun" in
         let closure_bound_var = rename_var let_bound_var in
         let decl = { let_bound_var; closure_bound_var; kind; params; body } in
         Ffunction(
@@ -102,7 +102,7 @@ let to_flambda
             (* When all the binding are functions, we build a single closure
                  for all the functions *)
             let clos = close_functions sb function_declarations in
-            let clos_var = Fident.create ~current_compilation_unit "clos" in
+            let clos_var = Variable.create ~current_compilation_unit "clos" in
             let body = List.fold_left (fun body decl ->
                 Flet(Not_assigned, decl.let_bound_var,
                      Ffunction(
@@ -183,40 +183,40 @@ let to_flambda
         assert false
 
   and close_functions
-      (original_substitution:Fident.t FidentMap.t) function_declarations =
+      (original_substitution:Variable.t VarMap.t) function_declarations =
     let function_declarations = List.map
         (fun decl -> { decl with params = List.map wrap_id decl.params })
         function_declarations in
     let used_variables_per_function =
-      FidentMap.of_list
+      VarMap.of_list
         (List.map (fun {closure_bound_var;body} ->
              closure_bound_var,
-             FidentSet.of_ident_set ~current_compilation_unit (Lambda.free_variables body))
+             VarSet.of_ident_set ~current_compilation_unit (Lambda.free_variables body))
             function_declarations) in
     let all_functions_arguments =
-      List.fold_right (fun {params} -> FidentSet.union (FidentSet.of_list params))
-        function_declarations FidentSet.empty in
+      List.fold_right (fun {params} -> VarSet.union (VarSet.of_list params))
+        function_declarations VarSet.empty in
     let all_used_variables =
-      FidentMap.fold (fun _ -> FidentSet.union)
-        used_variables_per_function FidentSet.empty in
+      VarMap.fold (fun _ -> VarSet.union)
+        used_variables_per_function VarSet.empty in
     let function_variables =
-      FidentSet.of_list
+      VarSet.of_list
         (List.map (fun {let_bound_var} -> let_bound_var)
            function_declarations) in
     let variables_in_closure =
-      FidentSet.diff all_used_variables
-        (FidentSet.union function_variables all_functions_arguments) in
+      VarSet.diff all_used_variables
+        (VarSet.union function_variables all_functions_arguments) in
     let sb =
       List.fold_right (fun {let_bound_var;closure_bound_var} ->
           add_subst ~replace:let_bound_var ~by:closure_bound_var)
         function_declarations original_substitution in
     let sb, free_variables_original_name =
-      FidentSet.fold
+      VarSet.fold
         (fun var (sb,map) ->
            let renamed = rename_var var in
            add_subst sb ~replace:var ~by:renamed,
-           FidentMap.add renamed var map)
-        variables_in_closure (sb, FidentMap.empty) in
+           VarMap.add renamed var map)
+        variables_in_closure (sb, VarMap.empty) in
 
     let close_one_function map { closure_bound_var; kind; params; body } =
       let dbg = match body with
@@ -226,36 +226,36 @@ let to_flambda
       let ffunction =
         { stub = false; params; dbg;
           free_variables =
-            FidentSet.map (subst sb)
-              (FidentMap.find closure_bound_var used_variables_per_function);
+            VarSet.map (subst sb)
+              (VarMap.find closure_bound_var used_variables_per_function);
           body = close sb body } in
       match kind with
       | Curried ->
-          FidentMap.add closure_bound_var ffunction map
+          VarMap.add closure_bound_var ffunction map
       | Tupled ->
           let tuplified_version = rename_var closure_bound_var in
           let generic_function_stub =
             tupled_function_call_stub
               closure_bound_var params tuplified_version in
-          let map = FidentMap.add closure_bound_var generic_function_stub map in
-          FidentMap.add tuplified_version ffunction map
+          let map = VarMap.add closure_bound_var generic_function_stub map in
+          VarMap.add tuplified_version ffunction map
     in
     let ffunctions =
       { ident = FunId.create current_compilation_unit;
         funs =
-          List.fold_left close_one_function FidentMap.empty function_declarations;
+          List.fold_left close_one_function VarMap.empty function_declarations;
         compilation_unit = current_compilation_unit } in
     let closure =
       { cl_fun = ffunctions;
         cl_free_var =
-          FidentMap.map (fun var -> Fvar(subst original_substitution var, nid ()))
+          VarMap.map (fun var -> Fvar(subst original_substitution var, nid ()))
             free_variables_original_name;
-        cl_specialised_arg = FidentMap.empty } in
+        cl_specialised_arg = VarMap.empty } in
 
     Fclosure (closure, nid ())
 
   and tupled_function_call_stub id original_params tuplified_version =
-    let tuple_param = Fident.create ~current_compilation_unit "tupled_stub_param" in
+    let tuple_param = Variable.create ~current_compilation_unit "tupled_stub_param" in
     let params = List.map (fun p -> rename_var p) original_params in
     let call = Fapply(
         { ap_function = Fvar(tuplified_version,nid ());
@@ -272,7 +272,7 @@ let to_flambda
         (0,call) params in
     { stub = true;
       params = [tuple_param];
-      free_variables = FidentSet.of_list [tuple_param;tuplified_version];
+      free_variables = VarSet.of_list [tuple_param;tuplified_version];
       body;
       dbg = Debuginfo.none }
 
@@ -303,7 +303,7 @@ let to_flambda
     in
     aux cst
   in
-  close FidentMap.empty lam
+  close VarMap.empty lam
 
 (** String lifting to toplevel of expressions *)
 

@@ -15,7 +15,7 @@ open Symbol
 
 (** Various "abstract" identifiers to be used in [Flambda]
 
-    * [Fident.t] should be used in place of non-persistent
+    * [Variable.t] should be used in place of non-persistent
       [Ident.t]. It wraps an [Ident.t] together with its source
       [compilation_unit]. It helps tracing the source of identifier
       when debugging the inliner; and, avoids ident renaming when
@@ -29,13 +29,13 @@ open Symbol
     misconfusion between different usages.
 
     * [Closure_function.t] and [Closure_variable.t] are abstract aliases
-      of [Fident.t] (see [Flambda] for more details).
+      of [Variable.t] (see [Flambda] for more details).
 
     * [Static_exception.t] is an abstract alias for [int].
 
 *)
 
-module Fident : sig
+module Variable : sig
 
   type t
 
@@ -44,7 +44,7 @@ module Fident : sig
 
   val unwrap : t -> Ident.t (* For bytecode debugger only *)
   val unique_ident : t -> Ident.t (* For clambdagen only *)
-    (* Should we propagate Fident.t into clambda ??? *)
+    (* Should we propagate Variable.t into clambda ??? *)
 
   val rename : current_compilation_unit:compilation_unit -> t -> t
 
@@ -56,13 +56,13 @@ module Fident : sig
 
 end
 
-module FidentSet : sig
-  include ExtSet with module M := Fident
+module VarSet : sig
+  include ExtSet with module M := Variable
   val of_ident_set :
     current_compilation_unit:compilation_unit -> Lambda.IdentSet.t -> t
 end
-module FidentMap : ExtMap with module M := Fident
-module FidentTbl : ExtHashtbl with module M := Fident
+module VarMap : ExtMap with module M := Variable
+module VarTbl : ExtHashtbl with module M := Variable
 
 module IdentMap : ExtMap with module M := Ident
 
@@ -73,8 +73,8 @@ module Closure_function : sig
 
   type t
 
-  val wrap : Fident.t -> t
-  val unwrap : t -> Fident.t
+  val wrap : Variable.t -> t
+  val unwrap : t -> Variable.t
 
   val in_compilation_unit : compilation_unit -> t -> bool
   val get_compilation_unit : t -> compilation_unit
@@ -98,8 +98,8 @@ module Closure_variable : sig
 
   type t
 
-  val wrap : Fident.t -> t
-  val unwrap : t -> Fident.t
+  val wrap : Variable.t -> t
+  val unwrap : t -> Variable.t
 
   val in_compilation_unit : compilation_unit -> t -> bool
 
@@ -155,5 +155,5 @@ module StaticExceptionTbl : ExtHashtbl with module M := Static_exception
 
 (***********************************************************************)
 
-module Fident_connected_components :
-  Sort_connected_components.S with module Id := Fident
+module Variable_connected_components :
+  Sort_connected_components.S with module Id := Variable
