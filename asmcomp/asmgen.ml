@@ -140,6 +140,10 @@ let test ppf lam =
           Printflambda.flambda lam)
       const
   end;
+  Flambdacheck.check ~current_compilation_unit ~sym:true fl;
+  Symbol.SymbolMap.iter (fun _ lam ->
+      Flambdacheck.check ~current_compilation_unit ~sym:true lam)
+    const;
   Clambdagen.convert fl_sym
 
 let compile_implementation ?toplevel prefixname ppf (size, lam) =

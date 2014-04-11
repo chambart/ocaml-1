@@ -16,7 +16,7 @@ open Flambda
 
 
 val check :
-  current_compilation_unit:compilation_unit -> 'a flambda -> unit
+  current_compilation_unit:compilation_unit -> ?sym:bool -> 'a flambda -> unit
 (** Run all tests, raises Fatal_error if a test fails *)
 
 type 'a counter_example =

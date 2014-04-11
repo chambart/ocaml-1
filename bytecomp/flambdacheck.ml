@@ -378,7 +378,7 @@ let test result fmt printer =
   | Counter_example ce ->
       Misc.fatal_error (Format.asprintf fmt printer ce)
 
-let check ~current_compilation_unit flam =
+let check ~current_compilation_unit ?(sym=false) flam =
   test (every_used_identifier_is_bound flam)
     "Unbound identifier %a" Variable.print;
 
@@ -410,17 +410,21 @@ let check ~current_compilation_unit flam =
     "function declare using unit %a which is not the current one"
     Compilation_unit.print;
 
-  test (every_used_function_from_current_compilation_unit_is_declared
-          ~current_compilation_unit flam)
-    "functions %a from the current compilation unit are used but \
-     not declared"
-    ClosureFunctionSet.print;
+  if not sym
+  then
+    test (every_used_function_from_current_compilation_unit_is_declared
+            ~current_compilation_unit flam)
+      "functions %a from the current compilation unit are used but \
+       not declared"
+      ClosureFunctionSet.print;
 
-  test (every_used_variable_in_closure_from_current_compilation_unit_is_declared
-          ~current_compilation_unit flam)
-    "variables %a from the current compilation unit are used but \
-     not declared"
-    ClosureVariableSet.print;
+  if not sym
+  then
+    test (every_used_variable_in_closure_from_current_compilation_unit_is_declared
+            ~current_compilation_unit flam)
+      "variables %a from the current compilation unit are used but \
+       not declared"
+      ClosureVariableSet.print;
 
   test (every_static_exception_is_caught flam)
     "static exception %a can't be caught"
