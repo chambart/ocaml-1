@@ -58,8 +58,7 @@ let to_flambda
   let debugger_map = ref VarMap.empty in
 
   let create_var id =
-    let var =
-      Variable.create ~current_compilation_unit (Ident.name id) in
+    let var = Variable.create ~current_compilation_unit (Ident.name id) in
     debugger_map := VarMap.add var id !debugger_map;
     var
   in
@@ -74,13 +73,9 @@ let to_flambda
     end;
     new_var in
 
-  let add_var id var env = Ident.add id var env in
+  let add_var id var (env:Variable.t Ident.tbl) = Ident.add id var env in
 
-  let rec add_vars ids vars env =
-    match ids, vars with
-    | [], [] -> env
-    | id :: ids, var :: vars -> add_vars ids vars (add_var id var env)
-    | _, _ -> assert false in
+  let add_vars ids vars env = List.fold_right2 add_var ids vars env in
 
   let find_var env id =
     try Ident.find_same id env
@@ -145,7 +140,7 @@ let to_flambda
             Fletrec(fdefs, close env body, nid ~name:"letrec" ())
         | Some function_declarations ->
             (* When all the binding are functions, we build a single closure
-                 for all the functions *)
+               for all the functions *)
             let clos = close_functions env function_declarations in
             let clos_var = Variable.create ~current_compilation_unit "clos" in
             let body =
@@ -266,14 +261,16 @@ let to_flambda
       (* remove recursives functions *)
       |> List.fold_right IdentSet.remove rec_idents in
 
-    let function_env =
-      List.fold_right
+    let closure_env_without_parameters =
+      Ident.empty
+      (* add recursive functions *)
+      |> List.fold_right
         (fun d env -> add_var d.rec_ident d.closure_bound_var env)
-        function_declarations Ident.empty in
-    let internal_env =
-      IdentSet.fold
+        function_declarations
+      (* add free variables *)
+      |> IdentSet.fold
         (fun id env -> add_var id (create_var id) env)
-        all_free_idents function_env in
+        all_free_idents in
 
     let close_one_function map { closure_bound_var; kind; params; body } =
       let dbg = match body with
@@ -283,7 +280,7 @@ let to_flambda
       let closure_env =
         List.fold_right
           (fun id env -> add_var id (create_var id) env)
-          params internal_env in
+          params closure_env_without_parameters in
       let params = List.map (find_var closure_env) params in
       let fun_decl =
         { stub = false; params; dbg;
@@ -314,7 +311,7 @@ let to_flambda
         cl_free_var =
           IdentSet.fold
             (fun id map ->
-               let internal_var = find_var internal_env id in
+               let internal_var = find_var closure_env_without_parameters id in
                let external_var = find_var external_env id in
                VarMap.add internal_var (Fvar(external_var, nid ())) map)
             all_free_idents VarMap.empty;
