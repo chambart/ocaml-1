@@ -187,6 +187,18 @@ let to_flambda
         assert(not (Ident.same id current_unit_id));
         let symbol = symbol_for_global' id in
         Fsymbol (symbol,nid ~name:"external_global" ())
+    | Lprim(Pmakeblock _ as p, args) ->
+        let (block,lets) = List.fold_right (fun lam (block,lets) ->
+            match close env lam with
+            | Fvar(v,_) as e -> (e::block,lets)
+            | expr ->
+                let v = Variable.create ~current_compilation_unit "block_field" in
+                Fvar(v,nid ()) :: block, (v,expr)::lets)
+            args ([],[]) in
+        let block = Fprim(p, block, Debuginfo.none, nid ~name:"block" ()) in
+        List.fold_left (fun body (v,expr) ->
+            Flet(Not_assigned, v, expr, body, nid ()))
+          block lets
     | Lprim(p, args) ->
         Fprim(p, close_list env args, Debuginfo.none,
               nid ~name:"prim" ())
