@@ -332,23 +332,23 @@ module Conv(P:Param1) = struct
           then add_approx id approx env
           else add_approx id Value_unknown env
         in
-        if not (is_constant id)
-        then
-          let ubody, body_approx = conv_approx env body in
-          Flet(str, id, lam, ubody, ()), body_approx
-        else begin match constant_symbol lam with
-          | No_lbl ->
-              (* no label: the value is an integer: substitute it *)
-              conv_approx (add_sb id lam env) body
-          | Lbl lbl ->
-              (* label: the value is a block: reference it *)
-              conv_approx (add_cm id lbl env) body
-          | Const_closure ->
-              conv_approx env body
-          | Not_const ->
-              Format.printf "%a@." Variable.print id;
-              Printflambda.flambda Format.std_formatter lam;
-              assert false
+        begin match is_constant id, constant_symbol lam, str with
+        | _, _, Assigned
+        | false, (Not_const | No_lbl | Const_closure), _ ->
+            let ubody, body_approx = conv_approx env body in
+            Flet(str, id, lam, ubody, ()), body_approx
+        | true, No_lbl, Not_assigned ->
+            (* no label: the value is an integer: substitute it *)
+            conv_approx (add_sb id lam env) body
+        | _, Lbl lbl, Not_assigned ->
+            (* label: the value is a block: reference it *)
+            conv_approx (add_cm id lbl env) body
+        | true, Const_closure, Not_assigned ->
+            conv_approx env body
+        | true, Not_const, Not_assigned ->
+            Format.eprintf "%a@.%a" Variable.print id
+              Printflambda.flambda lam;
+            assert false
         end
 
     | Fletrec(defs, body, _) ->
@@ -528,9 +528,12 @@ module Conv(P:Param1) = struct
         assert(l = []);
         let lam = Fprim(Lambda.Pfield i, [Fprim(Lambda.Pgetglobal id, l, dbg, v)], dbg, v) in
         if id = Compilenv.current_unit_id ()
-        then
-          conv env lam,
-          get_global i
+        then let approx = get_global i in
+          match approx with
+          | Value_symbol sym ->
+              Fsymbol(sym,()), approx
+          | _ ->
+              conv env lam, approx
         else
           conv_approx env lam
 
