@@ -140,9 +140,10 @@ let test ppf lam =
           Printflambda.flambda lam)
       const
   end;
-  Flambdacheck.check ~current_compilation_unit ~sym:true fl;
+  Flambdacheck.check ~current_compilation_unit ~flambdasym:true fl;
   Symbol.SymbolMap.iter (fun _ lam ->
-      Flambdacheck.check ~current_compilation_unit ~sym:true lam)
+      Flambdacheck.check ~current_compilation_unit
+        ~flambdasym:true ~cmxfile:true lam)
     const;
   Clambdagen.convert fl_sym
 

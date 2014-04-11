@@ -372,13 +372,33 @@ let every_static_exception_is_caught_at_a_single_position flam =
   with Counter_example_se var ->
     Counter_example var
 
+exception Counter_example_prim of Lambda.primitive
+
+let no_access_to_global_module_identifiers flam =
+  let open Lambda in
+  let f = function
+    | Fprim(Pgetglobalfield _ as p, _, _, _)
+    | Fprim(Psetglobalfield _ as p, _, _, _)
+    | Fprim(Psetglobal _ as p, _, _, _) ->
+        raise (Counter_example_prim p)
+    | Fprim(Pgetglobal id as p, _, _, _) ->
+        if not (Ident.is_predef_exn id)
+        then raise (Counter_example_prim p)
+    | _ -> ()
+  in
+  try
+    Flambdaiter.iter f flam;
+    No_counter_example
+  with Counter_example_prim p ->
+    Counter_example p
+
 let test result fmt printer =
   match result with
   | No_counter_example -> ()
   | Counter_example ce ->
       Misc.fatal_error (Format.asprintf fmt printer ce)
 
-let check ~current_compilation_unit ?(sym=false) flam =
+let check ~current_compilation_unit ?(flambdasym=false) ?(cmxfile=false) flam =
   test (every_used_identifier_is_bound flam)
     "Unbound identifier %a" Variable.print;
 
@@ -410,7 +430,7 @@ let check ~current_compilation_unit ?(sym=false) flam =
     "function declare using unit %a which is not the current one"
     Compilation_unit.print;
 
-  if not sym
+  if not flambdasym
   then
     test (every_used_function_from_current_compilation_unit_is_declared
             ~current_compilation_unit flam)
@@ -418,13 +438,20 @@ let check ~current_compilation_unit ?(sym=false) flam =
        not declared"
       ClosureFunctionSet.print;
 
-  if not sym
+  if not flambdasym
   then
     test (every_used_variable_in_closure_from_current_compilation_unit_is_declared
             ~current_compilation_unit flam)
       "variables %a from the current compilation unit are used but \
        not declared"
       ClosureVariableSet.print;
+
+  if cmxfile
+  then
+    test (no_access_to_global_module_identifiers flam)
+      "access to global identifier using the primitive %a in code \
+       exported to th cmx file"
+      Printlambda.primitive;
 
   test (every_static_exception_is_caught flam)
     "static exception %a can't be caught"
