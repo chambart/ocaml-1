@@ -106,9 +106,9 @@ let compile_genfuns ppf f =
 
 let test ppf lam =
   let current_compilation_unit = Compilenv.current_unit () in
-  let dump_and_check flam =
+  let dump_and_check s flam =
     if !Clflags.dump_flambda
-    then Format.fprintf ppf "%a@." Printflambda.flambda flam;
+    then Format.fprintf ppf "%s:@ %a@." s Printflambda.flambda flam;
     try Flambdacheck.check ~current_compilation_unit flam
     with e ->
       Format.fprintf ppf "%a@."
@@ -120,11 +120,13 @@ let test ppf lam =
       ~current_unit_id:(Compilenv.current_unit_id ())
       ~symbol_for_global':Compilenv.symbol_for_global'
       lam in
-  dump_and_check flam;
+  dump_and_check "flambdagen" flam;
   let flam = Flambdasimplify.simplify flam in
-  dump_and_check flam;
+  dump_and_check "simplify1" flam;
+  let flam = Flambdasimplify.simplify flam in
+  dump_and_check "simplify2" flam;
   let flam = Flambdasimplify.eliminate_ref flam in
-  dump_and_check flam;
+  dump_and_check "eliminate ref" flam;
   let fl_sym =
     Flambdasym.convert ~compilation_unit:current_compilation_unit flam in
   let fl,const,export = fl_sym in
