@@ -22,6 +22,14 @@ let rec init_mod loc shape =
   | Function ->
       let pad1 = 1 and pad2 = 2 and pad3 = 3 and pad4 = 4
       and pad5 = 5 and pad6 = 6 and pad7 = 7 and pad8 = 8 in
+      (* WARINING: those are constants, it will not be put in the
+         closure, hence the closure will only contains one free
+         variable (loc). This mean that a lot of function have an
+         indirection when update_mod initialize them. It could be
+         fixed by using references, but those would be useless
+         allocations and it would be a bit fragile to further
+         optimizations: We probably need a primitive to build dummy
+         non dropable values *)
       Obj.repr(fun _ ->
         ignore pad1; ignore pad2; ignore pad3; ignore pad4;
         ignore pad5; ignore pad6; ignore pad7; ignore pad8;
