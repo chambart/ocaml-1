@@ -116,13 +116,13 @@ module Conv(P:Param1) = struct
   let functions, closures, ex_kept_arguments = functions P.not_constants P.expr
 
   (* functions comming from a linked module *)
-  let ex_closures =
+  let ex_closures () =
     (Compilenv.approx_env ()).Flambdaexport.ex_functions_off
 
-  let ex_functions =
+  let ex_functions () =
     (Compilenv.approx_env ()).Flambdaexport.ex_functions
 
-  let ex_constant_closures =
+  let ex_constant_closures () =
     (Compilenv.approx_env ()).Flambdaexport.ex_constant_closures
 
   let used_variable_withing_closure = list_used_variable_withing_closure P.expr
@@ -135,14 +135,14 @@ module Conv(P:Param1) = struct
   let function_declaration_position cf =
     try Local (ClosureFunctionMap.find cf closures) with
     | Not_found ->
-        try External (ClosureFunctionMap.find cf ex_closures) with
+        try External (ClosureFunctionMap.find cf (ex_closures ())) with
         | Not_found ->
             Not_declared
 
   let functions_declaration_position fid =
     try Local (FunMap.find fid functions) with
     | Not_found ->
-        try External (FunMap.find fid ex_functions) with
+        try External (FunMap.find fid (ex_functions ())) with
         | Not_found ->
             Not_declared
 
@@ -151,7 +151,7 @@ module Conv(P:Param1) = struct
     | Local { ident } ->
         FunSet.mem ident P.constant_closures
     | External { ident } ->
-        FunSet.mem ident ex_constant_closures
+        FunSet.mem ident (ex_constant_closures ())
     | Not_declared ->
         fatal_error (Format.asprintf "missing closure %a"
                        Closure_function.print cf)
@@ -170,7 +170,7 @@ module Conv(P:Param1) = struct
     | Local { ident } ->
         FunSet.mem ident P.constant_closures
     | External { ident } ->
-        FunSet.mem ident ex_constant_closures
+        FunSet.mem ident (ex_constant_closures ())
     | Not_declared ->
         fatal_error (Format.asprintf "missing closure %a"
                        FunId.print fid)
@@ -179,7 +179,7 @@ module Conv(P:Param1) = struct
     let arity clos off = function_arity (find_declaration fun_id clos) in
     try arity (ClosureFunctionMap.find fun_id closures) fun_id with
     | Not_found ->
-        try arity (ClosureFunctionMap.find fun_id ex_closures) fun_id with
+        try arity (ClosureFunctionMap.find fun_id (ex_closures ())) fun_id with
         | Not_found ->
             fatal_error (Format.asprintf "missing closure %a"
                            Closure_function.print fun_id)
