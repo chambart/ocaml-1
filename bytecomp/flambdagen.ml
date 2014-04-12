@@ -183,6 +183,9 @@ let to_flambda
         let symbol = symbol_for_global' id in
         Fsymbol (symbol,nid ~name:"external_global" ())
     | Lprim(Pmakeblock _ as p, args) ->
+        (* Lift the contents of the block to variables. This allows to
+           eliminate the allocation if the block does not escape.
+           A more general solution would be to convert completely to ANF *)
         let (block,lets) = List.fold_right (fun lam (block,lets) ->
             match close env lam with
             | Fvar(v,_) as e -> (e::block,lets)
