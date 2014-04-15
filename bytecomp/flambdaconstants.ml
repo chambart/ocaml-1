@@ -158,7 +158,7 @@ module NotConstants(P:Param) = struct
       VarMap.iter (fun _ id ->
             register_implication
               ~in_nc:(Var id)
-              ~implies_in_nc:(Closure funcs.ident)) cl_specialised_arg;
+              ~implies_in_nc:[Closure funcs.ident]) cl_specialised_arg;
       (* adds 'funcs in NC => curr in NC' *)
       register_implication ~in_nc:(Closure funcs.ident) ~implies_in_nc:curr;
       (* a closure is constant if its free variables are constants. *)
