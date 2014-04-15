@@ -408,7 +408,7 @@ module Conv(P:Param1) = struct
                   cl_free_var = fv;
                   cl_specialised_arg = spec_arg }, _) ->
         let args_approx = VarMap.map (fun id -> get_approx id env) spec_arg in
-        conv_closure env funct args_approx fv
+        conv_closure env funct args_approx spec_arg fv
 
     | Ffunction({ fu_closure = lam; fu_fun = id; fu_relative_to = rel }, _) as expr ->
         let ulam, fun_approx = conv_approx env lam in
@@ -472,7 +472,7 @@ module Conv(P:Param1) = struct
         let args_approx =
           List.fold_right2 VarMap.add func.params args_approx VarMap.empty
           |> VarMap.filter (fun var _ -> VarMap.mem var cl_specialised_arg) in
-        let uffuns, fun_approx = conv_closure env ffuns args_approx fv in
+        let uffuns, fun_approx = conv_closure env ffuns args_approx cl_specialised_arg fv in
         let approx = match get_descr fun_approx with
           | Some(Value_closure { fun_id; closure = { results } }) ->
               ClosureFunctionMap.find fun_id results
@@ -614,7 +614,7 @@ module Conv(P:Param1) = struct
 
     | Fevent _ -> assert false
 
-  and conv_closure env functs param_approxs fv =
+  and conv_closure env functs param_approxs spec_arg fv =
     let closed = FunSet.mem functs.ident P.constant_closures in
 
     let fv_ulam_approx = VarMap.map (conv_approx env) fv in
@@ -717,11 +717,10 @@ module Conv(P:Param1) = struct
     let value_closure = Value_id closure_ex_id in
 
     let expr =
-      (* TODO: fill spec_arg *)
       let expr =
         Fclosure ({ cl_fun = ufunct;
                     cl_free_var = used_fv;
-                    cl_specialised_arg = VarMap.empty }, ()) in
+                    cl_specialised_arg = spec_arg }, ()) in
       if FunSet.mem ufunct.ident P.constant_closures
       then
         let sym = add_constant expr in
