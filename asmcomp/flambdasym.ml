@@ -85,16 +85,14 @@ type infos =
     ex_table : descr EidMap.t ref;
     ex_symbol_id : ExportId.t SymbolMap.t ref;
     constants : unit flambda SymbolTbl.t;
-    symbol_alias : Symbol.t SymbolTbl.t;
-    ex_functions : unit function_declarations FunMap.t ref }
+    symbol_alias : Symbol.t SymbolTbl.t }
 
 let init_infos () =
   { global = Hashtbl.create 10;
     ex_table = ref EidMap.empty;
     ex_symbol_id = ref SymbolMap.empty;
     constants = SymbolTbl.create 10;
-    symbol_alias = SymbolTbl.create 10;
-    ex_functions = ref FunMap.empty }
+    symbol_alias = SymbolTbl.create 10 }
 
 let rec canonical_symbol s infos =
   try
@@ -719,8 +717,6 @@ module Conv(P:Param1) = struct
 
     let ufunct = { functs with funs = VarMap.map fst funs_approx } in
 
-    infos.ex_functions := FunMap.add ufunct.ident ufunct !(infos.ex_functions);
-
     let value_closure' =
       { value_closure' with
         results = varmap_to_closfun_map (VarMap.map snd funs_approx) } in
@@ -796,6 +792,15 @@ module Prepare(P:Param2) = struct
     Flambdaiter.map use_canonical_symbols expr,
     SymbolTbl.fold aux infos.constants SymbolMap.empty
 
+  let ex_functions =
+    let ex_functions = ref FunMap.empty in
+    let aux { cl_fun } _ =
+      ex_functions := FunMap.add cl_fun.ident cl_fun !ex_functions
+    in
+    Flambdaiter.iter_on_closures aux expr;
+    SymbolMap.iter (fun _ -> Flambdaiter.iter_on_closures aux) constants;
+    !ex_functions
+
   (* Preparing export informations *)
 
   let canonical_approx = function
@@ -854,8 +859,6 @@ module Prepare(P:Param2) = struct
   let ex_id_symbol =
     SymbolMap.fold (fun sym id map -> EidMap.add id sym map)
       ex_symbol_id EidMap.empty
-
-  let ex_functions = !(infos.ex_functions)
 
   let ex_functions_off =
     let aux_fun ffunctions off_id _ map =
