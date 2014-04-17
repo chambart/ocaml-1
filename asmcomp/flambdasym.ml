@@ -815,7 +815,9 @@ module Prepare(P:Param2) = struct
         Value_unoffseted_closure (aux_closure clos)
 
   and aux_closure clos =
-    { clos with bound_var = ClosureVariableMap.map canonical_approx clos.bound_var }
+    { closure_id = clos.closure_id;
+      bound_var = ClosureVariableMap.map canonical_approx clos.bound_var;
+      results = ClosureFunctionMap.map canonical_approx clos.results }
 
   let new_descr descr = new_descr descr infos
 
