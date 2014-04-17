@@ -130,9 +130,7 @@ module NotConstants(P:Param) = struct
   let rec mark_loop (curr:dep list) = function
 
     | Flet(str, id, lam, body, _) ->
-      (* No need to match on str: if the variable is assigned it will
-         be marked directly as not constant, but if it is not
-         assigned, it could be considered constant *)
+      if str = Assigned then mark_curr [Var id];
       mark_loop [Var id] lam;
       (* adds 'id in NC => curr in NC'
          This is not really necessary, but compiling this correctly is
