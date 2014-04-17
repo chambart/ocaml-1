@@ -130,6 +130,19 @@ let print_symbols ppf export =
   in
   EidMap.iter print_symbol export.ex_id_symbol
 
+let print_all ppf export =
+  let open Format in
+  fprintf ppf "approxs@ %a@.@."
+    print_approx export;
+  fprintf ppf "id_symbol@ %a@.@."
+    (EidMap.print Symbol.print) export.ex_id_symbol;
+  fprintf ppf "symbol_id@ %a@.@."
+    (SymbolMap.print ExportId.print) export.ex_symbol_id;
+  fprintf ppf "constants@ %a@.@."
+    SymbolSet.print export.ex_constants;
+  fprintf ppf "functions@ %a@.@."
+    (FunMap.print Printflambda.function_declarations) export.ex_functions
+
 
 let merge e1 e2 =
   let int_eq (i:int) j = i = j in

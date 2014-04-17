@@ -90,3 +90,5 @@ val import_for_pack :
 val print_approx : Format.formatter -> exported -> unit
 
 val print_symbols : Format.formatter -> exported -> unit
+
+val print_all : Format.formatter -> exported -> unit
