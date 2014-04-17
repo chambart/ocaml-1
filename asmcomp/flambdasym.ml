@@ -212,6 +212,12 @@ module Conv(P:Param1) = struct
   let add_cm id const env =
     { env with cm = VarMap.add id const env.cm }
 
+  let copy_env id' id env =
+    try
+      let const = VarMap.find id env.cm in
+      add_cm id' const env
+    with Not_found -> env
+
   let add_global i approx =
     Hashtbl.add infos.global i approx
   let get_global i =
@@ -649,6 +655,12 @@ module Conv(P:Param1) = struct
     let env =
       VarMap.fold (fun id (_,approx) -> add_approx id approx)
         fv_ulam_approx env in
+
+    (* add info about symbols in specialised_arg *)
+    let env = VarMap.fold copy_env spec_arg env in
+    (* keep only spec_arg that are not symbols *)
+    let spec_arg = VarMap.filter
+        (fun _ id -> not (VarMap.mem id env.cm)) spec_arg in
 
     let conv_function id func =
 
