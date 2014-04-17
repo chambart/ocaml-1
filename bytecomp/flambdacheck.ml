@@ -48,7 +48,8 @@ let every_used_identifier_is_bound flam =
           List.fold_left (fun env (id,_) -> VarSet.add id env) env defs in
         List.iter (fun (_,def) -> loop env def) defs;
         loop env body
-    | Fclosure ({cl_fun;cl_free_var},_) ->
+    | Fclosure ({cl_fun;cl_free_var},_) as exp ->
+        check env exp;
         VarMap.iter (fun _ v -> loop env v) cl_free_var;
         VarMap.iter (fun _ { free_variables; body } -> loop free_variables body)
           cl_fun.funs
