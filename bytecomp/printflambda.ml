@@ -182,5 +182,15 @@ and const ppf c = let open Asttypes in match c with
         List.iter (fun f -> fprintf ppf "@ %s" f) fl in
       fprintf ppf "@[<1>[|@[%s%a@]|]@]" f1 floats fl
 
+let function_declarations ppf fd =
+  let idents ppf =
+    List.iter (fprintf ppf "@ %a" Variable.print) in
+  let funs ppf =
+    VarMap.iter (fun var f ->
+        fprintf ppf "@ (fun@ %a@[<2>%a@]@ @[<2>%a@])"
+          Variable.print var idents f.params lam f.body) in
+  fprintf ppf "@[<2>(%a)@]" funs fd.funs
+
+
 let flambda ppf ulam =
   fprintf ppf "%a@." lam ulam
