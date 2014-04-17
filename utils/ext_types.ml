@@ -96,7 +96,7 @@ struct
     of_list (List.map (fun (k,v) -> f k, v) (bindings m))
   let print f ppf s =
     let elts ppf s = iter (fun id v ->
-        Format.fprintf ppf "@ (%a %a)" M.print id f v) s in
+        Format.fprintf ppf "@ (@[%a@ %a@])" M.print id f v) s in
     Format.fprintf ppf "@[<1>{@[%a@ @]}@]" elts s
 
   module MSet = Set.Make(M)
