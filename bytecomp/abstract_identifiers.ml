@@ -26,7 +26,7 @@ module Variable = struct
     let open Ident in
     { var.var_var with
       name =
-        Format.asprintf "%a_%s "
+        Format.asprintf "%a_%s"
           Compilation_unit.print var.var_unit
           var.var_var.name }
 
