@@ -306,6 +306,9 @@ let new_const_symbol' () =
   { sym_unit = current_unit ();
     sym_label = linkage_name sym_label }
 
+let concat_symbol unitname id =
+  unitname ^ "__" ^ id
+
 let closure_symbol fv =
   let compilation_unit = Closure_function.get_compilation_unit fv in
   let unitname =
@@ -314,8 +317,8 @@ let closure_symbol fv =
   { Symbol.sym_unit = compilation_unit;
     sym_label =
       linkage_name
-        (make_symbol ~unitname
-           (Some ((Closure_function.unique_name fv) ^ "_closure"))) }
+        (concat_symbol unitname
+           ((Closure_function.unique_name fv) ^ "_closure")) }
 
 let function_label fv =
   let open Symbol in
@@ -323,7 +326,7 @@ let function_label fv =
   let unitname =
     string_of_linkage_name
       (Compilation_unit.get_linkage_name compilation_unit) in
-  make_symbol ~unitname (Some (Closure_function.unique_name fv))
+  (concat_symbol unitname (Closure_function.unique_name fv))
 
 
 let new_structured_constant cst global =
