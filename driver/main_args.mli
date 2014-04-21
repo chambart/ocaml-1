@@ -128,6 +128,7 @@ module type Optcomp_options = sig
   val _I : string -> unit
   val _impl : string -> unit
   val _inline : int -> unit
+  val _rounds : int -> unit
   val _intf : string -> unit
   val _intf_suffix : string -> unit
   val _labels : unit -> unit
@@ -193,6 +194,7 @@ module type Opttop_options = sig
   val _I : string -> unit
   val _init : string -> unit
   val _inline : int -> unit
+  val _rounds : int -> unit
   val _labels : unit -> unit
   val _no_app_funct : unit -> unit
   val _noassert : unit -> unit

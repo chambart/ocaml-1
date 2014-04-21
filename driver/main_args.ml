@@ -112,6 +112,10 @@ let mk_inline f =
   "-inline", Arg.Int f, "<n>  Set aggressiveness of inlining to <n>"
 ;;
 
+let mk_rounds f =
+  "-rounds", Arg.Int f, "<n>  Set number of simplification rounds to <n>"
+;;
+
 let mk_intf f =
   "-intf", Arg.String f, "<file>  Compile <file> as a .mli file"
 ;;
@@ -540,6 +544,7 @@ module type Optcomp_options = sig
   val _I : string -> unit
   val _impl : string -> unit
   val _inline : int -> unit
+  val _rounds : int -> unit
   val _intf : string -> unit
   val _intf_suffix : string -> unit
   val _labels : unit -> unit
@@ -605,6 +610,7 @@ module type Opttop_options = sig
   val _I : string -> unit
   val _init : string -> unit
   val _inline : int -> unit
+  val _rounds : int -> unit
   val _labels : unit -> unit
   val _no_app_funct : unit -> unit
   val _noassert : unit -> unit
@@ -783,6 +789,7 @@ struct
     mk_I F._I;
     mk_impl F._impl;
     mk_inline F._inline;
+    mk_rounds F._rounds;
     mk_intf F._intf;
     mk_intf_suffix F._intf_suffix;
     mk_labels F._labels;
@@ -849,6 +856,7 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_I F._I;
     mk_init F._init;
     mk_inline F._inline;
+    mk_rounds F._rounds;
     mk_labels F._labels;
     mk_no_app_funct F._no_app_funct;
     mk_noassert F._noassert;

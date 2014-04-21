@@ -121,11 +121,12 @@ let test ppf lam =
       ~symbol_for_global':Compilenv.symbol_for_global'
       lam in
   dump_and_check "flambdagen" flam;
-  let flam = Flambdasimplify.simplify flam in
-  dump_and_check "simplify1" flam;
-  let flam = Flambdasimplify.simplify flam in
-  dump_and_check "simplify2" flam;
-  let flam = Flambdasimplify.eliminate_ref flam in
+  let flam = ref flam in
+  for i = 1 to !Clflags.simplify_rounds do
+    flam := Flambdasimplify.simplify !flam;
+    dump_and_check (Printf.sprintf "simplify %i" i) !flam;
+  done;
+  let flam = Flambdasimplify.eliminate_ref !flam in
   dump_and_check "eliminate ref" flam;
   let fl_sym =
     Flambdasym.convert ~compilation_unit:current_compilation_unit flam in
