@@ -1506,9 +1506,10 @@ and inline env r clos lfunc fun_id func args dbg eid =
   loop_substitute env r (Flet(Not_assigned, clos_id, lfunc, body, ExprId.create ()))
 
 let lift_lets tree =
-  let aux = function
+  let rec aux = function
     | Flet(str1,v1,Flet(str2,v2,def2,body2,d2),body1,d1) ->
-        Flet(str2,v2,def2,Flet(str1,v1,body2,body1,d1),d2)
+        Flet(str2,v2,def2,
+             aux (Flet(str1,v1,body2,body1,d1)),d2)
     | e -> e in
   Flambdaiter.map aux tree
 
