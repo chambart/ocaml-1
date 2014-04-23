@@ -1194,6 +1194,11 @@ and closure env r cl annot =
          And we need to distinguish the inner iter from the outer one
       *)
 
+      let closure_env =
+        if ffun.stub
+        then { closure_env with inline_threshold = -10000 }
+        else closure_env in
+
       let body, r = loop closure_env r body in
       let used_params = List.fold_left (fun acc id ->
           if VarSet.mem id r.used_variables
