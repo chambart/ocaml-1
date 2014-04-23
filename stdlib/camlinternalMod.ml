@@ -20,8 +20,16 @@ type shape =
 let rec init_mod loc shape =
   match shape with
   | Function ->
-      let pad1 = 1 and pad2 = 2 and pad3 = 3 and pad4 = 4
-      and pad5 = 5 and pad6 = 6 and pad7 = 7 and pad8 = 8 in
+      let r = ref true in
+      r := false;
+      let pad1 = if !r then Some 1 else None in
+      let pad2 = if !r then Some 1 else None in
+      let pad3 = if !r then Some 1 else None in
+      let pad4 = if !r then Some 1 else None in
+      let pad5 = if !r then Some 1 else None in
+      let pad6 = if !r then Some 1 else None in
+      let pad7 = if !r then Some 1 else None in
+      let pad8 = if !r then Some 1 else None in
       (* WARINING: those are constants, it will not be put in the
          closure, hence the closure will only contains one free
          variable (loc). This mean that a lot of function have an
