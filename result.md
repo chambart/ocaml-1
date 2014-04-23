@@ -12,6 +12,31 @@ for i = 0 to 100000000 do
 done
 ```
 
+In this example,
+
+```ocaml
+let x = (1,(i,i,i,i,i,i)) in
+ignore (fst x)
+```
+
+is rewritten to
+
+```ocaml
+let x_1 = 1 in
+let x_2 = (i,i,i,i,i,i) in
+let x = (x_1,x_2) in
+ignore (x_1)
+```
+
+then the dead code is eliminated
+
+```ocaml
+let x_1 = 1 in
+ignore (x_1)
+```
+
+For sake of test/benchmarking ignore is volontarily not eliminated
+
 <table>
 <tr><td>
 <pre>
@@ -19,7 +44,7 @@ done
 	cmpq	$200000001, %rax
 	jg	.L100
 .L101:
-	movq	$3, %rbx
+	movq	$3, %rbx # correspond to 'ignore 1'
 	movq	%rax, %rbx
 	addq	$2, %rax
 	cmpq	$200000001, %rbx
@@ -87,6 +112,29 @@ let f x y =
   let a = { x; y } in
   swap a;
   a.x + a.y
+```
+
+after inlining, `f` becomes:
+
+```ocaml
+let f x y =
+  let a = { x; y } in
+  let y = a.y in
+  a.y <- a.x;
+  a.x <- y
+  a.x + a.y
+```
+
+Reference elimination can then take place
+
+```ocaml
+let f x y =
+  let a_1 = x in
+  let a_2 = y in
+  let y = a_2 in
+  a_2 <- a_1;
+  a_1 <- y
+  a_1 + a_2
 ```
 
 <table>
@@ -167,6 +215,26 @@ let rec fold f acc = function
   | h :: t -> fold f (f h acc) t
 
 let truc = fold plus 0
+```
+
+`fold` can be specialised to plus here giving
+
+```ocaml
+let truc =
+  let rec fold f acc = function
+    | [] -> acc
+    | h :: t -> fold plus (plus h acc) t in
+ fold plus 0
+```
+
+Further inlined to
+
+```ocaml
+let truc =
+  let rec fold f acc = function
+    | [] -> acc
+    | h :: t -> fold plus (h + acc) t in
+ fold plus 0
 ```
 
 <table>
@@ -279,6 +347,28 @@ let f g x =
 let h x = f plus x
 ```
 
+is inlined to
+
+```
+let h x = plus (x,x)
+```
+
+then
+
+```
+let h x =
+    let b = (x,x) in
+    let (x,y) = b in
+    x + y
+```
+
+then simplified to
+
+```
+let h x = x + x
+```
+
+
 <table>
 <tr><td>
 <pre>
@@ -347,6 +437,9 @@ let f x =
   let g y = y + x in
   g x
 ```
+
+The point here is to note that after inlining, the closure of g is not
+allocated anymore.
 
 <table>
 <tr><td>
