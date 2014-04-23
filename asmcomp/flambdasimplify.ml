@@ -1634,3 +1634,20 @@ let eliminate_ref lam =
         exp
   in
   Flambdaiter.map aux lam
+
+
+open Flambdapasses
+
+let simplify_pass =
+  { name = "simplify";
+    pass = (fun expr _ -> simplify expr) }
+
+let elim_ref_pass =
+  { name = "ref elimination";
+    pass = (fun expr _ -> eliminate_ref expr) }
+
+let () =
+  Flambdapasses.register_pass Loop 10 simplify_pass;
+  Flambdapasses.register_pass After 10 elim_ref_pass
+
+let passes = [simplify_pass; elim_ref_pass]

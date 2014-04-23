@@ -23,3 +23,5 @@ open Abstract_identifiers
 val simplify : ExprId.t flambda -> ExprId.t flambda
 
 val eliminate_ref : ExprId.t flambda -> ExprId.t flambda
+
+val passes : Flambdapasses.pass list

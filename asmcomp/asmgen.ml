@@ -121,20 +121,43 @@ let test ppf lam =
       ~symbol_for_global':Compilenv.symbol_for_global'
       lam in
   dump_and_check "flambdagen" flam;
+
+  (* keep passes linked in the cma *)
+  ignore (Flambdasimplify.passes);
+
+  let run_pass flambda pass =
+    let flambda = pass.Flambdapasses.pass flambda current_compilation_unit in
+    dump_and_check pass.Flambdapasses.name flambda;
+    flambda
+  in
+  let before = Flambdapasses.before_passes () in
+  let loop = Flambdapasses.loop_passes () in
+  let after = Flambdapasses.after_passes () in
+
+  if !Clflags.dump_flambda
+  then Format.fprintf ppf "@.flambda before@.";
+
+  let flam = List.fold_left run_pass flam before in
+
   let flam = ref flam in
   for i = 1 to !Clflags.simplify_rounds do
-    flam := Flambdasimplify.simplify !flam;
-    dump_and_check (Printf.sprintf "simplify %i" i) !flam;
+    if !Clflags.dump_flambda
+    then Format.fprintf ppf "@.flambda round %i@." i;
+    flam := List.fold_left run_pass !flam loop
   done;
-  let flam = Flambdasimplify.eliminate_ref !flam in
-  dump_and_check "eliminate ref" flam;
+
+  if !Clflags.dump_flambda
+  then Format.fprintf ppf "@.flambda after@.";
+
+  let flam = List.fold_left run_pass !flam after in
+
   let fl_sym =
     Flambdasym.convert ~compilation_unit:current_compilation_unit flam in
   let fl,const,export = fl_sym in
   Compilenv.set_export_info export;
   if !Clflags.dump_flambda
   then begin
-    Format.fprintf ppf "%a@." Printflambda.flambda fl;
+    Format.fprintf ppf "flambdasym@ %a@." Printflambda.flambda fl;
     Symbol.SymbolMap.iter (fun sym lam ->
         Format.fprintf ppf "sym: %a@ %a@."
           Symbol.print sym
