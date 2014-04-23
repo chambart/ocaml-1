@@ -33,6 +33,7 @@ module type ExtMap = sig
   val rename : key t -> key -> key
   val map_keys : (key -> key) -> 'a t -> 'a t
   val keys : 'a t -> Set.Make(M).t
+  val of_set : (key -> 'a) -> Set.Make(M).t -> 'a t
   val print :
     (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
 end
@@ -102,6 +103,7 @@ struct
   module MSet = Set.Make(M)
 
   let keys map = fold (fun k _ set -> MSet.add k set) map MSet.empty
+  let of_set f set = MSet.fold (fun e map -> add e (f e) map) set empty
 
 end
 
