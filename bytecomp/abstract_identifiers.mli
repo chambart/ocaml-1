@@ -48,7 +48,8 @@ module Variable : sig
   val unique_ident : t -> Ident.t (* For clambdagen only *)
     (* Should we propagate Variable.t into clambda ??? *)
 
-  val rename : current_compilation_unit:compilation_unit -> t -> t
+  val rename : current_compilation_unit:compilation_unit ->
+    ?append:string -> t -> t
 
   val in_compilation_unit : compilation_unit -> t -> bool
 

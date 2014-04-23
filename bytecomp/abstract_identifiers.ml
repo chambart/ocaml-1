@@ -31,9 +31,13 @@ module Variable = struct
           var.var_var.name }
 
 
-  let rename ~current_compilation_unit var =
+  let rename ~current_compilation_unit ?append var =
+    let var_var =
+      match append with
+      | None -> Ident.rename var.var_var
+      | Some s -> Ident.create (var.var_var.Ident.name ^ s) in
     { var_unit = current_compilation_unit;
-      var_var = Ident.rename var.var_var }
+      var_var }
 
   let in_compilation_unit cu var =
     Compilation_unit.equal cu var.var_unit
