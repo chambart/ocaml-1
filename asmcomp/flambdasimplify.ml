@@ -1510,16 +1510,7 @@ and inline env r clos lfunc fun_id func args dbg eid =
   in
   loop_substitute env r (Flet(Not_assigned, clos_id, lfunc, body, ExprId.create ()))
 
-let lift_lets tree =
-  let rec aux = function
-    | Flet(str1,v1,Flet(str2,v2,def2,body2,d2),body1,d1) ->
-        Flet(str2,v2,def2,
-             aux (Flet(str1,v1,body2,body1,d1)),d2)
-    | e -> e in
-  Flambdaiter.map aux tree
-
 let simplify tree =
-  let tree = lift_lets tree in
   let env = empty_env () in
   let result, r = loop env (init_r ()) tree in
   if not (VarSet.is_empty r.used_variables)
@@ -1635,8 +1626,19 @@ let eliminate_ref lam =
   in
   Flambdaiter.map aux lam
 
+let lift_lets tree =
+  let rec aux = function
+    | Flet(str1,v1,Flet(str2,v2,def2,body2,d2),body1,d1) ->
+        Flet(str2,v2,def2,
+             aux (Flet(str1,v1,body2,body1,d1)),d2)
+    | e -> e in
+  Flambdaiter.map aux tree
 
 open Flambdapasses
+
+let lift_let_pass =
+  { name = "lift lets";
+    pass = (fun expr _ -> lift_lets expr) }
 
 let simplify_pass =
   { name = "simplify";
@@ -1646,8 +1648,8 @@ let elim_ref_pass =
   { name = "ref elimination";
     pass = (fun expr _ -> eliminate_ref expr) }
 
-let () =
-  Flambdapasses.register_pass Loop 10 simplify_pass;
-  Flambdapasses.register_pass After 10 elim_ref_pass
+let () = Flambdapasses.register_pass Loop 9 lift_let_pass
+let () = Flambdapasses.register_pass Loop 10 simplify_pass
+let () = Flambdapasses.register_pass Loop 11 elim_ref_pass
 
 let passes = [simplify_pass; elim_ref_pass]
