@@ -203,6 +203,7 @@ let pass =
     pass = (fun expr _ -> function_indirection expr) }
 
 let () =
-  Flambdapasses.register_pass Before 10 pass
+  if Clflags.experiments
+  then Flambdapasses.register_pass Before 10 pass
 
 let passes = [pass]
