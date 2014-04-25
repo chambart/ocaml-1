@@ -1,6 +1,140 @@
 
-Exemples
-========
+Recent changes:
+===============
+
+Pluggable passes
+----------------
+
+It is easy to play with it to add some transformation:
+Just create a flambda***.ml file
+
+As an example (augmenting the scope of lets)
+
+```ocaml
+let lift_lets tree compilation_unit =
+  let rec aux = function
+    | Flet(str1,v1,Flet(str2,v2,def2,body2,d2),body1,d1) ->
+        Flet(str2,v2,def2,
+             aux (Flet(str1,v1,body2,body1,d1)),d2)
+    | e -> e in
+  Flambdaiter.map aux tree
+
+open Flambdapasses
+
+let lift_let_pass =
+  { name = "lift lets";
+    pass = lift_lets }
+
+let () = Flambdapasses.register_pass Loop 5 lift_let_pass
+```
+
+add it to the OPTSTART variable in the Makefile before optmain.cmo (to ensure that it is linked)
+
+```Makefile
+OPTSTART=asmcomp/flambda***.cmo \
+  driver/optmain.cmo \
+```
+
+Experimental passes
+-------------------
+
+Experimental passes that are activated by environment variables.
+It is to allow testing without passes for which I am not certain of the robustness/interest or if it make simple benchmarking harder... (when dummy for loops are eliminated)
+
+```
+export EXPERIMENTS=true
+ocamlopt ...
+```
+
+Moving lets to a better position (EXPERIMENTS)
+--------------------------------
+
+Lets are pushed up or down to minimize the number of computations.
+It also helps a bit with cmmgen pattern matchings.
+
+### Moving down expression
+
+```ocaml
+let f b x =
+  let a = x + 1 in
+  if b
+  then 1
+  else a
+```
+is rewritten to
+```ocaml
+let f b x =
+  if b
+  then 1
+  else let a = x + 1 in a
+```
+
+### Moving up in loops
+
+```ocaml
+let f y =
+  while true do
+    let x = y + y in
+    x
+  done
+```
+is rewritten to
+```ocaml
+let f y =
+  let x = y + y in
+  while true do
+    x
+  done
+```
+
+Trivial stub generation (EXPERIMENTS)
+-----------------------
+
+For some functions it may be worth adding a test before running it.
+The code is stable, but it is not obvious when this is a benefit
+
+For instance:
+
+```ocaml
+let rec map f = function
+  | [] -> []
+  | h::t -> f h :: map f t
+
+let g x l =
+  let add y = x + y in
+  map add l
+```
+Can be rewritten to
+```ocaml
+let rec map' f = function
+  | [] -> []
+  | h::t -> f h :: map' f t
+
+let map f = function (* annotated with stub: hence always inlined *)
+  | [] -> []
+  | l -> map' f l
+
+let g x l =
+  let add y = x + y in
+  map add l
+```
+
+Applying others rewriting (but no lambda lifting) leads to
+```ocaml
+let rec map' f = function
+  | [] -> []
+  | h::t -> f h :: map' f t
+
+let g x = function
+  | [] -> []
+  | l ->
+    let add y = x + y in
+    map add l
+```
+thus avoiding allocating the add closure when the list is empty.
+
+Exemples of generated code
+==========================
 
 Simple dead code elimination
 ----------------------------
