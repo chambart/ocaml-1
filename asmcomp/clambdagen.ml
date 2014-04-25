@@ -388,11 +388,14 @@ module Conv(P:Param2) = struct
       | Uvar _ | Uconst _ | Uprim(Pgetglobalfield _, _, _)
       | Uprim(Pgetglobal _, _, _) -> true
       | Uprim(Pfield _, [arg], _) -> no_effect arg
+      | _ -> false in
+
+    let no_effect = function
       | Uclosure _ ->
           (* if the function is closed, then it is a Uconst otherwise,
              we do not call this function *)
           assert false
-      | _ -> false in
+      | e -> no_effect e in
 
     (* if the function is closed, the closure is not in the parameters,
        so we must ensure that it is executed if it does some side effects *)
