@@ -1,7 +1,11 @@
 open Ext_types
 
 module Kosaraju : sig
-  val sorted_connected_components : int list array -> int list array
+  type component_graph =
+    { sorted_connected_components : int list array;
+      component_edges : int list array }
+
+  val component_graph : int list array -> component_graph
 end = struct
 
   let transpose graph =
@@ -65,13 +69,26 @@ end = struct
     let components, ncomponents = mark dfo graph in
     ncomponents, components
 
-  let sorted_connected_components graph =
+  type component_graph =
+    { sorted_connected_components : int list array;
+      component_edges : int list array }
+
+  let component_graph graph =
     let ncomponents, components = kosaraju graph in
     let id_scc = Array.create ncomponents [] in
+    let component_graph = Array.create ncomponents IntSet.empty in
+    let add_component_dep node set =
+      let node_deps = graph.(node) in
+      List.fold_left (fun set dep -> IntSet.add components.(dep) set)
+        set node_deps
+    in
     Array.iteri (fun node component ->
-        id_scc.(component) <- node :: id_scc.(component))
+        id_scc.(component) <- node :: id_scc.(component);
+        component_graph.(component) <-
+          add_component_dep node (component_graph.(component)))
       components;
-    id_scc
+    { sorted_connected_components = id_scc;
+      component_edges = Array.map IntSet.elements component_graph }
 
 end
 
@@ -81,8 +98,13 @@ module type S = sig
   type component =
     | Has_loop of Id.t list
     | No_loop of Id.t
+
   val connected_components_sorted_from_roots_to_leaf :
     directed_graph -> component array
+
+  val component_graph :
+    directed_graph -> (component * int list) array
+
 end
 
 module Make(Id:PrintableHashOrdered) = struct
@@ -127,18 +149,24 @@ module Make(Id:PrintableHashOrdered) = struct
         IdSet.fold (fun dest acc -> (IdMap.find dest back) :: acc) dests []) in
     { back; forth }, integer_graph
 
-  let connected_components_sorted_from_roots_to_leaf graph =
+  let component_graph graph =
     let numbering, integer_graph = number graph in
-    let components = Kosaraju.sorted_connected_components integer_graph in
-    Array.map (fun nodes ->
+    let { Kosaraju.sorted_connected_components;
+          component_edges } = Kosaraju.component_graph integer_graph in
+    Array.mapi (fun component nodes ->
         match nodes with
         | [] -> assert false
         | [node] ->
-            if List.mem node integer_graph.(node)
-            then Has_loop [numbering.forth.(node)]
-            else No_loop numbering.forth.(node)
+            (if List.mem node integer_graph.(node)
+             then Has_loop [numbering.forth.(node)]
+             else No_loop numbering.forth.(node)),
+            component_edges.(component)
         | _::_ ->
-            Has_loop (List.map (fun node -> numbering.forth.(node)) nodes))
-      components
+            (Has_loop (List.map (fun node -> numbering.forth.(node)) nodes)),
+            component_edges.(component))
+      sorted_connected_components
+
+  let connected_components_sorted_from_roots_to_leaf graph =
+    Array.map fst (component_graph graph)
 
 end

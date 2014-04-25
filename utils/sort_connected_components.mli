@@ -28,6 +28,9 @@ module type S = sig
   val connected_components_sorted_from_roots_to_leaf :
     directed_graph -> component array
 
+  val component_graph :
+    directed_graph -> (component * int list) array
+
 end
 
 
