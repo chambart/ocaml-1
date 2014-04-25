@@ -8,3 +8,5 @@ let () = Test_flambdagen.run ()
 let () = Test_recursives.run ()
 
 let () = Test_kept_parameters.run ()
+
+let () = Test_movelets.run ()

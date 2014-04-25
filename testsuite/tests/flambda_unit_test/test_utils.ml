@@ -18,14 +18,23 @@ let new_var name =
 let new_var_other_unit name =
   Variable.create ~current_compilation_unit:other_compilation_unit name
 
-let nid () = ExprId.create ()
+let nid ?name () = ExprId.create ?name ()
 
 let flet var def body =
-  Flet(Not_assigned,var,def,body,nid ())
+  Flet(Not_assigned,var,def,body,
+       nid ~name:(Format.asprintf "let %a" Variable.print var) ())
 
-let fvar var = Fvar(var,nid ())
+let fvar var =
+  Fvar(var,
+       nid ~name:(Format.asprintf "var %a" Variable.print var) ())
 
 let int i = Fconst(Fconst_base(Asttypes.Const_int i),nid ())
+
+let fbool b =
+  let v =
+    if true
+    then 1 else 0 in
+  Fconst(Fconst_pointer v,nid ())
 
 let rec fseq = function
   | [] -> assert false
@@ -34,6 +43,9 @@ let rec fseq = function
 
 let ffor v lo hi body =
   Ffor(v,lo,hi,Asttypes.Upto,body,nid ())
+
+let fwhile cond body =
+  Fwhile(cond,body,nid ())
 
 let ftry body v handler =
   Ftrywith(body,v,handler,nid ())
@@ -44,8 +56,21 @@ let fcatch exn vars body handler =
 let fassign v exp =
   Fassign(v, exp, nid ())
 
+let fprim p l =
+  Fprim(p, l, Debuginfo.none, nid ())
+
 let fadd e1 e2 =
-  Fprim(Lambda.Paddint, [e1;e2], Debuginfo.none, nid ())
+  fprim Lambda.Paddint [e1;e2]
+
+let fccall l =
+  let open Primitive in
+  let prim =
+    { prim_name = "test";
+      prim_arity = 1;
+      prim_alloc = true;
+      prim_native_name = "c_test";
+      prim_native_float = false } in
+  fprim (Lambda.Pccall prim) l
 
 let fun_decl params fv body =
   { stub = false;
@@ -94,6 +119,9 @@ let fapply ?(kind=Indirect) f args =
       ap_arg = args;
       ap_dbg = Debuginfo.none;
       ap_kind = kind},nid ())
+
+let fif cond ifso ifnot =
+  Fifthenelse(cond,ifso,ifnot,nid ())
 
 type env =
   { var : Variable.t VarMap.t }
