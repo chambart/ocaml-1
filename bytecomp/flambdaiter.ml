@@ -58,6 +58,53 @@ let apply_on_subexpressions f = function
   | Fsend (_,f1,f2,fl,_,_) ->
     List.iter f (f1::f2::fl)
 
+let subexpressions = function
+  | Fsymbol _
+  | Fvar _
+  | Fconst _
+  | Funreachable _ -> []
+
+  | Fassign (_,f1,_)
+  | Ffunction({fu_closure = f1},_)
+  | Fvariable_in_closure({vc_closure = f1},_)
+  | Fevent (f1,_,_) ->
+      [f1]
+
+  | Flet ( _, _, f1, f2,_)
+  | Ftrywith (f1,_,f2,_)
+  | Fsequence (f1,f2,_)
+  | Fwhile (f1,f2,_)
+  | Fstaticcatch (_,_,f1,f2,_) ->
+      [f1; f2]
+
+  | Ffor (_,f1,f2,_,f3,_)
+  | Fifthenelse (f1,f2,f3,_) ->
+      [f1; f2; f3]
+
+  | Fstaticraise (_,l,_)
+  | Fprim (_,l,_,_) -> l
+
+  | Fapply ({ap_function;ap_arg},_) ->
+      (ap_function::ap_arg)
+
+  | Fclosure ({cl_fun;cl_free_var},_) ->
+      let l = VarMap.fold (fun _ v l -> v :: l) cl_free_var [] in
+      VarMap.fold (fun _ f l -> f.body :: l) cl_fun.funs l
+
+  | Fletrec (defs, body,_) ->
+      body :: (List.map snd defs)
+
+  | Fswitch (arg,sw,_) ->
+      let l = List.fold_left (fun l (_,v) -> v :: l) [arg] sw.fs_consts in
+      let l = List.fold_left (fun l (_,v) -> v :: l) l sw.fs_blocks in
+      (match sw.fs_failaction with
+       | None -> l
+       | Some f1 -> f1 :: l)
+
+  | Fsend (_,f1,f2,fl,_,_) ->
+      (f1::f2::fl)
+
+
 let iter_general ~toplevel f t =
   let rec aux t =
     f t;
@@ -225,6 +272,192 @@ let map_general ~toplevel f tree =
 
 let map f tree = map_general ~toplevel:false f tree
 let map_toplevel f tree = map_general ~toplevel:true f tree
+
+let expression_free_variables = function
+  | Fvar (id,_) -> VarSet.singleton id
+  | Fassign (id,_,_) -> VarSet.singleton id
+  | Fclosure ({cl_free_var; cl_specialised_arg},_) ->
+      let set = VarMap.keys (VarMap.revert cl_specialised_arg) in
+      VarMap.fold (fun _ expr set ->
+          (* HACK:
+             This is not needed, but it avoids moving lets inside free_vars *)
+          match expr with
+          | Fvar(var, _) -> VarSet.add var set
+          | _ -> set)
+        cl_free_var set
+  | _ -> VarSet.empty
+
+let fold_subexpressions f acc = function
+  | Ftrywith(body,id,handler,d) ->
+      let acc, body = f acc VarSet.empty body in
+      let acc, handler = f acc (VarSet.singleton id) handler in
+      acc, Ftrywith(body,id,handler,d)
+
+  | Ffor(id, lo, hi, dir, body, d) ->
+      let acc, lo = f acc VarSet.empty lo in
+      let acc, hi = f acc VarSet.empty hi in
+      let acc, body = f acc (VarSet.singleton id) body in
+      acc, Ffor(id, lo, hi, dir, body, d)
+
+  | Flet (kind, id, def, body, d) ->
+      let acc, def = f acc VarSet.empty def in
+      let acc, body = f acc (VarSet.singleton id) body in
+      acc, Flet (kind, id, def, body, d)
+
+  | Fletrec (defs, body, d) ->
+      let vars = VarSet.of_list (List.map fst defs) in
+      let acc, defs =
+        List.fold_right (fun (var,def) (acc, defs) ->
+            let acc, def = f acc vars def in
+            acc, (var,def) :: defs)
+          defs (acc,[]) in
+      let acc, body = f acc vars body in
+      acc, Fletrec (defs, body, d)
+
+  | Fstaticcatch (exn,ids,body,handler,d) ->
+      let acc, body = f acc VarSet.empty body in
+      let acc, handler = f acc (VarSet.of_list ids) handler in
+      acc, Fstaticcatch (exn,ids,body,handler,d)
+
+  | Fstaticraise (exn, args, d) ->
+      let acc, args =
+        List.fold_right
+          (fun arg (acc, l) ->
+             let acc, arg = f acc VarSet.empty arg in
+             acc, arg :: l) args (acc,[]) in
+      acc, Fstaticraise (exn, args, d)
+
+  | Fclosure ({ cl_fun; cl_free_var } as closure, d) ->
+      let acc, funs =
+        VarMap.fold (fun v fun_decl (acc, funs) ->
+            let acc, body = f acc fun_decl.free_variables fun_decl.body in
+            acc, VarMap.add v { fun_decl with body } funs)
+          cl_fun.funs (acc, VarMap.empty)
+      in
+      let cl_fun = { cl_fun with funs } in
+      let acc, cl_free_var =
+        VarMap.fold (fun v flam (acc, free_vars) ->
+            let acc, flam = f acc VarSet.empty flam in
+            acc, VarMap.add v flam free_vars)
+          cl_free_var (acc, VarMap.empty)
+      in
+      acc, Fclosure({ closure with cl_fun; cl_free_var }, d)
+
+  | Fswitch (arg,
+             { fs_numconsts; fs_consts; fs_numblocks;
+               fs_blocks; fs_failaction }, d) ->
+      let acc, arg = f acc VarSet.empty arg in
+      let aux (i,flam) (acc, l) =
+        let acc, flam = f acc VarSet.empty flam in
+        acc, (i,flam) :: l
+      in
+      let acc, fs_consts = List.fold_right aux fs_consts (acc,[]) in
+      let acc, fs_blocks = List.fold_right aux fs_blocks (acc,[]) in
+      let acc, fs_failaction =
+        match fs_failaction with
+        | None -> acc, None
+        | Some flam ->
+            let acc, flam = f acc VarSet.empty flam in
+            acc, Some flam in
+      acc,
+      Fswitch (arg,
+               { fs_numconsts; fs_consts; fs_numblocks;
+                 fs_blocks; fs_failaction }, d)
+
+  | Fapply ({ ap_function; ap_arg; ap_kind; ap_dbg }, d) ->
+      let acc, ap_function = f acc VarSet.empty ap_function in
+      let acc, ap_arg =
+        List.fold_right
+          (fun arg (acc, l) ->
+             let acc, arg = f acc VarSet.empty arg in
+             acc, arg :: l) ap_arg (acc,[]) in
+      acc, Fapply ({ ap_function; ap_arg; ap_kind; ap_dbg }, d)
+
+  | Fsend (kind, e1, e2, args, dbg, d) ->
+      let acc, args =
+        List.fold_right
+          (fun arg (acc, l) ->
+             let acc, arg = f acc VarSet.empty arg in
+             acc, arg :: l) args (acc,[]) in
+      let acc, e1 = f acc VarSet.empty e1 in
+      let acc, e2 = f acc VarSet.empty e2 in
+      acc, Fsend (kind, e1, e2, args, dbg, d)
+
+  | Fsequence(e1, e2, d) ->
+      let acc, e1 = f acc VarSet.empty e1 in
+      let acc, e2 = f acc VarSet.empty e2 in
+      acc, Fsequence(e1, e2, d)
+
+  | Fwhile(cond, body, d) ->
+      let acc, cond = f acc VarSet.empty cond in
+      let acc, body = f acc VarSet.empty body in
+      acc, Fwhile(cond, body, d)
+
+  | Fifthenelse(cond,ifso,ifnot,d) ->
+      let acc, cond = f acc VarSet.empty cond in
+      let acc, ifso = f acc VarSet.empty ifso in
+      let acc, ifnot = f acc VarSet.empty ifnot in
+      acc, Fifthenelse(cond,ifso,ifnot,d)
+
+  | Fprim (p,args,dbg,d) ->
+      let acc, args =
+        List.fold_right
+          (fun arg (acc, l) ->
+             let acc, arg = f acc VarSet.empty arg in
+             acc, arg :: l) args (acc,[]) in
+      acc, Fprim (p,args,dbg,d)
+
+  | Fassign (v,flam,d) ->
+      let acc, flam = f acc VarSet.empty flam in
+      acc, Fassign (v,flam,d)
+
+  | Ffunction(clos,d) ->
+      let acc, fu_closure = f acc VarSet.empty clos.fu_closure in
+      acc, Ffunction({clos with fu_closure},d)
+
+  | Fvariable_in_closure(clos,d) ->
+      let acc, vc_closure = f acc VarSet.empty clos.vc_closure in
+      acc, Fvariable_in_closure({clos with vc_closure},d)
+
+  | Fevent (flam,e,d) ->
+      let acc, flam = f acc VarSet.empty flam in
+      acc, Fevent (flam,e,d)
+
+  | ( Fsymbol _
+    | Fvar _
+    | Fconst _
+    | Funreachable _) as e ->
+      acc, e
+
+let subexpression_bound_variables = function
+  | Ftrywith(body,id,handler,_) ->
+      [VarSet.singleton id, handler;
+       VarSet.empty, body]
+  | Ffor(id, lo, hi, _, body, _) ->
+      [VarSet.empty, lo;
+       VarSet.empty, hi;
+       VarSet.singleton id, body]
+  | Flet ( _, id, def, body,_) ->
+      [VarSet.empty, def;
+       VarSet.singleton id, body]
+  | Fletrec (defs, body,_) ->
+      let vars = VarSet.of_list (List.map fst defs) in
+      let defs = List.map (fun (_,def) -> vars, def) defs in
+      (vars, body) :: defs
+  | Fstaticcatch (_,ids,body,handler,_) ->
+      [VarSet.empty, body;
+       VarSet.of_list ids, handler]
+  | Fclosure ({ cl_fun; cl_free_var },_) ->
+      let free_vars =
+        List.map (fun (_, def) -> VarSet.empty, def)
+          (VarMap.bindings cl_free_var) in
+      let funs =
+        List.map (fun (_, fun_def) ->
+            fun_def.free_variables, fun_def.body)
+          (VarMap.bindings cl_fun.funs)in
+      funs @ free_vars
+  | e ->
+      List.map (fun s -> VarSet.empty, s) (subexpressions e)
 
 let free_variables tree =
   let free = ref VarSet.empty in

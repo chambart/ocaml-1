@@ -16,6 +16,8 @@ open Flambda
 val apply_on_subexpressions : ('a flambda -> unit) ->
   'a flambda -> unit
 
+val subexpressions : 'a flambda -> 'a flambda list
+
 val iter : ('a flambda -> unit) -> 'a flambda -> unit
 
 val iter_toplevel : ('a flambda -> unit) -> 'a flambda -> unit
@@ -32,6 +34,14 @@ val map_toplevel : ('a flambda -> 'a flambda) ->
   'a flambda -> 'a flambda
 
 val free_variables : 'a flambda -> VarSet.t
+
+val fold_subexpressions :
+  ('acc -> VarSet.t -> 'a flambda -> 'acc * 'a flambda) -> 'acc -> 'a flambda ->
+  'acc * 'a flambda
+
+val expression_free_variables : 'a flambda -> VarSet.t
+
+val subexpression_bound_variables : 'a flambda -> (VarSet.t*'a flambda) list
 
 val map_data : ('a -> 'b) -> 'a flambda -> 'b flambda
 
