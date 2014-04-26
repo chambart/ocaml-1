@@ -2,7 +2,7 @@
 Recent changes:
 ===============
 
-Pluggable passes
+Pluggable passes (Apr 26, 2014)
 ----------------
 
 It is easy to play with it to add some transformation:
@@ -35,7 +35,7 @@ OPTSTART=asmcomp/flambda***.cmo \
   driver/optmain.cmo \
 ```
 
-Experimental passes
+Experimental passes (Apr 26, 2014)
 -------------------
 
 Experimental passes that are activated by environment variables.
@@ -46,7 +46,7 @@ export EXPERIMENTS=true
 ocamlopt ...
 ```
 
-Moving lets to a better position (EXPERIMENTS)
+Moving lets to a better position (EXPERIMENTS) (Apr 26, 2014)
 --------------------------------
 
 Lets are pushed up or down to minimize the number of computations.
@@ -87,7 +87,7 @@ let f y =
   done
 ```
 
-Trivial stub generation (EXPERIMENTS)
+Trivial stub generation (EXPERIMENTS) (Apr 26, 2014)
 -----------------------
 
 For some functions it may be worth adding a test before running it.
@@ -125,15 +125,15 @@ let rec map' f = function
   | [] -> []
   | h::t -> f h :: map' f t
 
-let g x = function
-  | [] -> []
-  | l ->
+let g x l = 
+  if l == [] then []
+  else
     let add y = x + y in
     map add l
 ```
-thus avoiding allocating the add closure when the list is empty.
+thus avoiding the allocation of the `add` closure when the list is empty.
 
-Exemples of generated code
+Exemples of generated code (Apr 19, 2014)
 ==========================
 
 Simple dead code elimination
