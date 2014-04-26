@@ -62,6 +62,9 @@ let fprim p l =
 let fadd e1 e2 =
   fprim Lambda.Paddint [e1;e2]
 
+let tuple l =
+  fprim (Lambda.Pmakeblock(0,Asttypes.Immutable)) l
+
 let fccall l =
   let open Primitive in
   let prim =

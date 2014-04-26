@@ -126,6 +126,7 @@ let test ppf lam =
   ignore (Flambdasimplify.passes);
   ignore (Flambdaspec.passes);
   ignore (Flambdamovelets.passes);
+  ignore (Flambdaifstaticraise.passes);
 
   let run_pass flambda pass =
     let flambda = pass.Flambdapasses.pass flambda current_compilation_unit in

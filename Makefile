@@ -90,6 +90,8 @@ ASMCOMP=asmcomp/arch.cmo \
   asmcomp/flambdapasses.cmo \
   asmcomp/flambdamovelets.cmo \
   asmcomp/flambdasimplify.cmo \
+  asmcomp/flambdasubst.cmo \
+  asmcomp/flambdaifstaticraise.cmo \
   asmcomp/flambdaspec.cmo \
   asmcomp/flambdasym.cmo \
   asmcomp/clambdagen.cmo \
