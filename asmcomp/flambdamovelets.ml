@@ -111,6 +111,10 @@ let is_pure env expr =
         (* TODO: special case *)
         false
 
+    | Fprim(Praise, args, _, _) ->
+        env.exception_caugh &&
+        List.for_all (pure env) args
+
     | Fprim(p, args, _, _) ->
         pure_primitive p &&
         List.for_all (pure env) args
@@ -125,17 +129,25 @@ let is_pure env expr =
     | Fsequence _
     | Fwhile _
     | Ffor _ ->
-        List.for_all (pure env) (Flambdaiter.subexpressions expr)
+        let aux (bound,expr) =
+          let env = { env with pure_variables = VarSet.union bound env.pure_variables } in
+          pure env expr
+        in
+        List.for_all aux (Flambdaiter.subexpression_bound_variables expr)
 
-    | Fstaticcatch (exn,_,body,handler,_) ->
-        pure env handler &&
+    | Fstaticcatch (exn,vars,body,handler,_) ->
+        (let pure_variables = VarSet.union (env.pure_variables) (VarSet.of_list vars) in
+         let env = { env with pure_variables } in
+         pure env handler) &&
         let env =
-          { env with local_static_exn =
-                       StaticExceptionSet.add exn env.local_static_exn } in
+          { env with
+            local_static_exn =
+              StaticExceptionSet.add exn env.local_static_exn } in
         pure env body
 
-    | Ftrywith (body, _, handler, _) ->
-        pure env handler &&
+    | Ftrywith (body, var, handler, _) ->
+        (let env = { env with pure_variables = VarSet.add var env.pure_variables } in
+         pure env handler) &&
         let env = { env with exception_caugh = true } in
         pure env body
 
