@@ -1368,6 +1368,7 @@ and direct_apply env r ~local clos funct fun_id func fapprox closure (args,appro
   | Some fun_size ->
       let fun_var = find_declaration_variable fun_id clos in
       let recursive = VarSet.mem fun_var (recursive_functions clos) in
+      let inline_threshold = env.inline_threshold in
       let env = { env with inline_threshold = env.inline_threshold - fun_size } in
       if func.stub || functor_like env clos approxs ||
          (not recursive && env.inlining_level <= max_level)
@@ -1376,7 +1377,7 @@ and direct_apply env r ~local clos funct fun_id func fapprox closure (args,appro
         let body, r_inline = inline env r clos funct fun_id func args ap_dbg eid in
         if func.stub || functor_like env clos approxs ||
            (lambda_smaller body
-              (env.inline_threshold + List.length func.params))
+              (inline_threshold + List.length func.params))
         then
           (* if the definitive size is small enought: keep it *)
           body, r_inline
