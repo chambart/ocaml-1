@@ -745,6 +745,8 @@ let simplif_prim r p (args, approxs) expr dbg : 'a flambda * ret =
                 | Cle -> x <= y
                 | Cge -> x >= y in
               make_const_bool' expr r result eid
+          | Pisout ->
+              make_const_bool' expr r (y > x || y < 0) eid
           | _ ->
               expr, ret r value_unknown
           end
@@ -1040,6 +1042,7 @@ and loop_direct (env:env) r tree : 'a flambda * ret =
         | None -> Funreachable (ExprId.create ())
         | Some f -> f in
       begin match r.approx.descr with
+      | Value_int i
       | Value_constptr i ->
           let lam = try List.assoc i sw.fs_consts with
             | Not_found -> get_failaction () in
