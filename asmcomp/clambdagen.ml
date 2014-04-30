@@ -286,17 +286,38 @@ module Conv(P:Param2) = struct
            added here. *)
         Ugeneric_apply(conv env funct, conv_list env args, dbg)
 
-    | Fswitch(arg, sw, _) ->
-        (* NB: failaction might get copied, thus it should be some Lstaticraise *)
-        let const_index, const_actions =
-          conv_switch env sw.fs_consts sw.fs_numconsts sw.fs_failaction
-        and block_index, block_actions =
-          conv_switch env sw.fs_blocks sw.fs_numblocks sw.fs_failaction in
-        Uswitch(conv env arg,
-                {us_index_consts = const_index;
-                 us_actions_consts = const_actions;
-                 us_index_blocks = block_index;
-                 us_actions_blocks = block_actions})
+    | Fswitch(arg, sw, d) ->
+        let aux () =
+          let const_index, const_actions =
+            conv_switch env sw.fs_consts sw.fs_numconsts sw.fs_failaction
+          and block_index, block_actions =
+            conv_switch env sw.fs_blocks sw.fs_numblocks sw.fs_failaction in
+          Uswitch(conv env arg,
+                  {us_index_consts = const_index;
+                   us_actions_consts = const_actions;
+                   us_index_blocks = block_index;
+                   us_actions_blocks = block_actions})
+        in
+        let rec simple_expr = function
+          | Fconst( Fconst_base (Asttypes.Const_string _), _ ) -> false
+          | Fvar _ | Fsymbol _ | Fconst _ -> true
+          | Fstaticraise (_,args,_) -> List.for_all simple_expr args
+          | _ -> false in
+        (* Check that failaction is effectively copiable: i.e. it
+           can't declare symbols. If it is not the case, share it
+           through a staticraise/staticcatch *)
+        begin match sw.fs_failaction with
+        | None -> aux ()
+        | Some (Fstaticraise (_,args,_))
+          when List.for_all simple_expr args -> aux ()
+        | Some failaction ->
+            let exn = Static_exception.create () in
+            let fs_failaction = Some (Fstaticraise(exn,[], d)) in
+            let sw = { sw with fs_failaction } in
+            let expr =
+              Fstaticcatch(exn, [], Fswitch(arg, sw, d), failaction, d) in
+            conv env expr
+        end
 
     | Fprim(Pgetglobal id, l, dbg, _) ->
         assert false
