@@ -43,6 +43,9 @@ val map2_head: ('a -> 'b -> 'c) -> 'a list -> 'b list -> ('c list * 'b list)
            and t2 of length k, r1 is [List.map2 f l1 h1] and r2 is t2 *)
 val some_if_all_elements_are_some: 'a option list -> 'a list option
 
+val uniq_sort : ('a -> 'a -> int) -> 'a list -> 'a list
+        (* Sorts and remove duplicated elements according to the
+           comparison function *)
 val may: ('a -> unit) -> 'a option -> unit
 val may_map: ('a -> 'b) -> 'a option -> 'b option
 

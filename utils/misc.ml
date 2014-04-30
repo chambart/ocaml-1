@@ -87,6 +87,18 @@ let rec some_if_all_elements_are_some = function
         | None -> None
         | Some h' -> Some (h' :: t')
 
+let uniq_sort compare l =
+  let l = List.sort compare l in
+  let rec aux = function
+    | [] -> []
+    | [_] as l -> l
+    | h1 :: ((h2 :: _) as t) ->
+        if compare h1 h2 = 0
+        then aux t
+        else h1 :: aux t
+  in
+  aux l
+
 (* Options *)
 
 let may f = function
