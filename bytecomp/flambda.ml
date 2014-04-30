@@ -194,6 +194,8 @@ let recursive_functions { funs } =
     VarSet.empty connected_components
 
 let rec same l1 l2 =
+  l1 == l2 || (* it is ok for string case: if they are physicaly the same,
+                 it is the same original branch *)
   match (l1, l2) with
   | Fsymbol(s1, _), Fsymbol(s2, _) -> Symbol.equal s1 s2
   | Fsymbol _, _ | _, Fsymbol _ -> false
