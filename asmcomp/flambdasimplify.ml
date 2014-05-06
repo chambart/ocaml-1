@@ -889,7 +889,7 @@ and loop_direct (env:env) r tree : 'a flambda * ret =
       let id, env = new_subst_id id env in
       let def_used_var = r.used_variables in
       let body_env = match str with
-        | Assigned -> add_approx id value_unknown env
+        | Assigned -> { env with env_approx = VarMap.add id value_unknown env.env_approx }
         | _ -> add_approx id r.approx env in
       let r_body = { r with used_variables = init_used_var } in
       let body, r = loop body_env r_body body in
