@@ -332,15 +332,80 @@ module Approx = struct
       StaticExceptionMap.add exn (vars, expr) env.static_exn in
     { env with static_exn }
 
+  let cases_ints cases =
+    let aux acc case =
+      match acc with
+      | None -> None
+      | Some acc_lst ->
+          match case with
+          | Cstptr i -> Some (i :: acc_lst)
+          | Block _ -> None
+    in
+    List.fold_left aux (Some []) cases
+
+  let eval_comparison comp cases1 cases2 =
+    let test (i:int) j =
+      let open Lambda in
+      match comp with
+      | Ceq -> i = j
+      | Cneq -> i <> j
+      | Clt -> i < j
+      | Cgt -> i > j
+      | Cle -> i <= j
+      | Cge -> i >= j
+    in
+    match cases_ints cases1, cases_ints cases2 with
+    | None, _ | _, None | Some [], _ | _, Some [] -> None
+    | Some ((h1::_ ) as l1), Some ((h2::_) as l2) ->
+        let base_case = test h1 h2 in
+        let aux v =
+          let aux2 v2 = test v v2 = base_case in
+          List.for_all aux2 l2
+        in
+        if List.for_all aux l1
+        then Some base_case
+        else None
+
+  let bool_case b =
+    if b
+    then Cases [Cstptr 1]
+    else Cases [Cstptr 0]
+
   (* A simple approximation of potentially returned values: used to
      find if an expression correspond to a single match/if case *)
   let rec branch_returns union env = function
+    | Fconst(Fconst_base (Asttypes.Const_int i), d)
     | Fconst(Fconst_pointer i, d) ->
         Cases [Cstptr i]
     | Fprim(Lambda.Pmakeblock(tag,mut), args, _, _) ->
         Cases [Block { tag; mut; size = List.length args }]
     | Fprim(Lambda.Praise, _, _, _) ->
         Bottom
+    | Fprim(Lambda.Pintcomp cmp, [arg1; arg2], _, _) ->
+        begin match branch_returns union env arg1,
+                    branch_returns union env arg2 with
+        | Cases cases1, Cases cases2 ->
+            begin match eval_comparison cmp cases1 cases2 with
+            | None -> Others
+            | Some b -> bool_case b
+            end
+        | Bottom, _ | _, Bottom -> Bottom
+        | _, _ -> Others
+        end
+    | Fprim(Lambda.Pisint, [arg], _, _) ->
+        begin match branch_returns union env arg with
+        | Bottom -> Bottom
+        | Others | Cases [] -> Others
+        | Cases ((_::_) as cases) ->
+            let aux = function Cstptr _ -> true | Block _ -> false in
+            let isint = List.for_all aux cases in
+            let isblock = not (List.exists aux cases) in
+            match isint, isblock with
+            | true, true -> assert false
+            | true, false -> bool_case true
+            | false, true -> bool_case false
+            | false, false -> Others
+        end
     | Fvar(var, _) ->
         if VarMap.mem var env.vars
         then VarMap.find var env.vars
@@ -382,13 +447,16 @@ module Approx = struct
         branch_returns union env flam
     | _ -> Others
 
+  let branch_returns' union var approx expr =
+    let env = { empty_env with vars = VarMap.singleton var approx } in
+    branch_returns union env expr
+
   let branch_returns union expr =
     branch_returns union empty_env expr
 
 end
 
-let is_boolable expr =
-  match Approx.branch_returns union_merge expr with
+let bool_approx = function
   | Others | Bottom -> None
   | Cases [] -> assert false
   | Cases (h :: t) ->
@@ -399,6 +467,9 @@ let is_boolable expr =
       if List.for_all (fun c -> case_to_bool c = hb) t
       then Some hb
       else None
+
+let is_boolable var approx expr =
+  bool_approx (Approx.branch_returns' union_merge var approx expr)
 
 type matchings =
   | Single_case of ExprId.t flambda
@@ -491,8 +562,7 @@ let rec let_match comp_unit expr =
       (* if def does not return, the body of the let is never
          evaluated and the binding is useless: we keep only def for
          its side effects *)
-      Format.printf "elim don't return let %a@."
-        Printflambda.flambda def;
+      Format.printf "elim don't return let @.";
       def
 
   | Fifthenelse (cond, _ifso, _ifnot, _) when never_returns cond ->
@@ -540,8 +610,7 @@ let rec let_match comp_unit expr =
             Fstaticcatch(exn, vars, catch_body, handler, d)
       in
       begin match body with
-      | Fifthenelse (Fvar (var',dv), ifso, ifnot, dif)
-        when Variable.equal var var' ->
+      | Fifthenelse (cond, ifso, ifnot, dif) ->
         (* {[let x = catch ... with true in
            if x then ifso else ifnot]}
            is transformed to
@@ -549,7 +618,8 @@ let rec let_match comp_unit expr =
                    if x then ifso else ifnot
              with let x = true in ifso]}
         *)
-          begin match is_boolable handler with
+          let approx = Approx.branch_returns union_merge handler in
+          begin match is_boolable var approx cond with
           | None -> expr
           | Some b ->
               Format.printf "directly apply if let@.";
@@ -578,7 +648,7 @@ let rec let_match comp_unit expr =
 
   | Fifthenelse (Fstaticcatch(exn, exn_vars, exn_body, handler, dexn), ifso, ifnot, dif) ->
       begin
-        match is_boolable handler with
+        match bool_approx (Approx.branch_returns union_merge handler) with
         | None -> expr
         | Some b ->
             (* {[if catch ... with _ -> true then ifso else ifnot]}
