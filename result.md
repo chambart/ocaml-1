@@ -2,6 +2,172 @@
 Recent changes:
 ===============
 
+Using staticraise to simplify some branching (May 13, 2014)
+--------------------------------------------
+
+With a set of quite simple passes moving expressions up and down the
+tree using static exceptions and matching some patterns, we can end up
+simplifying some interesting patterns:
+
+The simplest case being
+
+```ocaml
+let (a,b) = if c then (1,2) else (3,4) in
+  a+b
+```
+
+### Moving expressions up
+
+A first pass replace tail allocations and const pointers in branching
+expressions by a static raises:
+
+```ocaml
+let (a,b) =
+ catch
+   if c then exit (1,2) else exit (3,4)
+ with (x,y) -> (x,y)
+ in
+  a+b
+```
+
+This form is not better than the previous, but it has some
+informations moved up in the expression, allowing to recognise some
+interesting patterns.
+
+### Recognise staticcatch patterns
+
+Here since the body of the catch never returns, thanks to the previous
+transformation, we know we can push the let binding inside the
+staticexception handler:
+
+```ocaml
+catch
+  if c then exit (1,2) else exit (3,4)
+with (x,y) ->
+  let (a,b) = (x,y) in
+  a+b
+```
+
+And previously existing passes can get rid of the allocation to finaly
+obtain:
+
+```ocaml
+catch
+  if c then exit (1,2) else exit (3,4)
+with (x,y) ->
+  x+y
+```
+
+### Some more involved example
+
+```ocaml
+let rec read_lines acc =
+  let res =
+    try Some (input_line stdin)
+    with End_of_file -> None
+  in
+  match res with
+  | None -> acc
+  | Some l -> read_lines (l :: acc)
+```
+
+Is first transformed to
+
+```ocaml
+let rec read_lines acc =
+  let res =
+    catch
+      catch
+        try exit 1 (input_line stdin)
+        with End_of_file -> exit 2
+      with 1 x -> Some x
+    with 2 -> None
+  in
+  match res with
+  | None -> acc
+  | Some l -> read_lines (l :: acc)
+```
+
+Then the following pattern is recognised
+
+```ocaml
+let x = catch ... with ... None in
+  match x with
+  | None -> ...
+  | ...
+```
+
+And the match branch is pushed inside the static exception handler:
+
+```ocaml
+let rec read_lines acc =
+  catch
+    let res =
+      catch
+        try exit 1 (input_line stdin)
+        with End_of_file -> exit 2
+      with 1 x -> Some x
+    in
+    match res with
+    | None -> acc
+    | Some l -> read_lines (l :: acc)
+  with 2 -> let res = None in acc
+```
+
+And further
+
+```ocaml
+let rec read_lines acc =
+  catch
+    catch
+      let res =
+        try exit 1 (input_line stdin)
+        with End_of_file -> exit 2
+      in
+      match res with
+      | None -> acc
+      | Some l -> read_lines (l :: acc)
+    with 1 x ->
+      let res = Some x in
+      let l = field 1 res in
+      read_lines (l :: acc)
+  with 2 -> let res = None in acc
+```
+
+And with further simplifications we obtain:
+
+```ocaml
+let rec read_lines acc =
+  catch
+    catch
+      try exit 1 (input_line stdin)
+      with End_of_file -> exit 2
+    with 1 x ->
+      read_lines (x :: acc)
+  with 2 -> acc
+```
+
+Hence, eliminating an allocation and a match.
+
+### Static exception simplifications
+
+When those transformation generate useless static exception, a final
+pass push back expressions at their original position and remove
+useless static exceptions.
+
+```ocaml
+catch
+  catch
+    exit 1
+  with 1 -> exit 2
+with 2 -> expr
+```
+
+is converted to
+```ocaml
+expr
+```
+
 Pluggable passes (Apr 26, 2014)
 ----------------
 
