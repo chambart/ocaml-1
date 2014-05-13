@@ -723,7 +723,10 @@ let simplif_prim r p (args, approxs) expr dbg : 'a flambda * ret =
           | _ ->
               expr, ret r value_unknown
           end
-      | [Value_int x; Value_int y] ->
+      | [Value_int x; Value_int y]
+      | [Value_constptr x; Value_int y]
+      | [Value_int x; Value_constptr y]
+      | [Value_constptr x; Value_constptr y] ->
           begin match p with
             Paddint -> make_const_int' expr r (x + y) eid
           | Psubint -> make_const_int' expr r (x - y) eid
@@ -747,6 +750,8 @@ let simplif_prim r p (args, approxs) expr dbg : 'a flambda * ret =
               make_const_bool' expr r result eid
           | Pisout ->
               make_const_bool' expr r (y > x || y < 0) eid
+          | Psequand -> make_const_bool' expr r (x <> 0 && y <> 0) eid
+          | Psequor  -> make_const_bool' expr r (x <> 0 || y <> 0) eid
           | _ ->
               expr, ret r value_unknown
           end
@@ -767,10 +772,9 @@ let simplif_prim r p (args, approxs) expr dbg : 'a flambda * ret =
           | _ ->
               expr, ret r value_unknown
           end
-      | [Value_constptr x; Value_constptr y] ->
+      | [Value_block _] ->
           begin match p with
-            Psequand -> make_const_bool' expr r (x <> 0 && y <> 0) eid
-          | Psequor  -> make_const_bool' expr r (x <> 0 || y <> 0) eid
+          | Pisint -> make_const_bool' expr r false eid
           | _ ->
               expr, ret r value_unknown
           end
