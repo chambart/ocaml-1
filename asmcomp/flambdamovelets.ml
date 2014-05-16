@@ -1,248 +1,5 @@
-open Lambda
 open Abstract_identifiers
 open Flambda
-
-(* pure: can be moved without changing the semantics *)
-
-let pure_primitive = function
-  | Pidentity
-  | Pignore
-  | Pgetglobal _
-  (* | Pgetglobalfield _ *) (* the order of getglobalfields are quite fixed *)
-  | Pmakeblock (_, Asttypes.Immutable) (* moving mutables could change sharing *)
-  | Psequand
-  | Psequor
-  | Pnot
-  | Pnegint
-  | Paddint
-  | Psubint
-  | Pmulint
-  (* | Pdivint *) (* divide by zero *)
-  | Pmodint
-  | Pandint
-  | Porint
-  | Pxorint
-  | Plslint
-  | Plsrint
-  | Pasrint
-  | Pintcomp _
-  | Poffsetint _
-  | Pintoffloat
-  | Pfloatofint
-  | Pnegfloat
-  | Pabsfloat
-  | Paddfloat
-  | Psubfloat
-  | Pmulfloat
-  | Pdivfloat
-  | Pfloatcomp _
-  | Pstringlength
-  (* | Pmakearray _ *) (* sharing *)
-  | Parraylength _
-  | Pisint
-  | Pisout
-  | Pbittest
-  | Pbintofint _
-  | Pintofbint _
-  | Pcvtbint _
-  | Pnegbint _
-  | Paddbint _
-  | Psubbint _
-  | Pmulbint _
-  (* | Pdivbint _ *) (* divide by zero *)
-  | Pmodbint _
-  | Pandbint _
-  | Porbint _
-  | Pxorbint _
-  | Plslbint _
-  | Plsrbint _
-  | Pasrbint _
-  | Pbintcomp _
-  | Pbigarraydim _
-  | Pctconst _
-  | Pbswap16
-  | Pbbswap _ -> true
-  | _ -> false
-
-type pure_env =
-  { pure_functions : ClosureFunctionSet.t;
-    pure_variables : VarSet.t;
-    bound_variables : VarSet.t;
-    local_static_exn : StaticExceptionSet.t;
-    exception_caugh : bool }
-
-let empty_env =
-  { pure_functions = ClosureFunctionSet.empty;
-    pure_variables = VarSet.empty;
-    bound_variables = VarSet.empty;
-    local_static_exn = StaticExceptionSet.empty;
-    exception_caugh = false }
-
-type pure =
-  | Pure_if of ClosureFunctionSet.t
-  | Impure
-
-let is_pure env expr =
-  let dep = ref ClosureFunctionSet.empty in
-  let add_dep cf = dep := ClosureFunctionSet.add cf !dep in
-  let rec pure env expr = match expr with
-    | Fvar (v,_) ->
-        VarSet.mem v env.bound_variables ||
-        VarSet.mem v env.pure_variables
-    | Fsymbol _
-    | Fconst _ -> true
-
-    | Flet (_,v,def,body,_) ->
-        pure env def &&
-        pure { env with bound_variables = VarSet.add v env.bound_variables } body
-
-    | Fletrec (defs,body,_) ->
-        let bound_variables =
-          List.fold_left
-            (fun set (v,_) -> VarSet.add v set)
-            env.bound_variables
-            defs
-        in
-        let env = { env with bound_variables } in
-        pure env body &&
-        List.for_all (fun (_,def) -> pure env def) defs
-
-    | Fprim(Pfield _, args, _, _) ->
-        (* TODO: special case *)
-        false
-
-    | Fprim(Praise, args, _, _) ->
-        env.exception_caugh &&
-        List.for_all (pure env) args
-
-    | Fprim(p, args, _, _) ->
-        pure_primitive p &&
-        List.for_all (pure env) args
-
-    | Fclosure ({ cl_free_var }, _) ->
-        VarMap.for_all (fun id def -> pure env def) cl_free_var
-
-    | Ffunction _
-    | Fvariable_in_closure _
-    | Fifthenelse _
-    | Fswitch _
-    | Fsequence _
-    | Fwhile _
-    | Ffor _ ->
-        let aux (bound,expr) =
-          let env = { env with pure_variables = VarSet.union bound env.pure_variables } in
-          pure env expr
-        in
-        List.for_all aux (Flambdaiter.subexpression_bound_variables expr)
-
-    | Fstaticcatch (exn,vars,body,handler,_) ->
-        (let pure_variables = VarSet.union (env.pure_variables) (VarSet.of_list vars) in
-         let env = { env with pure_variables } in
-         pure env handler) &&
-        let env =
-          { env with
-            local_static_exn =
-              StaticExceptionSet.add exn env.local_static_exn } in
-        pure env body
-
-    | Ftrywith (body, var, handler, _) ->
-        (let env = { env with pure_variables = VarSet.add var env.pure_variables } in
-         pure env handler) &&
-        let env = { env with exception_caugh = true } in
-        pure env body
-
-    | Fassign (var,flam,_) ->
-        VarSet.mem var env.bound_variables &&
-        pure env flam
-
-    | Fstaticraise (exn,args, _) ->
-        StaticExceptionSet.mem exn env.local_static_exn &&
-        List.for_all (pure env) args
-
-    | Fapply({ ap_kind = Indirect },_) ->
-        false
-
-    | Fapply({ ap_function; ap_arg; ap_kind = Direct direct },_) ->
-
-        let res =
-          pure env ap_function &&
-          List.for_all (pure env) ap_arg in
-        if res && not (ClosureFunctionSet.mem direct env.pure_functions)
-        then add_dep direct;
-        res
-
-    | Fsend _ ->
-        false
-
-    | Funreachable _ -> true
-
-    | Fevent _ -> assert false
-  in
-  let r = pure env expr in
-  if r
-  then Pure_if !dep
-  else Impure
-
-let pure_expression env expr =
-  match is_pure env expr with
-  | Pure_if s -> ClosureFunctionSet.is_empty s
-  | Impure -> false
-
-let pure_function fun_decl =
-  let env = { empty_env with bound_variables = fun_decl.free_variables } in
-  is_pure env fun_decl.body
-
-module CFS = ClosureFunctionSet
-module CFM = ClosureFunctionMap
-
-let collect_function_dep expr : pure CFM.t =
-  let map = ref CFM.empty in
-  let aux = function
-    | Fclosure(closure, _) ->
-        VarMap.iter
-          (fun var fun_decl ->
-             map :=
-               CFM.add
-                 (Closure_function.wrap var)
-                 (pure_function fun_decl)
-                 !map)
-          closure.cl_fun.funs
-    | _ -> ()
-  in
-  Flambdaiter.iter aux expr;
-  !map
-
-let propagate map : CFS.t =
-  let map = ref map in
-  let pure = ref CFS.empty in
-  let rec aux seen v =
-    if CFS.mem v seen || CFS.mem v !pure
-    then true, seen
-    else
-      if CFM.mem v !map
-      then match CFM.find v !map with
-        | Impure -> false, seen
-        | Pure_if deps ->
-            let f v (res, seen) =
-              let (res', seen) = aux (CFS.add v seen) v in
-              res' && res, seen
-            in
-            let (res, _) as ret = CFS.fold f deps (true, seen) in
-            if not res then map := CFM.add v Impure !map;
-            ret
-      else false, seen
-  in
-  let f v _ =
-    let res, seen = aux (CFS.singleton v) v in
-    if res then pure := CFS.union !pure seen
-  in
-  CFM.iter f !map;
-  !pure
-
-let pure_functions expr =
-  propagate (collect_function_dep expr)
-
-(**************************************)
 
 let nid () = ExprId.create ()
 
@@ -345,8 +102,7 @@ let mark_needs expr lets =
 let add_pure_var kind var env =
   match kind with
   | Assigned -> env
-  | Not_assigned ->
-      { env with pure_variables = VarSet.add var env.pure_variables }
+  | Not_assigned -> Flambdapurity.mark_unasigned_variable var env
 
 let add_let kind var expr acc =
   VarMap.add var { expr; kind } acc
@@ -357,7 +113,7 @@ let rec remove_pure_lets env acc expr : ret =
   match expr with
   | Flet(kind,var,def,body,eid) ->
       let body_env = add_pure_var kind var env in
-      if pure_expression env def
+      if Flambdapurity.pure_expression_toplevel env def
       then
         let acc, def = remove_pure_lets env acc def in
         let acc = add_let kind var def acc in
@@ -381,7 +137,10 @@ let rec remove_pure_lets env acc expr : ret =
 let prepare expr =
 
   (* let links = mark_needs expr VarMap.empty in *)
-  let env = { empty_env with pure_functions = pure_functions expr } in
+  let env =
+    Flambdapurity.mark_pure_functions
+      (Flambdapurity.pure_functions expr)
+      Flambdapurity.empty_env in
   let lets, expr = remove_pure_lets env VarMap.empty expr in
   (* let links = { links with lets; lets_dep = lets_dep lets; floating_lets = VarMap.keys lets } in *)
 
