@@ -14,12 +14,6 @@ let check_error f e =
   | No_counter_example -> assert false
   | Counter_example _ -> ()
 
-let v = new_var "v"
-let f = new_var "f"
-let g = new_var "g"
-let x = new_var "x"
-let y = new_var "y"
-
 let ext = new_var_other_unit "ext"
 
 let static_exn = Static_exception.create ()

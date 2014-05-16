@@ -53,6 +53,9 @@ let ftry body v handler =
 let fcatch exn vars body handler =
   Fstaticcatch(exn,vars,body,handler,nid ())
 
+let fstaticraise exn args =
+  Fstaticraise(exn, args, nid ())
+
 let fassign v exp =
   Fassign(v, exp, nid ())
 
@@ -61,6 +64,12 @@ let fprim p l =
 
 let fadd e1 e2 =
   fprim Lambda.Paddint [e1;e2]
+
+let int_equal e1 e2 =
+  fprim (Lambda.Pintcomp (Lambda.Ceq)) [e1;e2]
+
+let int_leq e1 e2 =
+  fprim (Lambda.Pintcomp (Lambda.Cle)) [e1;e2]
 
 let tuple l =
   fprim (Lambda.Pmakeblock(0,Asttypes.Immutable)) l
@@ -100,6 +109,9 @@ let fclosure lst fv =
        cl_free_var = VarMap.of_list fv;
        cl_specialised_arg = VarMap.empty },
      nid ())
+
+let ffunction fu_closure fu_fun =
+  Ffunction({ fu_closure; fu_fun; fu_relative_to = None }, nid ())
 
 let fun_decl' params body =
   { stub = false; params; body;
@@ -175,3 +187,37 @@ let rec equal env t1 t2 = match t1, t2 with
 
 let equal t1 t2 =
   equal empty_env t1 t2
+
+(* some variables *)
+
+let v = new_var "v"
+let f = new_var "f"
+let g = new_var "g"
+let x = new_var "x"
+let y = new_var "y"
+let z = new_var "z"
+let a = new_var "a"
+let b = new_var "b"
+
+let fibo = new_var "fibo"
+let x_fibo = new_var "x"
+let fibo_fun = Closure_function.wrap fibo
+
+let fibonacci =
+  let fibo_closure =
+    fclosure
+      [fibo, [x_fibo],
+       fif (int_leq (fvar x_fibo) (int 1))
+         (int 1)
+         (fadd
+            (fapply
+               ~kind:(Direct fibo_fun)
+               (fvar fibo)
+               [fadd (fvar x_fibo) (int (-1))])
+            (fapply
+               ~kind:(Direct fibo_fun)
+               (fvar fibo)
+               [fadd (fvar x_fibo) (int (-2))]))]
+      []
+  in
+  ffunction fibo_closure fibo_fun

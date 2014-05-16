@@ -96,7 +96,9 @@ OTHEROBJS=\
   $(OTOPDIR)/asmcomp/flambdapasses.cmo \
   $(OTOPDIR)/asmcomp/flambdasimplify.cmo \
   $(OTOPDIR)/asmcomp/flambdaspec.cmo \
+  $(OTOPDIR)/asmcomp/flambdasubst.cmo \
   $(OTOPDIR)/asmcomp/flambdaifstaticraise.cmo \
+  $(OTOPDIR)/asmcomp/flambdapurity.cmo \
   $(OTOPDIR)/asmcomp/flambdamovelets.cmo \
   $(OTOPDIR)/asmcomp/flambdasym.cmo \
   $(OTOPDIR)/asmcomp/clambdagen.cmo \
@@ -121,7 +123,11 @@ OTHEROBJS=\
   $(OTOPDIR)/asmcomp/printclambda.cmo \
   $(OTOPDIR)/asmcomp/asmgen.cmo
 
-OBJS=test_utils.cmo test_flambdacheck.cmo test_flambdagen.cmo test_connected_components.cmo test_kept_parameters.cmo test_recursives.cmo test_movelets.cmo test_flambdaifstaticraise.cmo
+OBJS= \
+	test_utils.cmo test_flambdacheck.cmo test_flambdagen.cmo \
+	test_connected_components.cmo test_kept_parameters.cmo \
+	test_recursives.cmo test_movelets.cmo test_flambdaifstaticraise.cmo \
+	test_purity.cmo
 
 ADD_COMPFLAGS=$(INCLUDES) -g
 

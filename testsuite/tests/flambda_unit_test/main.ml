@@ -12,3 +12,5 @@ let () = Test_kept_parameters.run ()
 let () = Test_movelets.run ()
 
 let () = Test_flambdaifstaticraise.run ()
+
+let () = Test_purity.run ()
