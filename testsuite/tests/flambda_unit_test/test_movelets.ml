@@ -20,27 +20,54 @@ let b = new_var "b"
 let impure_expr () = fccall []
 
 let expr1 = flet v (int 1) (fvar v)
+let res1 = flet v (int 1) (fvar v)
+
 let expr2 = flet x (int 1) (flet v (int 1) (fvar v))
+let res2 = flet v (int 1) (fvar v)
+
 let expr3 = flet x (impure_expr ()) (int 1)
+let res3 = flet x (impure_expr ()) (int 1)
+
 let expr4 =
   flet x (impure_expr ())
     (flet y (impure_expr ()) (int 1))
+let res4 =
+  flet x (impure_expr ())
+    (flet y (impure_expr ()) (int 1))
+
 let expr5 =
   flet x
     (flet y (int 1) (fvar y))
     (fvar x)
+let res5 =
+  flet x
+    (flet y (int 1) (fvar y))
+    (fvar x)
+
 let expr6 =
   flet x
     (int 1)
     (fif (fbool true)
        (int 1)
        (fvar x))
+let res6 =
+  fif (fbool true)
+    (int 1)
+    (flet x (int 1) (fvar x))
+
 let expr7 =
   flet x
     (int 1)
     (fif (fbool true)
        (fvar x)
        (fvar x))
+let res7 =
+  flet x
+    (int 1)
+    (fif (fbool true)
+       (fvar x)
+       (fvar x))
+
 let expr8 =
   flet y
     (int 1)
@@ -49,6 +76,15 @@ let expr8 =
        (fif (fbool true)
           (fvar y)
           (fvar x)))
+let res8 =
+  flet y
+    (int 1)
+    (fif (fbool true)
+       (fvar y)
+       (flet x
+          (fvar y)
+          (fvar x)))
+
 let expr9 =
   flet y
     (int 1)
@@ -59,25 +95,57 @@ let expr9 =
           (fif (fbool true)
              (fvar z)
              (fvar x))))
+let res9 =
+  flet y
+    (int 1)
+    (fif (fbool true)
+       (flet z
+          (fvar y)
+          (fvar z))
+       (flet x (fvar y)
+          (fvar x)))
+
 let expr10 =
   flet x (int 1)
     (fwhile (fbool true)
        (fvar x))
+let res10 =
+  flet x (int 1)
+    (fwhile (fbool true)
+       (fvar x))
+
 let expr11 =
     (fwhile (fbool true)
        (flet x (int 1)
           (fvar x)))
+let res11 =
+  flet x (int 1)
+    (fwhile (fbool true)
+       (fvar x))
+
 let expr12 =
     (fwhile (fbool true)
        (flet y (impure_expr ())
           (flet x (fvar y)
              (fvar x))))
+let res12 =
+    (fwhile (fbool true)
+       (flet y (impure_expr ())
+          (flet x (fvar y)
+             (fvar x))))
+
 let expr13 =
     (fwhile (fbool true)
        (flet y (impure_expr ())
           (flet x (fvar y)
              (flet z (int 1)
                 (fadd (fvar x) (fvar z))))))
+let res13 =
+  (flet z (int 1)
+     (fwhile (fbool true)
+        (flet y (impure_expr ())
+           (fadd (flet x (fvar y) (fvar x)) (fvar z)))))
+
 let expr14 =
   let inner_while =
     (fwhile (fbool true)
@@ -92,6 +160,20 @@ let expr14 =
   (fwhile (fbool true)
      (flet b (impure_expr ())
         inner_while))
+let res14 =
+  let inner_while =
+    (fwhile (fbool true)
+       (flet y (impure_expr ())
+          (fadd
+             (fadd (flet x (fvar y) (fvar x)) (fvar z))
+             (fadd (fvar a) (int 1)))))
+  in
+  (flet a (int 1)
+     (fwhile (fbool true)
+        (flet b (impure_expr ())
+           (flet z (fvar b)
+              inner_while))))
+
 let expr15 =
     (fwhile (fbool true)
        (flet y (impure_expr ())
@@ -99,7 +181,32 @@ let expr15 =
              (flet x (fvar a)
                 (flet z (int 1)
                    (fadd (fvar x) (fvar z)))))))
+let res15 =
+  (flet z (int 1)
+     (flet x (flet a (int 1) (fvar a))
+        (fwhile (fbool true)
+           (flet y (impure_expr ())
+              (fadd (fvar x) (fvar z))))))
 
+let expr16 =
+  (ffor x (int 1) (int 3)
+     (flet y (fvar x)
+        (fvar x)))
+let res16 =
+  (ffor x (int 1) (int 3)
+     (fvar x))
+
+let expr17 =
+  (ffor x (int 1) (int 3)
+     (flet y (fvar x)
+        (fif (fbool true)
+           (fvar x)
+           (fvar y))))
+let res17 =
+  (ffor x (int 1) (int 3)
+     (fif (fbool true)
+        (fvar x)
+        (flet y (fvar x) (fvar y))))
 
 let launch (s,e) =
   let e' = Flambdamovelets.move_lets e in
@@ -110,20 +217,39 @@ let launch (s,e) =
   check e;
   check e'
 
+let test (s,e1,e2) =
+  let e' = Flambdamovelets.move_lets e1 in
+  check e1;
+  check e';
+  if not (equal e' e2)
+  then
+    (Format.printf "fail movelet: %s@ orig:@ %a@.moved:@ %a@.expected:@ %a@."
+       s
+       Printflambda.flambda e1
+       Printflambda.flambda e'
+       Printflambda.flambda e2;
+     failwith (Printf.sprintf "fail movelet: %s" s))
+
+
 let run () =
-  List.iter launch
-    [ "1", expr1;
-      "2", expr2;
-      "3", expr3;
-      "4", expr4;
-      "5", expr5;
-      "6", expr6;
-      "7", expr7;
-      "8", expr8;
-      "9", expr9;
-      "10", expr10;
-      "11", expr11;
-      "12", expr12;
-      "13", expr13;
-      "14", expr14;
-      "15", expr15; ]
+  List.iter launch [ ];
+  List.iter test
+    [ "1", expr1, res1;
+      "2", expr2, res2;
+      "3", expr3, res3;
+      "4", expr4, res4;
+      "5", expr5, res5;
+      "6", expr6, res6;
+      "7", expr7, res7;
+      "8", expr8, res8;
+      "9", expr9, res9;
+      "10", expr10, res10;
+      "11", expr11, res11;
+      "12", expr12, res12;
+      "13", expr13, res13;
+      "14", expr14, res14;
+      "15", expr15, res15;
+      "16", expr16, res16;
+      "17", expr17, res17;
+    ];
+  Format.printf "movelet passed@."

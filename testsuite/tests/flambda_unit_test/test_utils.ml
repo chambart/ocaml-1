@@ -171,14 +171,28 @@ let rec equal env t1 t2 = match t1, t2 with
       p1 = p2 &&
       List.for_all2 (equal env) args1 args2
 
-  | (Fvar _| Fsymbol _| Fconst _| Flet _ | Fprim _), _ ->
+  | Fifthenelse (cond1, ifso1, ifnot1, _), Fifthenelse (cond2, ifso2, ifnot2, _) ->
+      equal env cond1 cond2 &&
+      equal env ifso1 ifso2 &&
+      equal env ifnot1 ifnot2
+
+  | Fwhile (a1, b1, _), Fwhile (a2, b2, _) ->
+      equal env a1 a2 && equal env b1 b2
+
+  | Ffor(v1, a1, b1, df1, c1, _), Ffor(v2, a2, b2, df2, c2, _) ->
+      equal env a1 a2 &&
+      equal env b1 b2 &&
+      df1 = df2 &&
+      equal (add_var v1 v2 env) c1 c2
+
+  | (Fvar _| Fsymbol _| Fconst _| Flet _ | Fprim _ | Fifthenelse _ | Fwhile _ | Ffor _ ), _ ->
       false
 
   | (Fassign _ | Fclosure _
     | Fapply _ | Fletrec _ | Ffunction _ | Fvariable_in_closure _
     | Fswitch _ | Fstaticraise _ | Fstaticcatch _
-    | Ftrywith _ | Fifthenelse _ | Fsequence _
-    | Fwhile _ | Ffor _ | Fsend _ | Funreachable _), _ ->
+    | Ftrywith _ | Fsequence _
+    | Fsend _ | Funreachable _), _ ->
       let e = Format.asprintf "equal: Not implemented %a"
           Printflambda.flambda t1 in
       failwith e
