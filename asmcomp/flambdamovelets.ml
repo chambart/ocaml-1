@@ -214,6 +214,24 @@ let rec extract_pure_lets env acc expr : ret =
         Flambdaiter.fold_subexpressions aux acc e in
       acc, e
 
+(*>>>>>>*)
+
+let count_uses expr lets =
+  let count = ref VarMap.empty in
+  let add_node expr =
+    let fv = Flambdaiter.expression_free_variables expr in
+    let add_use v count =
+      let c =
+        try VarMap.find v count
+        with Not_found -> 0 in
+      VarMap.add v (c+1) count in
+    count := VarSet.fold add_use fv !count
+  in
+  Flambdaiter.iter add_node expr;
+  !count
+
+(*<<<<<<*)
+
 let prepare expr =
 
   let env =
@@ -232,6 +250,208 @@ let prepare expr =
   let links = mark_needs expr lets in
   let links = { links with lets_dep = lets_dep lets; floating_lets = VarMap.keys lets } in
   links, expr
+
+(*>>>>>>*)
+
+module Multiset : sig
+  type t
+  val empty : t
+  val cardinal : Variable.t -> t -> int
+  val add : Variable.t -> int -> t -> t
+  val union : t -> t -> t
+  (** [union m1 m2] O((min |m1| |m2|).log(max |m1| |m2|)) *)
+  val remove : Variable.t -> t -> t
+  (** [t' = remove v t] is the multiset where
+      For each v' <> v, [cardinal v' t = cardinal v' t']
+      and [cardinal v t' = 0] *)
+  val set : t -> VarSet.t
+  (** O(n) *)
+  val of_set : VarSet.t -> t
+  (** O(n) *)
+  val union_check : check_level:t -> t -> t -> t * VarSet.t
+  (** [(r,s) = union_check ~check_level m1 m2]
+      r is the union of m1 and m2.
+      for each v such that
+      [cardinal v m1 > 0] and [cardinal v m2 > 0]
+      if [cardinal v m1 + cardinal v m2 >= cardinal v check_level]
+      then v is in s
+
+      O((min |m1| |m2|).log(max |m1| |m2|))
+  *)
+end = struct
+
+  type t =
+    { count : int VarMap.t;
+      cardinal : int;
+      (* The cardinal of the map, for O(1) access.
+         Needed for a reasonable union complexity *)
+    }
+
+  let empty = { count = VarMap.empty; cardinal = 0 }
+
+  let cardinal v c =
+    try VarMap.find v c.count
+    with Not_found -> 0
+
+  let add v n c =
+    try
+      let m = VarMap.find v c.count in
+      { c with count = VarMap.add v (m+n) c.count }
+    with Not_found ->
+      { count = VarMap.add v n c.count;
+        cardinal = c.cardinal + 1 }
+
+  (* O((min |m1| |m2|).log(max |m1| |m2|)) *)
+  let union c1 c2 =
+    let min_c, max_c =
+      if c1.cardinal < c2.cardinal
+      then c1, c2
+      else c2, c1 in
+    VarMap.fold add min_c.count max_c
+
+  let union_check ~check_level c1 c2 =
+    let min_c, max_c =
+      if c1.cardinal < c2.cardinal
+      then c1, c2
+      else c2, c1 in
+    let aux v n (c,s) =
+      try
+        let m = VarMap.find v c.count in
+        let s =
+          if m + n >= cardinal v check_level
+          then VarSet.add v s
+          else s in
+        { c with count = VarMap.add v (m+n) c.count }, s
+      with Not_found ->
+        { count = VarMap.add v n c.count;
+          cardinal = c.cardinal + 1 }, s
+    in
+    VarMap.fold aux min_c.count (max_c, VarSet.empty)
+
+  let remove v c =
+    if VarMap.mem v c.count
+    then
+      { count = VarMap.remove v c.count;
+        cardinal = c.cardinal - 1 }
+    else c
+
+  let set c = VarMap.keys c.count
+
+  let of_set s = VarSet.fold (fun v acc -> add v 1 acc) s empty
+
+end
+
+module Tmp = struct
+
+  type rebuild_state =
+    { used_var : Multiset.t;
+      waitings : VarSet.t;
+      (* Variables waiting for a loop construct to be inserted *)
+      needed : VarSet.t
+      (* Variables that can be inserted at that point *) }
+
+  let empty_state =
+    { used_var = Multiset.empty;
+      waitings = VarSet.empty;
+      needed = VarSet.empty }
+
+  type links =
+    { uses : Multiset.t;
+      lets : lets VarMap.t;
+      lets_dep : VarSet.t VarMap.t;
+      floating_lets : VarSet.t }
+
+  type loop_stack =
+    | Toplevel
+    | Inside_loop of VarSet.t
+
+  let loop_stack_vars = function
+    | Toplevel -> VarSet.empty
+    | Inside_loop v -> v
+
+  let split_needed loop_stack set =
+    let waitings = VarSet.inter set (loop_stack_vars loop_stack) in
+    let needed = VarSet.diff set (loop_stack_vars loop_stack) in
+    waitings, needed
+
+  let state_union links (loop_stack:loop_stack) s1 s2 =
+    let used_var, new_needed =
+      Multiset.union_check ~check_level:links.uses s1.used_var s2.used_var in
+    let waitings = VarSet.union s1.waitings s2.waitings in
+    let needed = VarSet.union s1.needed s2.needed in
+    let new_waitings, new_needed = split_needed loop_stack new_needed in
+    let waitings = VarSet.union waitings new_waitings in
+    let needed = VarSet.union new_needed needed in
+    { used_var; waitings; needed }
+
+  let is_loop = function
+    | Fwhile _
+    | Ffor _ -> true
+    | _ -> false
+
+  (* list variables that appear only once in the tree,
+     and precisely at this expression *)
+  let directly_needed links set =
+    let uses = links.uses in
+    let aux v acc =
+      if Multiset.cardinal v uses = 1
+      then VarSet.add v acc
+      else acc in
+    VarSet.fold aux set VarSet.empty
+
+  let rec rebuild links expr (loop_stack:loop_stack) : rebuild_state * 'a flambda =
+    let expr_needed =
+      VarSet.inter
+        (Flambdaiter.expression_free_variables expr)
+        links.floating_lets in
+    let inner_loop_stack =
+      if is_loop expr
+      then Inside_loop VarSet.empty
+      else loop_stack
+    in
+    let waiting, needed =
+      split_needed loop_stack (directly_needed links expr_needed)
+    in
+    let state =
+      { used_var = Multiset.of_set expr_needed;
+        waitings = VarSet.empty;
+        needed } in
+    let state, expr =
+      match expr with
+      | Fclosure _ -> failwith "TODO"
+      | _ ->
+          Flambdaiter.fold_subexpressions (continue links inner_loop_stack) state expr
+    in
+    add_lets links state loop_stack expr
+
+  and continue links loop_stack acc_state bound expr =
+    let loop_stack =
+      match loop_stack with
+      | Toplevel -> Toplevel
+      | Inside_loop set -> Inside_loop (VarSet.union bound set) in
+    let expr_state, expr = rebuild links expr loop_stack in
+    let state = state_union links loop_stack expr_state acc_state in
+    state, expr
+
+  and add_lets links state loop_stack expr =
+    if VarSet.is_empty state.needed
+    then state, expr
+    else
+      let added_let = VarSet.choose state.needed in
+      let needed = VarSet.remove added_let state.needed in
+      let state = { state with needed } in
+      let { kind; expr = let_def } =
+        try VarMap.find added_let links.lets
+        with Not_found -> assert false in
+      let let_state, let_def = rebuild links let_def loop_stack in
+      let expr = Flet(kind, added_let, let_def, expr, nid ()) in
+      let state = state_union links loop_stack let_state state in
+      add_lets links state loop_stack expr
+
+end
+
+(*<<<<<<*)
+
 
 type rebuild_ret = links * VarSet.t * ExprId.t flambda
 
