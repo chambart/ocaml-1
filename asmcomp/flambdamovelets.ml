@@ -23,8 +23,10 @@
       the loop.
 
     move_lets works in 2 passes:
-    - remove every pure variable declarations from the expression
+    - remove every pure variable declarations from the expression:
+      implemented in the 'prepare' function
     - reinsert the declarations at the 'right' position:
+      implemented in the 'rebuild' function
 
     The 'right' position is as deep as possible in the tree such that it is:
     - at a correct position:
@@ -35,6 +37,8 @@
     The reinsertion is done by traversing the tree bottom up, adding a declaration when
     - every use (accounting for not yet reinserted declarations) is below the current point
     - and the current point is not in a loop or the variable is not constant for the current loop
+
+    Note: in this file pure variable declarations are called floating lets.
 
 *)
 
@@ -56,6 +60,7 @@ type links =
 let empty_links = { lets = VarMap.empty; uses = VarMap.empty;
                     lets_dep = VarMap.empty; floating_lets = VarSet.empty }
 
+(* O(n.log(n)) with n the sum of the sizes of expressions *)
 let variables_connected_components lets =
   let let_dep { expr } =
     Flambdaiter.free_variables expr in
@@ -71,20 +76,30 @@ let variables_connected_components lets =
               VarMap.find id lets_dep
           | Variable_connected_components.Has_loop ids ->
               List.fold_left (fun set id ->
+                  (* complexity assumes that building an union of size n iteratively is of cost n.log(n)*)
                   VarSet.union set (VarMap.find id lets_dep))
                 VarSet.empty ids in
         VarSet.diff deps floating_vars)
       components in
   components, component_deps
 
+(* Build a map containing the transitive closure of variable dependencies.
+   O(n.log(n)) with n the sum of the sizes of expressions *)
 let lets_dep lets =
   let components, component_deps =
     variables_connected_components lets in
 
   let let_deps = ref VarMap.empty in
+  (* Components are sorted in reverse topological order:
+     components.(length - 1) has no dependencies
+     nothing depends on components.(0).
+
+     This means that when going from (length-1) to 0 all dependencies
+     of components.(k) are handled when i = k *)
   for i = Array.length components - 1 downto 0 do
     let comp, deps = components.(i) in
     let var_deps =
+      (* complexity assumes that building an union of size n iteratively is of cost n.log(n)*)
       List.fold_left (fun set dep -> VarSet.union set component_deps.(dep))
         component_deps.(i) deps in
     component_deps.(i) <- var_deps;
