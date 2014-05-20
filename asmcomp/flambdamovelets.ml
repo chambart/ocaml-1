@@ -1,3 +1,43 @@
+(***********************************************************************)
+(*                                                                     *)
+(*                                OCaml                                *)
+(*                                                                     *)
+(*                     Pierre Chambart, OCamlPro                       *)
+(*                                                                     *)
+(*  Copyright 2014 Institut National de Recherche en Informatique et   *)
+(*  en Automatique.  All rights reserved.  This file is distributed    *)
+(*  under the terms of the Q Public License version 1.0.               *)
+(*                                                                     *)
+(***********************************************************************)
+
+(** This module declare two passes:
+
+    * move_lets: find the optimal position in the tree for pure variable declarations.
+    * remove_trivial_lets: simplifies expressions of the form {[let x = expr in x]}
+      to {[expr]} (simplifications made obvious by move_lets)
+
+    move_let tries to minimize computations by:
+    - moving declarations inside branching expressions (if, match, ...) if
+      it is used in a single branch.
+    - moving declarations outside loops (for, while) if it is invariant in
+      the loop.
+
+    move_lets works in 2 passes:
+    - remove every pure variable declarations from the expression
+    - reinsert the declarations at the 'right' position:
+
+    The 'right' position is as deep as possible in the tree such that it is:
+    - at a correct position:
+      * higher than every usage of the variable.
+      * below than every referenced variable in the definition
+    - higher than as much loop as possible
+
+    The reinsertion is done by traversing the tree bottom up, adding a declaration when
+    - every use (accounting for not yet reinserted declarations) is below the current point
+    - and the current point is not in a loop or the variable is not constant for the current loop
+
+*)
+
 open Abstract_identifiers
 open Flambda
 
@@ -13,26 +53,33 @@ type links =
     lets_dep : VarSet.t VarMap.t;
     floating_lets : VarSet.t }
 
-let empty_links = { lets = VarMap.empty; uses = VarMap.empty; lets_dep = VarMap.empty; floating_lets = VarSet.empty }
+let empty_links = { lets = VarMap.empty; uses = VarMap.empty;
+                    lets_dep = VarMap.empty; floating_lets = VarSet.empty }
 
-let lets_dep lets =
-  let open Variable_connected_components in
+let variables_connected_components lets =
   let let_dep { expr } =
     Flambdaiter.free_variables expr in
   let lets_dep = VarMap.map let_dep lets in
   let floating_vars = VarMap.keys lets in
   let lets_floating_dep = VarMap.map (VarSet.inter floating_vars) lets_dep in
-  let components = component_graph lets_floating_dep in
-  let component_deps = Array.map (fun (comp, _) ->
-      let deps = match comp with
-        | No_loop id -> VarMap.find id lets_dep
-        | Has_loop ids ->
-            List.fold_left (fun set id ->
-                VarSet.union set (VarMap.find id lets_dep))
-              VarSet.empty ids in
-      VarSet.diff deps floating_vars)
-      components
-  in
+  let components =
+    Variable_connected_components.component_graph lets_floating_dep in
+  let component_deps =
+    Array.map (fun (comp, _) ->
+        let deps = match comp with
+          | Variable_connected_components.No_loop id ->
+              VarMap.find id lets_dep
+          | Variable_connected_components.Has_loop ids ->
+              List.fold_left (fun set id ->
+                  VarSet.union set (VarMap.find id lets_dep))
+                VarSet.empty ids in
+        VarSet.diff deps floating_vars)
+      components in
+  components, component_deps
+
+let lets_dep lets =
+  let components, component_deps =
+    variables_connected_components lets in
 
   let let_deps = ref VarMap.empty in
   for i = Array.length components - 1 downto 0 do
@@ -42,8 +89,8 @@ let lets_dep lets =
         component_deps.(i) deps in
     component_deps.(i) <- var_deps;
     let ids = match comp with
-      | No_loop id -> [id]
-      | Has_loop ids -> ids in
+      | Variable_connected_components.No_loop id -> [id]
+      | Variable_connected_components.Has_loop ids -> ids in
     let_deps :=
       List.fold_left (fun let_deps id -> VarMap.add id var_deps let_deps)
         !let_deps ids;
@@ -51,7 +98,7 @@ let lets_dep lets =
   !let_deps
 
 (* like Flambdaiter.free_variables, except that it go throug closures *)
-let not_bound_variables tree =
+let unbound_variables tree =
   let rec loop (free,bound) bound_here expr =
     let free_vars = Flambdaiter.expression_free_variables expr in
     let free = VarSet.union free free_vars in
@@ -61,9 +108,13 @@ let not_bound_variables tree =
   let (free,bound), _ = loop (VarSet.empty, VarSet.empty) VarSet.empty tree in
   VarSet.diff free bound
 
-let live_lets lets expr =
-  let let_deps = VarMap.map (fun { expr } -> not_bound_variables expr) lets in
-  let roots = not_bound_variables expr in
+(* Some simple dead code elimination:
+   A variable is usefull if it is referenced in an usefull expression:
+   - the base expression with pure variable declarations removed is usefull
+   - if a variable is usefull its expression is usefull *)
+let usefull_lets lets expr =
+  let let_deps = VarMap.map (fun { expr } -> unbound_variables expr) lets in
+  let roots = unbound_variables expr in
   let live = ref VarSet.empty in
   let queue = Queue.create () in
   let add_live v =
@@ -109,18 +160,32 @@ let add_let kind var expr acc =
 
 type ret = lets VarMap.t * ExprId.t flambda
 
-let rec remove_pure_lets env acc expr : ret =
+(* Remove pure variable declarations from the expression
+   and returns the set of removed declarations:
+
+   if expr is some:
+
+   [let x = let y = 2 in y + 1 in
+    x + 2]
+
+   returns
+
+   [x + 2] and
+   {x -> y + 1;
+    y -> 2}
+*)
+let rec extract_pure_lets env acc expr : ret =
   match expr with
   | Flet(kind,var,def,body,eid) ->
       let body_env = add_pure_var kind var env in
       if Flambdapurity.pure_expression_toplevel env def
       then
-        let acc, def = remove_pure_lets env acc def in
+        let acc, def = extract_pure_lets env acc def in
         let acc = add_let kind var def acc in
-        remove_pure_lets body_env acc body
+        extract_pure_lets body_env acc body
       else
-        let acc, def = remove_pure_lets env acc def in
-        let acc, body = remove_pure_lets body_env acc body in
+        let acc, def = extract_pure_lets env acc def in
+        let acc, body = extract_pure_lets body_env acc body in
         acc, Flet(kind,var,def,body,eid)
 
   (* TODO: letrec *)
@@ -128,7 +193,7 @@ let rec remove_pure_lets env acc expr : ret =
   | e ->
       let aux acc bound expr =
         let env = VarSet.fold (add_pure_var Not_assigned) bound env in
-        let acc, expr = remove_pure_lets env acc expr in
+        let acc, expr = extract_pure_lets env acc expr in
         acc, expr in
       let acc, e =
         Flambdaiter.fold_subexpressions aux acc e in
@@ -136,15 +201,19 @@ let rec remove_pure_lets env acc expr : ret =
 
 let prepare expr =
 
-  (* let links = mark_needs expr VarMap.empty in *)
   let env =
     Flambdapurity.mark_pure_functions
       (Flambdapurity.pure_functions expr)
       Flambdapurity.empty_env in
-  let lets, expr = remove_pure_lets env VarMap.empty expr in
-  (* let links = { links with lets; lets_dep = lets_dep lets; floating_lets = VarMap.keys lets } in *)
+  let lets, expr = extract_pure_lets env VarMap.empty expr in
 
-  let lets = live_lets lets expr in
+  (* We remove useless lets to avoid problems when reinserting the
+     declarations: The declarations are inserted as soon as every
+     reference to them is already inserted in the tree. Variables that
+     are never referenced will never be inserted, so they would
+     prevent every variable referenced from their declaration to be
+     inserted. *)
+  let lets = usefull_lets lets expr in
   let links = mark_needs expr lets in
   let links = { links with lets_dep = lets_dep lets; floating_lets = VarMap.keys lets } in
   links, expr
