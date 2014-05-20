@@ -208,6 +208,13 @@ let res17 =
         (fvar x)
         (flet y (fvar x) (fvar y))))
 
+let expr18 =
+  flet z (int 1)
+    (flet y (fvar z)
+       (flet x (fvar y)
+          (int 2)))
+let res18 = int 2
+
 let launch (s,e) =
   let e' = Flambdamovelets.move_lets e in
   Format.printf "%s@ orig:@ %a@.moved:@ %a@."
@@ -251,5 +258,6 @@ let run () =
       "15", expr15, res15;
       "16", expr16, res16;
       "17", expr17, res17;
+      "18", expr18, res18;
     ];
   Format.printf "movelet passed@."
