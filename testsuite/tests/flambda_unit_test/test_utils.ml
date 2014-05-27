@@ -147,6 +147,9 @@ let empty_env =
 let add_var v v' env =
   { var = VarMap.add v v' env.var }
 
+let add_var_list l1 l2 env =
+  List.fold_right2 add_var l1 l2 env
+
 let equal_var env v v' =
   try Variable.equal (VarMap.find v env.var) v'
   with Not_found -> false
@@ -155,6 +158,15 @@ let equal_let_kind k1 k2 = match k1, k2 with
   | Assigned, Assigned
   | Not_assigned, Not_assigned -> true
   | (Assigned | Not_assigned), (Assigned | Not_assigned) -> false
+
+let add_same_var_set env s =
+  VarSet.fold (fun v env -> add_var v v env) s env
+
+let equal_set env s1 s2 =
+  let img =
+    VarSet.fold (fun v acc -> VarSet.add (VarMap.find v env.var) acc) s1 VarSet.empty in
+  VarSet.equal img s2 &&
+  VarSet.cardinal s1 = VarSet.cardinal s2
 
 let rec equal env t1 t2 = match t1, t2 with
   | Fvar(v1, _), Fvar(v2, _) -> equal_var env v1 v2
@@ -169,7 +181,7 @@ let rec equal env t1 t2 = match t1, t2 with
 
   | Fprim (p1, args1, _, _), Fprim (p2, args2, _, _) ->
       p1 = p2 &&
-      List.for_all2 (equal env) args1 args2
+      equal_list env args1 args2
 
   | Fifthenelse (cond1, ifso1, ifnot1, _), Fifthenelse (cond2, ifso2, ifnot2, _) ->
       equal env cond1 cond2 &&
@@ -185,11 +197,45 @@ let rec equal env t1 t2 = match t1, t2 with
       df1 = df2 &&
       equal (add_var v1 v2 env) c1 c2
 
-  | (Fvar _| Fsymbol _| Fconst _| Flet _ | Fprim _ | Fifthenelse _ | Fwhile _ | Ffor _ ), _ ->
+  | Fclosure (c1, _), Fclosure (c2, _) ->
+      (* could be more general: assumes variables are the same:
+         substitution breaks it ! *)
+      let env = add_same_var_set env (VarMap.keys c1.cl_fun.funs) in
+      let env = add_same_var_set env (VarMap.keys c1.cl_free_var) in
+
+      let same_function f1 f2 =
+        if not (List.length f1.params = List.length f2.params)
+        then false
+        else
+          let env = add_var_list f1.params f2.params env in
+          f1.stub = f2.stub &&
+          equal_set env f1.free_variables f2.free_variables &&
+          equal env f1.body f2.body in
+
+      VarMap.equal (equal env) c1.cl_free_var c2.cl_free_var &&
+      VarMap.equal Variable.equal c1.cl_specialised_arg c2.cl_specialised_arg &&
+      VarMap.equal same_function c1.cl_fun.funs c2.cl_fun.funs
+
+  | Ffunction (fu1, _), Ffunction (fu2, _) ->
+      (* assumes same function name, could be more general *)
+      equal env fu1.fu_closure fu2.fu_closure &&
+      Closure_function.equal fu1.fu_fun fu2.fu_fun &&
+      (match fu1.fu_relative_to, fu2.fu_relative_to with
+       | None, None -> true
+       | Some _, None | None, Some _ -> false
+       | Some re1, Some re2 ->
+           Closure_function.equal re1 re2)
+
+  | Fapply(a1, _), Fapply(a2, _) ->
+      a1.ap_kind = a2.ap_kind &&
+      equal env a1.ap_function a2.ap_function &&
+      equal_list env a1.ap_arg a2.ap_arg
+
+  | (Fvar _| Fsymbol _| Fconst _| Flet _ | Fprim _ | Fifthenelse _ | Fwhile _
+    | Ffor _ | Fclosure _ | Ffunction _ | Fapply _), _ ->
       false
 
-  | (Fassign _ | Fclosure _
-    | Fapply _ | Fletrec _ | Ffunction _ | Fvariable_in_closure _
+  | (Fassign _ | Fletrec _ | Fvariable_in_closure _
     | Fswitch _ | Fstaticraise _ | Fstaticcatch _
     | Ftrywith _ | Fsequence _
     | Fsend _ | Funreachable _), _ ->
@@ -198,6 +244,11 @@ let rec equal env t1 t2 = match t1, t2 with
       failwith e
 
   | Fevent _, _  -> false
+
+and equal_list env l1 l2 =
+  List.length l1 = List.length l2 &&
+  List.for_all2 (equal env) l1 l2
+
 
 let equal t1 t2 =
   equal empty_env t1 t2
