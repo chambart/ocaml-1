@@ -758,8 +758,9 @@ let remove_trivial_lets_pass =
     pass = (fun expr _ -> remove_trivial_lets expr) }
 
 let () =
-  if Clflags.experiments
-  then Flambdapasses.register_pass Loop 12 move_lets_pass;
+  (* if Clflags.experiments *)
+  (* then *)
+    Flambdapasses.register_pass Loop 12 move_lets_pass;
   Flambdapasses.register_pass Loop 13 remove_trivial_lets_pass
 
 let passes = [move_lets_pass; remove_trivial_lets_pass]
