@@ -443,7 +443,8 @@ module Tmp = struct
     | _ -> false
 
   (* list variables that appear only once in the tree,
-     and precisely at this expression *)
+     and precisely at this expression
+     O(|set|.log(|set|)) *)
   let directly_needed links set =
     let uses = links.uses in
     let aux v acc =
@@ -461,6 +462,7 @@ module Tmp = struct
     let needed = VarSet.union state.needed new_needed in
     { state with needed; waitings }
 
+  (* O(loop_nesting . |links.floating_lets| . log(|links.floating_lets|)) *)
   let rec rebuild links expr (loop_stack:loop_stack) : rebuild_state * 'a flambda =
     let expr_needed =
       VarSet.inter
@@ -509,9 +511,14 @@ module Tmp = struct
     (*   VarSet.print state.needed; *)
 
     (* Should do it only at loop expressions !
-       It will be empty (?) everywhere else (and change the complexity *)
+       It will be empty (?) everywhere else (and change the complexity) *)
 
-    let state = transfer_waitings links loop_stack state in
+    (* let state = transfer_waitings links loop_stack state in *)
+    let state =
+      if is_loop expr
+      then transfer_waitings links loop_stack state
+      else state in
+
     (* Format.printf "rebuild2 waitings %a needed %a@." *)
     (*   VarSet.print state.waitings *)
     (*   VarSet.print state.needed; *)
