@@ -123,6 +123,15 @@ let res11 =
     (fwhile (fbool true)
        (fvar x))
 
+let expr12' =
+  (flet y (impure_expr ())
+     (flet x (fvar y)
+        (fvar x)))
+let res12' =
+  (flet y (impure_expr ())
+     (flet x (fvar y)
+        (fvar x)))
+
 let expr12 =
     (fwhile (fbool true)
        (flet y (impure_expr ())
@@ -215,6 +224,42 @@ let expr18 =
           (int 2)))
 let res18 = int 2
 
+let expr19 = fibonacci
+let res19 = fibonacci
+
+let expr20 = flet f fibonacci (int 1)
+let res20 = int 1
+
+let expr21 = fclosure [f, [z], expr17] []
+let res21 = fclosure [f, [z], res17] []
+
+let expr6 =
+  flet x
+    (int 1)
+    (fif (fbool true)
+       (int 1)
+       (fvar x))
+let res6 =
+  fif (fbool true)
+    (int 1)
+    (flet x (int 1) (fvar x))
+
+
+let expr22 =
+  fclosure [f, [z],
+            flet a (fvar z)
+              (flet b (fvar y)
+                 (fif (fbool true)
+                    (fvar a)
+                    (fvar b)))
+           ] [y, int 2]
+let res22 =
+  fclosure [f, [z],
+            (fif (fbool true)
+               (flet a (fvar z) (fvar a))
+               (flet b (fvar y) (fvar b)))
+           ] [y, int 2]
+
 let launch (s,e) =
   let e' = Flambdamovelets.move_lets e in
   Format.printf "%s@ orig:@ %a@.moved:@ %a@."
@@ -225,6 +270,7 @@ let launch (s,e) =
   check e'
 
 let test (s,e1,e2) =
+  Format.printf "run %s@." s;
   let e' = Flambdamovelets.move_lets e1 in
   check e1;
   check e';
@@ -252,6 +298,7 @@ let run () =
       "9", expr9, res9;
       "10", expr10, res10;
       "11", expr11, res11;
+      "12'", expr12', res12';
       "12", expr12, res12;
       "13", expr13, res13;
       "14", expr14, res14;
@@ -259,5 +306,9 @@ let run () =
       "16", expr16, res16;
       "17", expr17, res17;
       "18", expr18, res18;
+      "19", expr19, res19;
+      "20", expr20, res20;
+      "21", expr21, res21;
+      "22", expr22, res22;
     ];
   Format.printf "movelet passed@."
