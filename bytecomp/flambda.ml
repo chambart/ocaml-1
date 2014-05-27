@@ -219,8 +219,9 @@ let rec same l1 l2 =
       samelist same a1.ap_arg a2.ap_arg
   | Fapply _, _ | _, Fapply _ -> false
   | Fclosure (c1, _), Fclosure (c2, _) ->
-      samelist sameclosure
-        (VarMap.bindings c1.cl_fun.funs) (VarMap.bindings c2.cl_fun.funs)
+      VarMap.equal sameclosure c1.cl_fun.funs c2.cl_fun.funs &&
+      VarMap.equal same c1.cl_free_var c2.cl_free_var &&
+      VarMap.equal Variable.equal c1.cl_specialised_arg c2.cl_specialised_arg
   | Fclosure _, _ | _, Fclosure _ -> false
   | Ffunction (f1, _), Ffunction (f2, _) ->
       same f1.fu_closure f2.fu_closure &&
@@ -277,7 +278,7 @@ let rec same l1 l2 =
   | Funreachable _, _ | _, Funreachable _ -> false
   | Fevent _, Fevent _ -> false
 
-and sameclosure (_, c1) (_, c2) =
+and sameclosure c1 c2 =
   samelist Variable.equal c1.params c2.params &&
   same c1.body c2.body
 
