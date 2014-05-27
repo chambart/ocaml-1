@@ -260,6 +260,15 @@ let res22 =
                (flet b (fvar y) (fvar b)))
            ] [y, int 2]
 
+let expr23 =
+  flet y (int 2)
+    (fclosure [f, [x], fvar z] [z, fvar y])
+let res23 =
+  (* expected result if there is no expression_free_variable hack:
+     fclosure [f, [x], fvar z] [z, flet y (int 2) (fvar y)] *)
+  flet y (int 2)
+    (fclosure [f, [x], fvar z] [z, fvar y])
+
 let launch (s,e) =
   let e' = Flambdamovelets.move_lets e in
   Format.printf "%s@ orig:@ %a@.moved:@ %a@."
@@ -310,5 +319,6 @@ let run () =
       "20", expr20, res20;
       "21", expr21, res21;
       "22", expr22, res22;
+      "23", expr23, res23;
     ];
   Format.printf "movelet passed@."
