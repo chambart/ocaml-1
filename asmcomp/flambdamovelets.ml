@@ -265,6 +265,10 @@ module Multiset : sig
 
   val print : Format.formatter -> t -> unit
 
+  val diff : t -> t -> t
+  (** [diff m1 m2]
+      cardinal v (diff m1 m2) = max 0 (cardinal v m1 - cardinal v m2) *)
+
 end = struct
 
   type t =
@@ -339,6 +343,15 @@ end = struct
     { count; cardinal = VarMap.cardinal count }
 
   let print ppf c = VarMap.print Format.pp_print_int ppf c.count
+
+  let diff t1 t2 =
+    let count =
+      VarMap.filter (fun _ v -> v > 0)
+        (VarMap.mapi (fun id v ->
+             try v - (VarMap.find id t2.count) with Not_found -> v)
+            t1.count)
+    in
+   { count; cardinal = VarMap.cardinal count }
 
 end
 
@@ -498,7 +511,8 @@ module Tmp = struct
           let cl_fun = { cl_fun with funs } in
           let state, cl_free_var =
             VarMap.fold (fun v flam (state, free_vars) ->
-                let acc, flam = rebuild links flam inner_loop_stack in
+                let state, flam =
+                  continue links inner_loop_stack state VarSet.empty flam in
                 state, VarMap.add v flam free_vars)
               cl_free_var (state, VarMap.empty)
           in
@@ -564,8 +578,13 @@ module Tmp = struct
       if not (VarSet.is_empty state.waitings)
       then Format.printf "not empty waitings: %a@." VarSet.print state.waitings;
       if not (Multiset.equal links.uses state.used_var)
-      then Format.printf "not equal multisets @ uses:@ %a@ used_var@ %a@."
-          Multiset.print links.uses Multiset.print state.used_var;
+      then
+        let d1 = Multiset.diff links.uses state.used_var in
+        let d2 = Multiset.diff state.used_var links.uses in
+        Format.printf "not equal multisets @ uses:@ %a@ used_var@ %a\
+                       @ diff1: %a@ diff2: %a@."
+          Multiset.print links.uses Multiset.print state.used_var
+          Multiset.print d1 Multiset.print d2;
       assert false
     end;
     expr
