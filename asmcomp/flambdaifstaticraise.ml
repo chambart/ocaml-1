@@ -749,8 +749,9 @@ let simplify_static_exceptions expr comp_unit =
   in
   count ~tail:StaticExceptionSet.empty 0 expr;
 
-  let is_trivial = function
-    | Fstaticraise _
+  let rec is_trivial = function
+    | Fstaticraise (_, args, _) ->
+        List.for_all is_trivial args
     | Fvar _
     | Fconst(Fconst_base (Asttypes.Const_int _), _)
     | Fconst(Fconst_pointer _, _) -> true
