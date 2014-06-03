@@ -274,7 +274,10 @@ let collect_function_dep expr : pure CFM.t =
 let propagate map : CFS.t =
   let map = ref map in
   let pure = ref CFS.empty in
+  (* returns (pure, seen)
+     if pure is true, seen is a set of pure function *)
   let rec aux seen v =
+    (* invariant: seen is a set of function not prooved impure *)
     if CFS.mem v seen || CFS.mem v !pure
     then true, seen
     else
@@ -282,9 +285,13 @@ let propagate map : CFS.t =
       then match CFM.find v !map with
         | Impure -> false, seen
         | Pure_if deps ->
+            let seen = CFS.add v seen in
             let f v (res, seen) =
-              let (res', seen) = aux (CFS.add v seen) v in
-              res' && res, seen
+              if res
+              then
+                let (res', seen) = aux seen v in
+                res', seen
+              else res, seen
             in
             let (res, _) as ret = CFS.fold f deps (true, seen) in
             if not res then map := CFM.add v Impure !map;
@@ -292,9 +299,14 @@ let propagate map : CFS.t =
       else false, seen
   in
   let f v _ =
-    let res, seen = aux (CFS.singleton v) v in
+    let res, seen = aux CFS.empty v in
     if res then pure := CFS.union !pure seen
   in
+  (* TODO: this loop is Quadratic: To have a linear complexity, we
+     should iterate following topological order. It would still be
+     quadratic in the size of the biggest strongly connected component
+     of function (recursive functions). This would also reduce
+     recursion depth. *)
   CFM.iter f !map;
   !pure
 
