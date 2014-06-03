@@ -204,8 +204,10 @@ let rec same l1 l2 =
   | Fconst(c1, _), Fconst(c2, _) -> begin
       let open Asttypes in
       match c1, c2 with
-      | Fconst_base (Const_string _), _ ->
-          false (* string constants can't be merged: they are mutable *)
+      | Fconst_base (Const_string s1), Fconst_base (Const_string s2) ->
+          s1 == s2 (* string constants can't be merged: they are mutable,
+                      but if they are physicaly the same, it comes from a safe case *)
+      | Fconst_base (Const_string _), _ -> false
       | Fconst_base (Const_int _ | Const_char _ | Const_float _ |
                      Const_int32 _ | Const_int64 _ | Const_nativeint _), _
       | Fconst_pointer _, _
