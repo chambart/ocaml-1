@@ -113,6 +113,11 @@ let fclosure lst fv =
 let ffunction fu_closure fu_fun =
   Ffunction({ fu_closure; fu_fun; fu_relative_to = None }, nid ())
 
+let ffun_fclos ?(fv=[]) f args body =
+  ffunction
+    (fclosure [f, args, body] fv)
+    (Closure_function.wrap f)
+
 let fun_decl' params body =
   { stub = false; params; body;
     free_variables = Flambdaiter.free_variables body;
@@ -257,7 +262,20 @@ let equal t1 t2 =
 
 let v = new_var "v"
 let f = new_var "f"
+let f_func = Closure_function.wrap f
+let f' = new_var "f'"
 let g = new_var "g"
+let g_func = Closure_function.wrap g
+let g' = new_var "g'"
+let h = new_var "h"
+let h_func = Closure_function.wrap h
+let h' = new_var "h'"
+let fi = new_var "fi"
+let fi_func = Closure_function.wrap fi
+let fi' = new_var "fi'"
+let fj = new_var "fj"
+let fj_func = Closure_function.wrap fj
+let fj' = new_var "fj'"
 let x = new_var "x"
 let y = new_var "y"
 let z = new_var "z"
