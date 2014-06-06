@@ -271,44 +271,39 @@ let collect_function_dep expr : pure CFM.t =
   Flambdaiter.iter aux expr;
   !map
 
-let propagate map : CFS.t =
-  let map = ref map in
-  let pure = ref CFS.empty in
-  (* returns (pure, seen)
-     if pure is true, seen is a set of pure function *)
-  let rec aux seen v =
-    (* invariant: seen is a set of function not prooved impure *)
-    if CFS.mem v seen || CFS.mem v !pure
-    then true, seen
-    else
-      if CFM.mem v !map
-      then match CFM.find v !map with
-        | Impure -> false, seen
-        | Pure_if deps ->
-            let seen = CFS.add v seen in
-            let f v (res, seen) =
-              if res
+let reverse map =
+  let impure = ref CFS.empty in
+  let reversed = ref CFM.empty in
+  CFM.iter (fun dst -> function
+      | Impure ->
+          impure := CFS.add dst !impure
+      | Pure_if deps ->
+          CFS.iter (fun src ->
+              if CFM.mem src map
               then
-                let (res', seen) = aux seen v in
-                res', seen
-              else res, seen
-            in
-            let (res, _) as ret = CFS.fold f deps (true, seen) in
-            if not res then map := CFM.add v Impure !map;
-            ret
-      else false, seen
-  in
-  let f v _ =
-    let res, seen = aux CFS.empty v in
-    if res then pure := CFS.union !pure seen
-  in
-  (* TODO: this loop is Quadratic: To have a linear complexity, we
-     should iterate following topological order. It would still be
-     quadratic in the size of the biggest strongly connected component
-     of function (recursive functions). This would also reduce
-     recursion depth. *)
-  CFM.iter f !map;
-  !pure
+                let s = try CFM.find src !reversed with
+                  | Not_found -> CFS.empty in
+                reversed := CFM.add src (CFS.add dst s) !reversed
+              else
+                impure := CFS.add dst !impure)
+            deps)
+    map;
+  !impure, !reversed
+
+let propagate map : CFS.t =
+  let impure', dep = reverse map in
+  let impure = ref impure' in
+  let work_queue = ref impure' in
+  while not (CFS.is_empty !work_queue) do
+    let v = CFS.choose !work_queue in
+    work_queue := CFS.remove v !work_queue;
+    try
+      let deps = CFM.find v dep in
+      work_queue := CFS.union deps !work_queue;
+      impure := CFS.union deps !impure
+    with Not_found -> ()
+  done;
+  CFS.diff (CFM.keys map) !impure
 
 let pure_functions expr =
   propagate (collect_function_dep expr)
