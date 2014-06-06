@@ -297,10 +297,10 @@ let propagate map : CFS.t =
   while not (CFS.is_empty !work_queue) do
     let v = CFS.choose !work_queue in
     work_queue := CFS.remove v !work_queue;
+    impure := CFS.add v !impure;
     try
-      let deps = CFM.find v dep in
-      work_queue := CFS.union deps !work_queue;
-      impure := CFS.union deps !impure
+      let deps = CFS.diff (CFM.find v dep) !impure in
+      work_queue := CFS.union deps !work_queue
     with Not_found -> ()
   done;
   CFS.diff (CFM.keys map) !impure
