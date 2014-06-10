@@ -175,6 +175,12 @@ let asr_int c1 c2 =
   | _ ->
     Cop(Casr, [c1; c2])
 
+let rec cifthenelse (cond, ifso, ifnot) = match cond with
+  | Clet(id,exp,body) ->
+    Clet(id,exp,cifthenelse (body, ifso, ifnot))
+  | e ->
+    Cifthenelse(cond,ifso,ifnot)
+
 (* Division or modulo on tagged integers.  The overflow case min_int / -1
    cannot occur, but we must guard against division by zero. *)
 
@@ -224,9 +230,10 @@ let safe_mod_bi =
 
 (* Bool *)
 
-let test_bool = function
+let rec test_bool = function
     Cop(Caddi, [Cop(Clsl, [c; Cconst_int 1]); Cconst_int 1]) -> c
   | Cop(Clsl, [c; Cconst_int 1]) -> c
+  | Clet(id, exp, body) -> Clet(id, exp, test_bool body)
   | c -> Cop(Ccmpi Cne, [c; Cconst_int 1])
 
 (* Float *)
@@ -1816,13 +1823,13 @@ and exit_if_true cond nfail otherwise =
   | Uifthenelse (cond, ifso, ifnot) ->
       make_catch2
         (fun shared ->
-          Cifthenelse
+          cifthenelse
             (test_bool (transl cond),
              exit_if_true ifso nfail shared,
              exit_if_true ifnot nfail shared))
         otherwise
   | _ ->
-      Cifthenelse(test_bool(transl cond), Cexit (nfail, []), otherwise)
+      cifthenelse(test_bool(transl cond), Cexit (nfail, []), otherwise)
 
 and exit_if_false cond otherwise nfail =
   match cond with
@@ -1848,13 +1855,13 @@ and exit_if_false cond otherwise nfail =
   | Uifthenelse (cond, ifso, ifnot) ->
       make_catch2
         (fun shared ->
-          Cifthenelse
+          cifthenelse
             (test_bool (transl cond),
              exit_if_false ifso shared nfail,
              exit_if_false ifnot shared nfail))
         otherwise
   | _ ->
-      Cifthenelse(test_bool(transl cond), otherwise, Cexit (nfail, []))
+      cifthenelse(test_bool(transl cond), otherwise, Cexit (nfail, []))
 
 and transl_switch arg index cases = match Array.length cases with
 | 0 -> fatal_error "Cmmgen.transl_switch"
