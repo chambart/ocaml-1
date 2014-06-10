@@ -51,15 +51,6 @@ type lets =
   { expr : ExprId.t flambda;
     kind : let_kind }
 
-type links =
-  { uses : ExprSet.t VarMap.t;
-    lets : lets VarMap.t;
-    lets_dep : VarSet.t VarMap.t;
-    floating_lets : VarSet.t }
-
-let empty_links = { lets = VarMap.empty; uses = VarMap.empty;
-                    lets_dep = VarMap.empty; floating_lets = VarSet.empty }
-
 (* O(n.log(n)) with n the sum of the sizes of expressions *)
 let variables_connected_components lets =
   let let_dep { expr } =
@@ -145,26 +136,6 @@ let usefull_lets lets expr =
   done;
   VarMap.filter (fun v _ -> VarSet.mem v !live) lets
 
-let mark_needs expr lets =
-  let links = ref empty_links in
-
-  let add_node expr =
-    let eid = data_at_toplevel_node expr in
-    let fv = Flambdaiter.expression_free_variables expr in
-
-    let add_use v uses =
-      let set =
-        try VarMap.find v uses
-        with Not_found -> ExprSet.empty in
-      VarMap.add v (ExprSet.add eid set) uses in
-
-    let uses = VarSet.fold add_use fv !links.uses in
-    links := { !links with uses } in
-  Flambdaiter.iter add_node expr;
-  VarMap.iter (fun _ { expr } -> Flambdaiter.iter add_node expr) lets;
-
-  { !links with lets }
-
 let add_pure_var kind var env =
   match kind with
   | Assigned -> env
@@ -214,40 +185,12 @@ let rec extract_pure_lets env acc expr : ret =
         Flambdaiter.fold_subexpressions aux acc e in
       acc, e
 
-let prepare expr =
-
-  let env =
-    Flambdapurity.mark_pure_functions
-      (Flambdapurity.pure_functions expr)
-      Flambdapurity.empty_env in
-  let lets, expr = extract_pure_lets env VarMap.empty expr in
-
-  (* We remove useless lets to avoid problems when reinserting the
-     declarations: The declarations are inserted as soon as every
-     reference to them is already inserted in the tree. Variables that
-     are never referenced will never be inserted, so they would
-     prevent every variable referenced from their declaration to be
-     inserted. *)
-  let lets = usefull_lets lets expr in
-  let links = mark_needs expr lets in
-  let links = { links with lets_dep = lets_dep lets; floating_lets = VarMap.keys lets } in
-  links, expr
-
-(*>>>>>>*)
 
 module Multiset : sig
   type t
-  val empty : t
   val cardinal : Variable.t -> t -> int
-  val add : Variable.t -> int -> t -> t
   val union : t -> t -> t
   (** [union m1 m2] O((min |m1| |m2|).log(max |m1| |m2|)) *)
-  val remove : Variable.t -> t -> t
-  (** [t' = remove v t] is the multiset where
-      For each v' <> v, [cardinal v' t = cardinal v' t']
-      and [cardinal v t' = 0] *)
-  val set : t -> VarSet.t
-  (** O(n) *)
   val of_set : VarSet.t -> t
   (** O(n) *)
   val of_intmap : int VarMap.t -> t
@@ -319,18 +262,9 @@ end = struct
     in
     VarMap.fold aux min_c.count (max_c, VarSet.empty)
 
-  let remove v c =
-    if VarMap.mem v c.count
-    then
-      { count = VarMap.remove v c.count;
-        cardinal = c.cardinal - 1 }
-    else c
-
   let equal v1 v2 =
     v1.cardinal = v2.cardinal &&
     VarMap.equal (fun (x:int) y -> x = y) v1.count v2.count
-
-  let set c = VarMap.keys c.count
 
   let of_set s = VarSet.fold (fun v acc -> add v 1 acc) s empty
 
@@ -408,11 +342,6 @@ type rebuild_state =
     (* Variables waiting for a loop construct to be inserted *)
     needed : VarSet.t
     (* Variables that can be inserted at that point *) }
-
-let empty_state =
-  { used_var = Multiset.empty;
-    waitings = VarSet.empty;
-    needed = VarSet.empty }
 
 type loop_stack =
   | Toplevel
