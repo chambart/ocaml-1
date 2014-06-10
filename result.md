@@ -2,6 +2,9 @@
 Recent changes:
 ===============
 
+Moving lets to a better position not experimental anymore (June 10, 2014)
+--------------------------------------------
+
 Using staticraise to simplify some branching (May 13, 2014)
 --------------------------------------------
 
@@ -212,7 +215,7 @@ export EXPERIMENTS=true
 ocamlopt ...
 ```
 
-Moving lets to a better position (EXPERIMENTS) (Apr 26, 2014)
+Moving lets to a better position (not EXPERIMENTS since 10 June) (Apr 26, 2014)
 --------------------------------
 
 Lets are pushed up or down to minimize the number of computations.
