@@ -513,9 +513,7 @@ let matching_switch_case returning_expr sw =
   | Single_case expr -> Some expr
   | Failaction ->
       match sw.fs_failaction with
-      | None ->
-          Format.printf "unreachable staticraise@.";
-          Some (Funreachable (nid ()))
+      | None -> Some (Funreachable (nid ()))
       | Some expr -> Some expr
 
 (* Common representation of both staticcatch and trywith to factorise
@@ -562,19 +560,16 @@ let rec let_match comp_unit expr =
       (* if def does not return, the body of the let is never
          evaluated and the binding is useless: we keep only def for
          its side effects *)
-      Format.printf "elim don't return let @.";
       def
 
   | Fifthenelse (cond, _ifso, _ifnot, _) when never_returns cond ->
       (* if cond does not return, both cases ifso and ifnot are never
          evaluated: we keep only cond for its side effects *)
-      Format.printf "elim don't return if@.";
       cond
 
   | Fswitch (cond, _, _) when never_returns cond ->
       (* if cond does not return, no branch is ever evaluated: we keep
          only cond for its side effects *)
-      Format.printf "elim don't return switch@.";
       cond
 
   | Flet(kind, var, (Fstaticcatch(_, _, catch_body, _, _)
@@ -586,7 +581,6 @@ let rec let_match comp_unit expr =
          can be transformed to
          {[try raise E with e -> let x = handler in continue]} *)
 
-      let () = Format.printf "push let in exn handler@." in
       let { handler; catch } = catch_descr' def in
       let handler = Flet(kind, var, handler, body, dlet) in
       let handler = let_match handler in
@@ -599,8 +593,9 @@ let rec let_match comp_unit expr =
         (* branch can be duplicated: bound variables must be substituted *)
         match Flambdasubst.substitute_bound_variables comp_unit subst branch with
         | None ->
-            Format.printf "failed substitution@.";
-            (* failed substitution *)
+            (* Format.printf "failed substitution@."; *)
+            (* In some cases substitution can fail to rewrite local function.
+               If it happens too often, it can be made to handle more cases. *)
             expr
         | Some branch ->
             let handler = Flet(kind,new_var,handler,branch,nid ()) in
@@ -622,7 +617,6 @@ let rec let_match comp_unit expr =
           begin match is_boolable var approx cond with
           | None -> expr
           | Some b ->
-              Format.printf "directly apply if let@.";
               let branch = if b then ifso else ifnot in
               rebuild_catch branch
           end
@@ -639,9 +633,7 @@ let rec let_match comp_unit expr =
         *)
           begin match matching_switch_case handler sw with
           | None -> expr
-          | Some branch ->
-              Format.printf "directly apply switch let@.";
-              rebuild_catch branch
+          | Some branch -> rebuild_catch branch
           end
       | _ -> expr
       end
@@ -655,12 +647,11 @@ let rec let_match comp_unit expr =
                is transformed to
                {[catch if ... then ifso else ifnot with _ -> true; ifso]}
             *)
-            Format.printf "directly apply if@.";
             let branch = if b then ifso else ifnot in
             (* branch can be duplicated: bound variables must be substituted *)
             match Flambdasubst.substitute_bound_variables comp_unit VarMap.empty branch with
             | None ->
-                Format.printf "failed substitution@.";
+                (* Format.printf "failed substitution@."; *)
                 (* failed substitution *)
                 expr
             | Some branch ->
