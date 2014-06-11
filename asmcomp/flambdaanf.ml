@@ -1,3 +1,15 @@
+(***********************************************************************)
+(*                                                                     *)
+(*                                OCaml                                *)
+(*                                                                     *)
+(*                     Pierre Chambart, OCamlPro                       *)
+(*                                                                     *)
+(*  Copyright 2014 Institut National de Recherche en Informatique et   *)
+(*  en Automatique.  All rights reserved.  This file is distributed    *)
+(*  under the terms of the Q Public License version 1.0.               *)
+(*                                                                     *)
+(***********************************************************************)
+
 open Abstract_identifiers
 open Flambda
 
@@ -96,7 +108,7 @@ let anf current_compilation_unit tree =
         assert false
 
   and tovar ?id binds = function
-    | (Fvar _ | Fconst _) as expr -> binds, expr
+    | (Fvar _ | Fconst _ | Fsymbol _) as expr -> binds, expr
     | expr ->
         let id = match id with
           | None -> Variable.create ~current_compilation_unit "anf"
@@ -163,3 +175,98 @@ let anf current_compilation_unit tree =
 
   in
   anf tree
+
+
+let is_simple = function
+  | Fvar _
+  | Fconst _
+  | Fsymbol _ -> true
+
+  | Fassign _ | Fclosure _ | Fapply _ | Ffunction _
+  | Fvariable_in_closure _ | Flet _ | Fletrec _
+  | Fprim _ | Fswitch _ | Fstaticraise _ | Fstaticcatch _
+  | Ftrywith _ | Fifthenelse _ | Fsequence _
+  | Fwhile _ | Ffor _ | Fsend _ | Funreachable _ -> false
+
+  | Fevent _ -> assert false
+
+let rec is_anf = function
+  | Fvar _
+  | Fconst _
+  | Fsymbol _
+  | Funreachable _ -> true
+
+  | Flet (kind, id, Flet _, body, _)
+  | Flet (kind, id, Fletrec _, body, _) ->
+      false
+
+  | Flet (kind, id, lam, body, _) ->
+      is_anf lam &&
+      is_anf body
+
+  | Fletrec (defs, body, _) ->
+      List.for_all (fun (_,expr) -> is_anf expr) defs &&
+      is_anf body
+
+  | Fprim( (Lambda.Psequand | Lambda.Psequor) , _, dbg, _) ->
+      false
+
+  | Fprim(_, args, _, _)
+  | Fstaticraise (_, args, _) ->
+      List.for_all is_simple args
+
+  | Fsequence(e1,e2,_) ->
+      false
+
+  | Fapply ({ ap_function; ap_arg; ap_kind; ap_dbg }, _) ->
+      is_simple ap_function &&
+      List.for_all is_simple ap_arg
+
+  | Fclosure ({cl_fun; cl_free_var; cl_specialised_arg}, _) ->
+      VarMap.for_all (fun _ e -> is_simple e) cl_free_var &&
+      VarMap.for_all (fun _ { body } -> is_anf body) cl_fun.funs
+
+  | Ffunction({ fu_closure = expr }, _)
+  | Fvariable_in_closure ({ vc_closure = expr }, _)
+  | Fassign (_, expr, _) ->
+      is_simple expr
+
+  | Fifthenelse (econd, eso, enot, _) ->
+      is_simple econd &&
+      is_anf eso &&
+      is_anf enot
+
+  | Fswitch (econd, sw, _) ->
+      is_simple econd &&
+      List.for_all (fun (_,e) -> is_anf e) sw.fs_consts &&
+      List.for_all (fun (_,e) -> is_anf e) sw.fs_blocks &&
+      (match sw.fs_failaction with
+       | None -> true
+       | Some e -> is_anf e)
+
+  | Fstaticcatch (_, _, body, handler, _)
+  | Ftrywith (body, _, handler, _) ->
+      is_anf body &&
+      is_anf handler
+
+  | Fwhile (cond, body, _) ->
+      is_anf cond &&
+      is_anf body
+
+  | Ffor (id, lo_expr, hi_expr, dir, body, _) ->
+      is_simple lo_expr &&
+      is_simple hi_expr &&
+      is_anf body
+
+  | Fsend (kind, meth, obj, args, dbg, _) ->
+      is_simple meth &&
+      is_simple obj &&
+      List.for_all is_simple args
+
+  | Fevent (expr, ev, _) ->
+      assert false
+
+let anf current_compilation_unit expr =
+  let r = anf current_compilation_unit expr in
+  assert(is_anf r);
+  r
