@@ -1233,7 +1233,9 @@ and closure env r cl annot =
 
       let r = VarSet.fold (fun id r -> exit_scope r id)
           ffun.free_variables r in
-      VarMap.add fid { ffun with body } funs, kept_params_map, used_params, r)
+      let free_variables = Flambdaiter.free_variables body in
+      VarMap.add fid { ffun with body; free_variables } funs,
+      kept_params_map, used_params, r)
       ffuns.funs (VarMap.empty, ClosureFunctionMap.empty, VarSet.empty, r) in
 
   let spec_args = VarMap.filter
