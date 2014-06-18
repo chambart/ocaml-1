@@ -1399,6 +1399,7 @@ and direct_apply env r ~local clos funct fun_id func fapprox closure (args,appro
         recursive && not (FunSet.mem clos.ident env.current_functions)
         && not (VarSet.is_empty kept_params)
         && ClosureVariableMap.is_empty closure.bound_var (* closed *)
+        && env.inlining_level <= max_level
 
       then begin
         let f id approx acc =
