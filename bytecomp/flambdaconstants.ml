@@ -174,7 +174,7 @@ module NotConstants(P:Param) = struct
     (* a symbol does not necessarilly points to a constant: toplevel
        modules are declared as symbols, but can constain not constant
        values *)
-    | Fsymbol(sym,_) ->
+    | Fsymbol(_sym,_) ->
       (* for a later patch: *)
       (* if not (SymbolSet.mem sym *)
       (*           (Compilenv.approx_env ()).Flambdaexport.ex_constants) *)
@@ -188,7 +188,7 @@ module NotConstants(P:Param) = struct
       then mark_curr curr
 
     (* globals are symbols: handle like symbols *)
-    | Fprim(Lambda.Pgetglobal id, [], _, _) ->
+    | Fprim(Lambda.Pgetglobal _id, [], _, _) ->
       if not for_clambda
       then mark_curr curr
 
@@ -197,15 +197,15 @@ module NotConstants(P:Param) = struct
        - offset is compiled to a pointer inside a constant closure.
          See Cmmgen for the details *)
 
-    | Fprim(Lambda.Pmakeblock(tag, Asttypes.Immutable), args, dbg, _) ->
+    | Fprim(Lambda.Pmakeblock(_tag, Asttypes.Immutable), args, _dbg, _) ->
       List.iter (mark_loop curr) args
 
-    | Ffunction ({fu_closure; fu_fun}, _) ->
+    | Ffunction ({fu_closure; fu_fun; _}, _) ->
       if Closure_function.in_compilation_unit compilation_unit fu_fun
       then mark_loop curr fu_closure
       else mark_curr curr
 
-    | Fvariable_in_closure ({vc_closure = f1},_)
+    | Fvariable_in_closure ({vc_closure = f1; _},_)
     | Fprim(Lambda.Pfield _, [f1], _, _) ->
       if for_clambda
       then mark_curr curr;
@@ -280,7 +280,7 @@ module NotConstants(P:Param) = struct
       mark_curr curr;
       List.iter (mark_loop []) l
 
-    | Fapply ({ap_function = f1; ap_arg = fl },_) ->
+    | Fapply ({ap_function = f1; ap_arg = fl; _ },_) ->
       mark_curr curr;
       mark_loop [] f1;
       List.iter (mark_loop []) fl
