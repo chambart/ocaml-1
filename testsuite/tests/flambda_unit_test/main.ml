@@ -14,3 +14,5 @@ let () = Test_movelets.run ()
 let () = Test_flambdaifstaticraise.run ()
 
 let () = Test_purity.run ()
+
+let () = Test_flambdareach.run ()

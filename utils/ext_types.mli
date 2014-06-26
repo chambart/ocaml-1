@@ -36,6 +36,7 @@ module type ExtMap = sig
       some binding is present in both, the one from [m2] is taken *)
   val union_left : 'a t -> 'a t -> 'a t
   (** [union_left m1 m2 = union_right m2 m1] *)
+  val union_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
   val rename : key t -> key -> key
   val map_keys : (key -> key) -> 'a t -> 'a t
   val keys : 'a t -> Set.Make(M).t

@@ -363,36 +363,138 @@ module ValueSet = struct
 
 end
 
+type code = ExprId.t flambda
+
 module CodeSet : sig
   type t
   val empty : t
-  val add : ExprId.t flambda -> t -> t
+  val add : code -> t -> t
+  val union : t -> t -> t
+  val singleton : code -> t
+  val fold : (code -> 'acc -> 'acc) -> t -> 'acc -> 'acc
 end = struct
   type t = ExprId.t flambda ExprMap.t
   let empty = ExprMap.empty
   let add f s = ExprMap.add (data_at_toplevel_node f) f s
+  let union s1 s2 = ExprMap.union_right s1 s2
+  let singleton f = ExprMap.singleton (data_at_toplevel_node f) f
+  let fold f s acc = ExprMap.fold (fun _ code acc -> f code acc) s acc
 end
 
-type stack (* TODO *)
+module CodeMap : sig
+  type 'a t
+  val empty : 'a t
+  val add : code -> 'a -> 'a t -> 'a t
+  val singleton : code -> 'a -> 'a t
+  val find : code -> 'a t -> 'a
+end = struct
+  type 'a t = 'a ExprMap.t
+  let empty = ExprMap.empty
+  let add f v s = ExprMap.add (data_at_toplevel_node f) v s
+  let singleton f v = ExprMap.singleton (data_at_toplevel_node f) v
+  let find f s = ExprMap.find (data_at_toplevel_node f) s
+end
 
-type call_set = unit (* TODO *)
+type stack_part = { return_var : Variable.t; return_point : code }
+
+module StackPart : sig
+  type t
+  val empty : t
+  val add : stack_part -> t -> t
+  val union : t -> t -> t
+  val singleton : stack_part -> t
+  val toplevel : Variable.t -> t
+  val return_vars : t -> VarSet.t
+  val return_points : t -> CodeSet.t
+end = struct
+  type t = { vars : VarSet.t; points : CodeSet.t }
+  let empty = { vars = VarSet.empty; points = CodeSet.empty }
+  let add { return_var; return_point } { vars; points } =
+    { vars = VarSet.add return_var vars;
+      points = CodeSet.add return_point points }
+  let union s1 s2 =
+    { vars = VarSet.union s1.vars s2.vars;
+      points = CodeSet.union s1.points s2.points }
+  let singleton { return_var; return_point } =
+    { vars = VarSet.singleton return_var;
+      points = CodeSet.singleton return_point }
+  let return_vars { vars } = vars
+  let return_points { points } = points
+  let toplevel v = { vars = VarSet.singleton v; points = CodeSet.empty }
+end
+
+module StackSet : sig
+  type t
+  val empty : t
+  val add_call : stack_part -> t -> t
+  val add_raise : stack_part -> t -> t
+  val union : t -> t -> t
+  val set_call : stack_part -> t -> t
+  val return_vars : t -> VarSet.t
+  val return_points : t -> CodeSet.t
+  val toplevel : return:Variable.t -> uncaught:Variable.t -> t
+end = struct
+  type t = { calls : StackPart.t; raises : StackPart.t }
+  let empty = { calls = StackPart.empty; raises = StackPart.empty }
+  let add_call call s = { s with calls = StackPart.add call s.calls }
+  let add_raise raisep s = { s with raises = StackPart.add raisep s.raises }
+  let union s1 s2 =
+    { calls = StackPart.union s1.calls s2.calls;
+      raises = StackPart.union s1.raises s2.raises }
+  let set_call call s =
+    { s with calls = StackPart.singleton call }
+  let return_vars { calls } = StackPart.return_vars calls
+  let return_points { calls } = StackPart.return_points calls
+  let toplevel ~return ~uncaught =
+    { calls = StackPart.toplevel return;
+      raises = StackPart.toplevel uncaught }
+end
+
+type stack = StackSet.t
 
 type state =
   { reached : CodeSet.t;
+    stacks : StackSet.t CodeMap.t;
     env : ValueSet.t VarMap.t;
     globals : ValueSet.t IntMap.t;
     escape : VarSet.t;
     escape_fun : VarSet.t; (* last argument *)
   }
 
-let push_stack (state:state) (stack:stack) (ret:Variable.t) (kont:ExprId.t flambda) =
-  stack (* TODO *)
+let initial_state =
+  { reached = CodeSet.empty;
+    stacks = CodeMap.empty;
+    env = VarMap.empty;
+    globals = IntMap.empty;
+    escape = VarSet.empty;
+    escape_fun = VarSet.empty; }
 
-let call (state:state) (stack:stack) (body:ExprId.t flambda) =
-  state (* TODO *)
+let push_stack (stack:stack) (ret:Variable.t) (kont:ExprId.t flambda) =
+  let spart = { return_var = ret; return_point = kont } in
+  StackSet.set_call spart stack
 
 let reached state expr =
   { state with reached = CodeSet.add expr state.reached }
+
+let entry_point ~return ~uncaught expr =
+  let state = reached initial_state expr in
+  { state with stacks = CodeMap.singleton expr (StackSet.toplevel ~return ~uncaught) }
+
+let add_stack state stack expr =
+  let stacks =
+    try CodeMap.find expr state.stacks
+    with Not_found -> StackSet.empty in
+  { state with stacks = CodeMap.add expr (StackSet.union stack stacks) state.stacks }
+
+let call (state:state) (stack:stack) (body:ExprId.t flambda) =
+  let state = reached state body in
+  add_stack state stack body
+(* TODO ? *)
+
+let goto_branch (state:state) (stack:stack) (expr:ExprId.t flambda) =
+  let state = reached state expr in
+  add_stack state stack expr
+(* TODO ? *)
 
 let binding state v =
   try VarMap.find v state.env with
@@ -448,18 +550,29 @@ let var_union state (vars: VarSet.t result) =
   VarSet.fold (fun v -> ValueSet.union (binding state v))
     vars.values acc
 
-let rec fp state stack = function
+let rec step_expr state stack = function
   | Flet(_, v, def, body, _) ->
-      let stack = push_stack state stack v body in
-      let state = fp_let state stack v def in
+      let state = step_let state (push_stack stack v body) v def in
       if ValueSet.is_empty (binding state v)
       then state
       else
         let state = reached state body in
-        fp state stack body
+        step_expr state stack body
+  | Fvar(v, _) ->
+      let values = binding state v in
+      if ValueSet.is_empty values
+      then state
+      else
+        let state =
+          VarSet.fold (fun ret state -> assign state ret values)
+            (StackSet.return_vars stack) state in
+        let state =
+          CodeSet.fold (fun code state -> reached state code)
+            (StackSet.return_points stack) state in
+        state
   | _ -> assert false
 
-and fp_let state stack v = function
+and step_let state stack v = function
   | Fevent _
   | Fsequence _
   | Flet _ -> assert false
@@ -511,13 +624,22 @@ and fp_let state stack v = function
   | Fapply ({ap_function = f;ap_arg = args; ap_kind},_) ->
       let f = ebinding state f in
       let state, res = match ap_kind with
-        | Direct _ -> apply_direct state stack f args
+        | Direct _ -> step_apply_direct state stack f args
         | Indirect ->
           match args with
             | [] | _::_::_ -> assert false (* ANF *)
-            | [arg] -> apply_indirect state stack f arg
+            | [arg] -> step_apply_indirect state stack f arg
       in
       assign state v res
+
+  | Fifthenelse (cond,ifso,ifnot,_) ->
+      let cond = ebinding state cond in
+      if ValueSet.is_empty cond
+      then state
+      else
+        let state = goto_branch state stack ifso in
+        goto_branch state stack ifnot
+
 
 (* Fsymbol _ ->  *)
   (* | Fconst _ *)
@@ -530,7 +652,6 @@ and fp_let state stack v = function
   (* | Fstaticcatch (_,_,f1,f2,_) -> *)
 
   (* | Ffor (_,f1,f2,_,f3,_) *)
-  (* | Fifthenelse (f1,f2,f3,_) -> *)
 
   (* | Fstaticraise (_,l,_) *)
   (* | Fprim (_,l,_,_) -> *)
@@ -541,7 +662,7 @@ and fp_let state stack v = function
 
   | _ -> assert false
 
-and apply_indirect (state:state) (stack:stack) f arg =
+and step_apply_indirect (state:state) (stack:stack) f arg =
   let apply_one (state,result) f =
     let (param, clos, (missing, body)) = f in
     let state = assign state param (ebinding state arg) in
@@ -560,7 +681,7 @@ and apply_indirect (state:state) (stack:stack) f arg =
   let result = if funs.top then ValueSet.top else ValueSet.empty in
   List.fold_left apply_one (state, result) funs.values
 
-and apply_direct (state:state) (stack:stack) f args =
+and step_apply_direct (state:state) (stack:stack) f args =
   let apply_one (state,result) f =
     let (param, clos, (missing, body)) = f in
     let state =
@@ -572,3 +693,21 @@ and apply_direct (state:state) (stack:stack) f args =
   let funs = ValueSet.functions f in
   let result = if funs.top then ValueSet.top else ValueSet.empty in
   List.fold_left apply_one (state, result) funs.values
+
+let step state =
+  let aux code state =
+    let stack = CodeMap.find code state.stacks in
+    step_expr state stack code
+  in
+  CodeSet.fold aux state.reached state
+
+let steps ~current_compilation_unit code n =
+  let return = Variable.create ~current_compilation_unit "return" in
+  let uncaught = Variable.create ~current_compilation_unit "uncaught" in
+  let state = entry_point ~return ~uncaught code in
+  let rec aux state n =
+    if n <= 0
+    then state
+    else aux (step state) (n-1)
+  in
+  aux state n
