@@ -107,6 +107,9 @@ module ImmBlockSet : sig
   val field : t -> int -> VarSet.t
   val fields : t -> VarSet.t
 
+  val add_field : t -> int -> VarSet.t -> t
+  val add_sub_field : t -> Variable.t -> int -> VarSet.t -> t
+
   (* used to implement HeapBlockSet *)
   val sub_field : t -> Variable.t -> int -> VarSet.t
   val sub_fields : t -> Variable.t -> VarSet.t
@@ -153,6 +156,36 @@ end = struct
     VarMap.is_empty t
 
   (********************)
+
+  let add_int_field m i contents =
+    IntMap.mapi (fun size a ->
+        if size <= i
+        then a
+        else
+          let union = VarSet.union contents a.(i) in
+          if VarSet.equal union a.(i)
+          then a
+          else
+            let a = Array.copy a in
+            a.(i) <- VarSet.union contents a.(i);
+            a)
+      m
+
+  let add_field s i contents =
+    if i >= 0
+    then
+      VarMap.map (fun m -> add_int_field m i contents) s
+    else s
+
+  let add_sub_field s v i contents =
+    if i >= 0
+    then
+      try
+        let m = VarMap.find v s in
+        let m = add_int_field m i contents in
+        VarMap.add v m s
+      with Not_found -> s
+    else s
 
   let int_field i s acc =
     IntMap.fold (fun _ a acc ->
@@ -201,6 +234,7 @@ module HeapBlockSet : sig
 
   val field : heap -> t -> int -> VarSet.t
   val fields : heap -> t -> VarSet.t
+  val set_field : heap -> t -> int -> VarSet.t -> heap
 end = struct
   type t = VarSet.t
   type heap = ImmBlockSet.t
@@ -230,6 +264,11 @@ end = struct
         VarSet.union (ImmBlockSet.sub_fields heap v) acc)
       s VarSet.empty
 
+  let set_field heap s i contents =
+    VarSet.fold (fun v heap ->
+        ImmBlockSet.add_sub_field heap v i contents)
+      s heap
+
 end
 
 module BlockSet : sig
@@ -244,6 +283,8 @@ module BlockSet : sig
 
   val field : heap -> t -> int -> VarSet.t
   val fields : heap -> t -> VarSet.t
+  val set_field : heap -> t -> int -> VarSet.t -> heap
+
 end = struct
 
   type heap = HeapBlockSet.heap
@@ -291,6 +332,11 @@ end = struct
     VarSet.union
       (ImmBlockSet.fields s.immut)
       (HeapBlockSet.fields heap s.mut)
+
+  let set_field (heap:heap) (s:t) i contents =
+    (* do we warn if immut isn't empty ?
+       there are cases where this could occur with gadts... *)
+    HeapBlockSet.set_field heap s.mut i contents
 
 end
 
@@ -473,6 +519,9 @@ module ValueSet = struct
     { values = FuncSet.elements s.funcs;
       top = s.top }
 
+  let set_field (heap:heap) (s:t) i contents : heap =
+    BlockSet.set_field heap s.blocks i contents
+
 end
 
 type code = ExprId.t flambda
@@ -551,8 +600,11 @@ module StackSet : sig
   val union : t -> t -> t
   val equal : t -> t -> bool
   val set_call : stack_part -> t -> t
+  val set_raise : stack_part -> t -> t
   val return_vars : t -> VarSet.t
   val return_points : t -> CodeSet.t
+  val exn_return_vars : t -> VarSet.t
+  val exn_return_points : t -> CodeSet.t
   val toplevel : return:Variable.t -> uncaught:Variable.t -> t
 end = struct
   type t = { calls : StackPart.t; raises : StackPart.t }
@@ -567,8 +619,15 @@ end = struct
     StackPart.equal s1.raises s2.raises
   let set_call call s =
     { s with calls = StackPart.singleton call }
+  let set_raise raises s =
+    { s with raises = StackPart.singleton raises }
+
   let return_vars { calls } = StackPart.return_vars calls
   let return_points { calls } = StackPart.return_points calls
+
+  let exn_return_vars { raises } = StackPart.return_vars raises
+  let exn_return_points { raises } = StackPart.return_points raises
+
   let toplevel ~return ~uncaught =
     { calls = StackPart.toplevel return;
       raises = StackPart.toplevel uncaught }
@@ -608,6 +667,10 @@ let initial_state current_unit_id =
 let push_stack (stack:stack) (ret:Variable.t) (kont:ExprId.t flambda) =
   let spart = { return_var = ret; return_point = kont } in
   StackSet.set_call spart stack
+
+let push_stack_exn (stack:stack) (ret:Variable.t) (kont:ExprId.t flambda) =
+  let spart = { return_var = ret; return_point = kont } in
+  StackSet.set_raise spart stack
 
 let reached state expr =
   { state with reached = CodeSet.add expr state.reached }
@@ -735,7 +798,16 @@ let rec step_expr state stack expr =
           CodeSet.fold (fun code state -> reached state code)
             (StackSet.return_points stack) state in
         state
-  | _ -> assert false
+
+  | Fifthenelse (cond,ifso,ifnot,_) ->
+      step_if state stack cond ifso ifnot
+
+  | Fprim(Lambda.Praise, [arg], _, _) ->
+      step_raise state stack arg
+
+  | _ ->
+      Format.printf "not anf: %a@." Printflambda.flambda expr;
+      assert false
 
 and step_let state stack v def =
   match def with
@@ -764,10 +836,18 @@ and step_let state stack v def =
           let res = var_union state (ValueSet.field state.heap r i) in
           assign state v res
 
+      | Psetfield (i,_), [dst; contents] ->
+          let r = ebinding state dst in
+          let contents = VarSet.singleton (var contents) in
+          let heap = ValueSet.set_field state.heap r i contents in
+          let state = { state with heap } in
+          assign_other state v
+
       | (Pnegint | Paddint | Psubint | Pmulint | Pdivint | Pmodint
         | Pandint | Porint | Pxorint
         | Plslint | Plsrint | Pasrint
         | Pintcomp _), _ ->
+          Format.printf "eval prim@.";
           assign_other state v
 
       | Pgetglobalfield (id, pos), [] ->
@@ -781,6 +861,9 @@ and step_let state stack v def =
           let r = ebinding state arg in
           let state = assign_global state pos r in
           assign_other state v
+
+      | Praise, [arg] ->
+          step_raise state stack arg
 
       | _ ->
           Format.printf "not implemented %a@." Printflambda.flambda def;
@@ -820,19 +903,19 @@ and step_let state stack v def =
       let state, res = match ap_kind with
         | Direct _ -> step_apply_direct state stack f args
         | Indirect ->
-          match args with
+            match args with
             | [] | _::_::_ -> assert false (* ANF *)
             | [arg] -> step_apply_indirect state stack f arg
       in
       assign state v res
 
   | Fifthenelse (cond,ifso,ifnot,_) ->
-      let cond = ebinding state cond in
-      if ValueSet.is_empty cond
-      then state
-      else
-        let state = goto_branch state stack ifso in
-        goto_branch state stack ifnot
+      step_if state stack cond ifso ifnot
+
+  | Ftrywith (body,id,handler,_) ->
+      let body_stack = push_stack_exn stack id handler in
+      let state = goto_branch state body_stack body in
+      goto_branch state stack handler
 
   | Fwhile (cond,body,_) ->
       let state = goto_branch state stack cond in
@@ -848,7 +931,6 @@ and step_let state stack v def =
   (* | Funreachable _ -> () *)
 
 
-  (* | Ftrywith (f1,_,f2,_) *)
   (* | Fstaticcatch (_,_,f1,f2,_) -> *)
 
   (* | Fstaticraise (_,l,_) *)
@@ -859,6 +941,24 @@ and step_let state stack v def =
   (* | Fsend (_,f1,f2,fl,_,_) -> *)
 
   | _ -> assert false
+
+and step_raise state stack arg =
+  let values = ebinding state arg in
+  let state =
+    VarSet.fold (fun ret state -> assign state ret values)
+      (StackSet.exn_return_vars stack) state in
+  let state =
+    CodeSet.fold (fun code state -> reached state code)
+      (StackSet.exn_return_points stack) state in
+  state
+
+and step_if state stack cond ifso ifnot =
+  let cond = ebinding state cond in
+  if ValueSet.is_empty cond
+  then state
+  else
+    let state = goto_branch state stack ifso in
+    goto_branch state stack ifnot
 
 and step_apply_indirect (state:state) (stack:stack) f arg =
   let apply_one (state,result) f =
