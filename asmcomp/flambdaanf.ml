@@ -54,10 +54,26 @@ let anf current_compilation_unit tree =
         let binds = ignore_val binds e1 in
         let binds, ex2 = decompose_tovar binds e2 in
         binds, ex2
-    | Fapply ({ ap_function; ap_arg; ap_kind; ap_dbg }, eid) ->
+    | Fapply ({ ap_function; ap_arg; ap_kind = (Direct _ as ap_kind); ap_dbg }, eid) ->
         let binds, ap_function = decompose_tovar binds ap_function in
         let binds, ap_arg = decompose_tovar_list binds ap_arg in
         binds, Fapply ({ ap_function; ap_arg; ap_kind; ap_dbg }, eid)
+
+    | Fapply ({ ap_function; ap_arg; ap_kind = (Indirect as ap_kind); ap_dbg }, eid) ->
+        let binds, ap_function = decompose_tovar binds ap_function in
+        let binds, ap_arg = decompose_tovar_list binds ap_arg in
+        let rec aux ap_function binds = function
+          | [] -> assert false
+          | [v] -> binds, Fapply ({ ap_function; ap_arg = [v]; ap_kind; ap_dbg }, eid)
+          | h::t ->
+              let func_var = Variable.create ~current_compilation_unit "anf_func" in
+              let expr = Fapply ({ ap_function; ap_arg = [h]; ap_kind; ap_dbg }
+                                , ExprId.create ()) in
+              let binds = Simple (Not_assigned, func_var, expr) :: binds in
+              aux (Fvar (func_var, ExprId.create ())) binds t
+        in
+        aux ap_function binds ap_arg
+
     | Fclosure ({cl_fun; cl_free_var; cl_specialised_arg}, eid) ->
         let binds, cl_free_var = decompose_tovar_idmap binds cl_free_var in
         let cl_fun =
@@ -108,7 +124,9 @@ let anf current_compilation_unit tree =
         assert false
 
   and tovar ?id binds = function
-    | (Fvar _ | Fconst _ | Fsymbol _) as expr -> binds, expr
+    | (Fvar _
+      (* | Fconst _ | Fsymbol _ *)
+      ) as expr -> binds, expr
     | expr ->
         let id = match id with
           | None -> Variable.create ~current_compilation_unit "anf"
@@ -178,9 +196,11 @@ let anf current_compilation_unit tree =
 
 
 let is_simple = function
-  | Fvar _
+  | Fvar _ -> true
+
   | Fconst _
-  | Fsymbol _ -> true
+  | Fsymbol _
+    (* -> true *)
 
   | Fassign _ | Fclosure _ | Fapply _ | Ffunction _
   | Fvariable_in_closure _ | Flet _ | Fletrec _
@@ -220,7 +240,11 @@ let rec is_anf = function
 
   | Fapply ({ ap_function; ap_arg; ap_kind; ap_dbg }, _) ->
       is_simple ap_function &&
-      List.for_all is_simple ap_arg
+      List.for_all is_simple ap_arg &&
+      begin match ap_kind with
+      | Direct _ -> true
+      | Indirect -> List.length ap_arg = 1
+      end
 
   | Fclosure ({cl_fun; cl_free_var; cl_specialised_arg}, _) ->
       VarMap.for_all (fun _ e -> is_simple e) cl_free_var &&
