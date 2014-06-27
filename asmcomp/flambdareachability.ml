@@ -82,9 +82,21 @@ module Value = struct
 
   let ufunc funs : ufunc = funs
 
+  let is_empty_block ((_,_,v):block) =
+    try
+      for i = 0 to Array.length v - 1 do
+        if VarSet.is_empty v.(i)
+        then raise Exit
+      done;
+      false
+    with Exit -> true
+
+  let block_id ((id, _, _):block) = id
+  let is_mutable_block ((_,mut,_):block) = mut = Asttypes.Mutable
+
 end
 
-module BlockSet : sig
+module ImmBlockSet : sig
   type t
   val empty : t
   val add : Value.block -> t -> t
@@ -94,23 +106,16 @@ module BlockSet : sig
 
   val field : t -> int -> VarSet.t
   val fields : t -> VarSet.t
+
+  (* used to implement HeapBlockSet *)
+  val sub_field : t -> Variable.t -> int -> VarSet.t
+  val sub_fields : t -> Variable.t -> VarSet.t
 end = struct
-  type t =
-    { mut : VarSet.t array IntMap.t VarMap.t;
-      immut : VarSet.t array IntMap.t VarMap.t }
+  type t = VarSet.t array IntMap.t VarMap.t
   (* invariant: there is no block with an empty field
      t is empty iff the map is empty *)
 
-  let empty = { mut = VarMap.empty; immut = VarMap.empty }
-
-  let empty_block (_,_,v) =
-    try
-      for i = 0 to Array.length v - 1 do
-        if VarSet.is_empty v.(i)
-        then raise Exit
-      done;
-      false
-    with Exit -> true
+  let empty = VarMap.empty
 
   let array_union a1 a2 =
     Array.mapi (fun i s -> VarSet.union s a2.(i)) a1
@@ -132,58 +137,160 @@ end = struct
       set
 
   let add (block:Value.block) (set:t) =
-    if empty_block block
+    if Value.is_empty_block block
     then (* it is ok to drop a block with an empty field: it is not reachable *)
       set
     else
-      let (_,mut,_) = block in
-      match mut with
-      | Asttypes.Mutable -> { set with mut = add' block set.mut }
-      | Asttypes.Immutable -> { set with immut = add' block set.immut }
+      add' block set
 
   let union (s1:t) (s2:t) : t =
-    let f s1 s2 =
-      VarMap.union_merge (IntMap.union_merge array_union) s1 s2
-    in
-    { mut = f s1.mut s2.mut;
-      immut = f s1.immut s2.immut }
+    VarMap.union_merge (IntMap.union_merge array_union) s1 s2
 
   let equal (s1:t) (s2:t) : bool =
-    let f s1 s2 =
-      VarMap.equal (IntMap.equal (equal_array VarSet.equal)) s1 s2
-    in
-    f s1.immut s2.immut &&
-    f s1.mut s2.mut
+    VarMap.equal (IntMap.equal (equal_array VarSet.equal)) s1 s2
 
   let is_empty t =
-    VarMap.is_empty t.immut &&
-    VarMap.is_empty t.mut
+    VarMap.is_empty t
 
   (********************)
 
-  let field' s i acc =
-    VarMap.fold (fun _ m acc ->
-        IntMap.fold (fun _ a acc ->
-            if Array.length a > i && i >= 0
-            then VarSet.union a.(i) acc
-            else acc)
-          m acc)
+  let int_field i s acc =
+    IntMap.fold (fun _ a acc ->
+        if Array.length a > i && i >= 0
+        then VarSet.union a.(i) acc
+        else acc)
       s acc
+
+  let field' s i acc =
+    VarMap.fold (fun _ m acc -> int_field i m acc) s acc
 
   let field (s:t) i =
-    field' s.immut i VarSet.empty
-    |> field' s.mut i
+    field' s i VarSet.empty
 
-  let fields' s acc =
-    VarMap.fold (fun _ m acc ->
-        IntMap.fold (fun _ a acc ->
-            Array.fold_right VarSet.union a acc)
-          m acc)
+  let sub_field (s:t) v i =
+    try int_field i (VarMap.find v s) VarSet.empty
+    with Not_found -> VarSet.empty
+
+
+  let int_fields s acc =
+    IntMap.fold (fun _ a acc ->
+        Array.fold_right VarSet.union a acc)
       s acc
 
+  let fields' s acc =
+    VarMap.fold (fun _ m acc -> int_fields m acc) s acc
+
   let fields (s:t) =
-    fields' s.immut VarSet.empty
-    |> fields' s.mut
+    fields' s VarSet.empty
+
+  let sub_fields (s:t) v =
+    try int_fields (VarMap.find v s) VarSet.empty
+    with Not_found -> VarSet.empty
+
+end
+
+module HeapBlockSet : sig
+  type t
+  type heap
+  val empty_heap : heap
+  val empty : t
+  val add : Value.block -> heap -> t -> heap * t
+  val union : t -> t -> t
+  val equal : t -> t -> bool
+  val is_empty : t -> bool
+
+  val field : heap -> t -> int -> VarSet.t
+  val fields : heap -> t -> VarSet.t
+end = struct
+  type t = VarSet.t
+  type heap = ImmBlockSet.t
+
+  let empty = VarSet.empty
+  let empty_heap = ImmBlockSet.empty
+
+  let add (block:Value.block) (heap:heap) (set:t) =
+    if Value.is_empty_block block
+    then heap, set
+    else
+      let heap = ImmBlockSet.add block heap in
+      let set = VarSet.add (Value.block_id block) set in
+      heap, set
+
+  let union s1 s2 = VarSet.union s1 s2
+  let equal s1 s2 = VarSet.equal s1 s2
+  let is_empty s = VarSet.is_empty s
+
+  let field heap s i =
+    VarSet.fold (fun v acc ->
+        VarSet.union (ImmBlockSet.sub_field heap v i) acc)
+      s VarSet.empty
+
+  let fields heap s =
+    VarSet.fold (fun v acc ->
+        VarSet.union (ImmBlockSet.sub_fields heap v) acc)
+      s VarSet.empty
+
+end
+
+module BlockSet : sig
+  type t
+  type heap
+  val empty_heap : heap
+  val empty : t
+  val add : Value.block -> heap -> t -> heap * t
+  val union : t -> t -> t
+  val equal : t -> t -> bool
+  val is_empty : t -> bool
+
+  val field : heap -> t -> int -> VarSet.t
+  val fields : heap -> t -> VarSet.t
+end = struct
+
+  type heap = HeapBlockSet.heap
+
+  type t =
+    { mut : HeapBlockSet.t;
+      immut : ImmBlockSet.t }
+  (* invariant: there is no block with an empty field
+     t is empty iff the map is empty *)
+
+  let empty_heap = HeapBlockSet.empty_heap
+
+  let empty =
+    { mut = HeapBlockSet.empty;
+      immut = ImmBlockSet.empty }
+
+  let add (block:Value.block) (heap:heap) (set:t) =
+    if Value.is_mutable_block block
+    then
+      let heap, mut = HeapBlockSet.add block heap set.mut in
+      heap, { set with mut}
+    else
+      heap, { set with immut = ImmBlockSet.add block set.immut }
+
+  let union (s1:t) (s2:t) : t =
+    { mut = HeapBlockSet.union s1.mut s2.mut;
+      immut = ImmBlockSet.union s1.immut s2.immut }
+
+  let equal (s1:t) (s2:t) : bool =
+    ImmBlockSet.equal s1.immut s2.immut &&
+    HeapBlockSet.equal s1.mut s2.mut
+
+  let is_empty t =
+    ImmBlockSet.is_empty t.immut &&
+    HeapBlockSet.is_empty t.mut
+
+  (********************)
+
+  let field (heap:heap) (s:t) i =
+    VarSet.union
+      (ImmBlockSet.field s.immut i)
+      (HeapBlockSet.field heap s.mut i)
+
+  let fields (heap:heap) (s:t) =
+    VarSet.union
+      (ImmBlockSet.fields s.immut)
+      (HeapBlockSet.fields heap s.mut)
 
 end
 
@@ -291,6 +398,8 @@ type 'a result =
 
 module ValueSet = struct
 
+  type heap = BlockSet.heap
+
   type t =
       { other : bool;
         blocks : BlockSet.t;
@@ -305,13 +414,16 @@ module ValueSet = struct
       ufuncs = UFuncSet.empty;
       top = false }
 
+  let empty_heap = BlockSet.empty_heap
+
   let top = { empty with top = true }
 
   let add_other s = { s with other = true }
   let add_top s = { s with top = true }
 
-  let add_block (b:Value.block) s =
-    { s with blocks = BlockSet.add b s.blocks }
+  let add_block (b:Value.block) (heap:heap) s =
+    let heap, blocks = BlockSet.add b heap s.blocks in
+    heap, { s with blocks }
 
   let add_func (f:Value.func) s =
     { s with funcs = FuncSet.add f s.funcs }
@@ -345,8 +457,8 @@ module ValueSet = struct
 
   (*********************)
 
-  let field s i =
-    { values = BlockSet.field s.blocks i;
+  let field heap s i =
+    { values = BlockSet.field heap s.blocks i;
       top = s.top }
 
   let closure_variable s v =
@@ -468,6 +580,7 @@ type state =
   { reached : CodeSet.t;
     stacks : StackSet.t CodeMap.t;
     env : ValueSet.t VarMap.t;
+    heap : ValueSet.heap;
     globals : ValueSet.t IntMap.t;
     escape : VarSet.t;
     escape_fun : VarSet.t; (* last applied argument *)
@@ -486,6 +599,7 @@ let initial_state current_unit_id =
   { reached = CodeSet.empty;
     stacks = CodeMap.empty;
     env = VarMap.empty;
+    heap = ValueSet.empty_heap;
     globals = IntMap.empty;
     escape = VarSet.empty;
     escape_fun = VarSet.empty;
@@ -555,8 +669,8 @@ let bound_or_empty state v =
 
 let assign_block state v block =
   let set = bound_or_empty state v in
-  let set = ValueSet.add_block block set in
-  { state with env = VarMap.add v set state.env }
+  let heap, set = ValueSet.add_block block state.heap set in
+  { state with env = VarMap.add v set state.env; heap }
 
 let assign_ufunc state v ufunc =
   let set = bound_or_empty state v in
@@ -647,7 +761,7 @@ and step_let state stack v def =
           assign_block state v res
       | Pfield i, [arg] ->
           let r = ebinding state arg in
-          let res = var_union state (ValueSet.field r i) in
+          let res = var_union state (ValueSet.field state.heap r i) in
           assign state v res
 
       | (Pnegint | Paddint | Psubint | Pmulint | Pdivint | Pmodint
