@@ -372,6 +372,7 @@ module CodeSet : sig
   val union : t -> t -> t
   val singleton : code -> t
   val fold : (code -> 'acc -> 'acc) -> t -> 'acc -> 'acc
+  val equal : t -> t -> bool
 end = struct
   type t = ExprId.t flambda ExprMap.t
   let empty = ExprMap.empty
@@ -379,6 +380,7 @@ end = struct
   let union s1 s2 = ExprMap.union_right s1 s2
   let singleton f = ExprMap.singleton (data_at_toplevel_node f) f
   let fold f s acc = ExprMap.fold (fun _ code acc -> f code acc) s acc
+  let equal s1 s2 = ExprMap.equal (fun _ _ -> true) s1 s2
 end
 
 module CodeMap : sig
@@ -387,12 +389,14 @@ module CodeMap : sig
   val add : code -> 'a -> 'a t -> 'a t
   val singleton : code -> 'a -> 'a t
   val find : code -> 'a t -> 'a
+  val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
 end = struct
   type 'a t = 'a ExprMap.t
   let empty = ExprMap.empty
   let add f v s = ExprMap.add (data_at_toplevel_node f) v s
   let singleton f v = ExprMap.singleton (data_at_toplevel_node f) v
   let find f s = ExprMap.find (data_at_toplevel_node f) s
+  let equal f s1 s2 = ExprMap.equal f s1 s2
 end
 
 type stack_part = { return_var : Variable.t; return_point : code }
@@ -406,6 +410,7 @@ module StackPart : sig
   val toplevel : Variable.t -> t
   val return_vars : t -> VarSet.t
   val return_points : t -> CodeSet.t
+  val equal : t -> t -> bool
 end = struct
   type t = { vars : VarSet.t; points : CodeSet.t }
   let empty = { vars = VarSet.empty; points = CodeSet.empty }
@@ -418,6 +423,9 @@ end = struct
   let singleton { return_var; return_point } =
     { vars = VarSet.singleton return_var;
       points = CodeSet.singleton return_point }
+  let equal s1 s2 =
+    VarSet.equal s1.vars s2.vars &&
+    CodeSet.equal s1.points s2.points
   let return_vars { vars } = vars
   let return_points { points } = points
   let toplevel v = { vars = VarSet.singleton v; points = CodeSet.empty }
@@ -429,6 +437,7 @@ module StackSet : sig
   val add_call : stack_part -> t -> t
   val add_raise : stack_part -> t -> t
   val union : t -> t -> t
+  val equal : t -> t -> bool
   val set_call : stack_part -> t -> t
   val return_vars : t -> VarSet.t
   val return_points : t -> CodeSet.t
@@ -441,6 +450,9 @@ end = struct
   let union s1 s2 =
     { calls = StackPart.union s1.calls s2.calls;
       raises = StackPart.union s1.raises s2.raises }
+  let equal s1 s2 =
+    StackPart.equal s1.calls s2.calls &&
+    StackPart.equal s1.raises s2.raises
   let set_call call s =
     { s with calls = StackPart.singleton call }
   let return_vars { calls } = StackPart.return_vars calls
@@ -458,16 +470,26 @@ type state =
     env : ValueSet.t VarMap.t;
     globals : ValueSet.t IntMap.t;
     escape : VarSet.t;
-    escape_fun : VarSet.t; (* last argument *)
+    escape_fun : VarSet.t; (* last applied argument *)
+    current_unit_id : Ident.t;
   }
 
-let initial_state =
+let equal_state s1 s2 =
+  CodeSet.equal s1.reached s2.reached &&
+  CodeMap.equal StackSet.equal s1.stacks s2.stacks &&
+  VarMap.equal ValueSet.equal s1.env s2.env &&
+  IntMap.equal ValueSet.equal s1.globals s2.globals &&
+  VarSet.equal s1.escape s2.escape &&
+  VarSet.equal s1.escape_fun s2.escape_fun
+
+let initial_state current_unit_id =
   { reached = CodeSet.empty;
     stacks = CodeMap.empty;
     env = VarMap.empty;
     globals = IntMap.empty;
     escape = VarSet.empty;
-    escape_fun = VarSet.empty; }
+    escape_fun = VarSet.empty;
+    current_unit_id}
 
 let push_stack (stack:stack) (ret:Variable.t) (kont:ExprId.t flambda) =
   let spart = { return_var = ret; return_point = kont } in
@@ -476,11 +498,12 @@ let push_stack (stack:stack) (ret:Variable.t) (kont:ExprId.t flambda) =
 let reached state expr =
   { state with reached = CodeSet.add expr state.reached }
 
-let entry_point ~return ~uncaught expr =
-  let state = reached initial_state expr in
+let entry_point current_unit_id ~return ~uncaught expr =
+  let state = reached (initial_state current_unit_id) expr in
   { state with stacks = CodeMap.singleton expr (StackSet.toplevel ~return ~uncaught) }
 
 let add_stack state stack expr =
+  Format.printf "add_stack %a@." Printflambda.flambda expr;
   let stacks =
     try CodeMap.find expr state.stacks
     with Not_found -> StackSet.empty in
@@ -496,8 +519,16 @@ let goto_branch (state:state) (stack:stack) (expr:ExprId.t flambda) =
   add_stack state stack expr
 (* TODO ? *)
 
+let goto_body (state:state) (stack:stack) (expr:ExprId.t flambda) =
+  let state = reached state expr in
+  add_stack state stack expr
+
 let binding state v =
   try VarMap.find v state.env with
+  | Not_found -> ValueSet.empty
+
+let global state i =
+  try IntMap.find i state.globals with
   | Not_found -> ValueSet.empty
 
 let assign state v contents =
@@ -508,6 +539,15 @@ let assign state v contents =
     with Not_found -> contents
   in
   { state with env = VarMap.add v set state.env }
+
+let assign_global state pos contents =
+  let set =
+    try
+      let set = IntMap.find pos state.globals in
+      ValueSet.union contents set
+    with Not_found -> contents
+  in
+  { state with globals = IntMap.add pos set state.globals }
 
 let bound_or_empty state v =
   try VarMap.find v state.env
@@ -537,26 +577,37 @@ let assign_other state v =
   let set = ValueSet.add_other set in
   { state with env = VarMap.add v set state.env }
 
+let assign_top state v =
+  let set = bound_or_empty state v in
+  let set = ValueSet.add_top set in
+  { state with env = VarMap.add v set state.env }
+
 let ebinding state = function
   | Fvar (v, _) -> binding state v
-  | _ -> assert false (* forbidden in ANF *)
+  | f ->
+      Format.printf "ebinding %a@." Printflambda.flambda f;
+      assert false (* forbidden in ANF *)
 
 let var = function
   | Fvar (v, _) -> v
-  | _ -> assert false (* forbidden in ANF *)
+  | f ->
+      Format.printf "var %a@." Printflambda.flambda f;
+      assert false (* forbidden in ANF *)
 
 let var_union state (vars: VarSet.t result) =
   let acc = if vars.top then ValueSet.top else ValueSet.empty in
   VarSet.fold (fun v -> ValueSet.union (binding state v))
     vars.values acc
 
-let rec step_expr state stack = function
+let rec step_expr state stack expr =
+  Format.printf "go: %a@." Printflambda.flambda expr;
+  match expr with
   | Flet(_, v, def, body, _) ->
       let state = step_let state (push_stack stack v body) v def in
       if ValueSet.is_empty (binding state v)
       then state
       else
-        let state = reached state body in
+        let state = goto_body state stack body in
         step_expr state stack body
   | Fvar(v, _) ->
       let values = binding state v in
@@ -572,25 +623,54 @@ let rec step_expr state stack = function
         state
   | _ -> assert false
 
-and step_let state stack v = function
+and step_let state stack v def =
+  match def with
   | Fevent _
   | Fsequence _
   | Flet _ -> assert false
+
+  | Fsymbol _ ->
+      assign_top state v
+
+  | Fconst _ ->
+      assign_other state v
 
   | Fvar (v', _) ->
       let r = binding state v' in
       assign state v r
 
   | Fprim(prim, args, _, _) ->
+      let open Lambda in
       begin match prim, args with
-      | Lambda.Pmakeblock(_tag,mut), _ ->
+      | Pmakeblock(_tag,mut), _ ->
           let res = Value.block v mut (Array.map var (Array.of_list args)) in
           assign_block state v res
-      | Lambda.Pfield i, [arg] ->
+      | Pfield i, [arg] ->
           let r = ebinding state arg in
           let res = var_union state (ValueSet.field r i) in
           assign state v res
-      | _ -> assert false
+
+      | (Pnegint | Paddint | Psubint | Pmulint | Pdivint | Pmodint
+        | Pandint | Porint | Pxorint
+        | Plslint | Plsrint | Pasrint
+        | Pintcomp _), _ ->
+          assign_other state v
+
+      | Pgetglobalfield (id, pos), [] ->
+          if Ident.same id state.current_unit_id
+          then
+            let r = global state pos in
+            assign state v r
+          else assign_top state v
+
+      | Psetglobalfield pos, [arg] ->
+          let r = ebinding state arg in
+          let state = assign_global state pos r in
+          assign_other state v
+
+      | _ ->
+          Format.printf "not implemented %a@." Printflambda.flambda def;
+          assert false
       end
 
   | Fassign(x, Fvar (y,_), _) ->
@@ -640,18 +720,22 @@ and step_let state stack v = function
         let state = goto_branch state stack ifso in
         goto_branch state stack ifnot
 
+  | Fwhile (cond,body,_) ->
+      let state = goto_branch state stack cond in
+      let state = goto_branch state stack body in
+      assign_other state v
 
-(* Fsymbol _ ->  *)
-  (* | Fconst _ *)
+  | Ffor (id,lo,hi,_,body,_) ->
+      ignore(var lo); ignore(var hi); (* verify that they are variables *)
+      let state = assign_other state id in
+      let state = goto_branch state stack body in
+      assign_other state v
+
   (* | Funreachable _ -> () *)
 
 
-  (* | Flet ( _, _, f1, f2,_) *)
   (* | Ftrywith (f1,_,f2,_) *)
-  (* | Fwhile (f1,f2,_) *)
   (* | Fstaticcatch (_,_,f1,f2,_) -> *)
-
-  (* | Ffor (_,f1,f2,_,f3,_) *)
 
   (* | Fstaticraise (_,l,_) *)
   (* | Fprim (_,l,_,_) -> *)
@@ -696,18 +780,35 @@ and step_apply_direct (state:state) (stack:stack) f args =
 
 let step state =
   let aux code state =
+    Format.printf "step: %a@." Printflambda.flambda code;
     let stack = CodeMap.find code state.stacks in
     step_expr state stack code
   in
   CodeSet.fold aux state.reached state
 
-let steps ~current_compilation_unit code n =
+let steps ~current_compilation_unit code i =
+  let current_unit_id =
+    Symbol.Compilation_unit.get_persistent_ident current_compilation_unit in
   let return = Variable.create ~current_compilation_unit "return" in
   let uncaught = Variable.create ~current_compilation_unit "uncaught" in
-  let state = entry_point ~return ~uncaught code in
+  let state = entry_point current_unit_id ~return ~uncaught code in
   let rec aux state n =
     if n <= 0
     then state
-    else aux (step state) (n-1)
+    else
+      let () = Format.printf "steps: %i@." n in
+      let state' = step state in
+      if equal_state state state'
+      then
+        let () = Format.printf "fixpoint: %i@." (i-n) in
+        state
+      else aux state' (n-1)
   in
-  aux state n
+  aux state i
+
+
+let test ~current_compilation_unit expr =
+  if Clflags.experiments
+  then
+    let expr = Flambdaanf.anf current_compilation_unit expr in
+    ignore (steps ~current_compilation_unit expr 20)

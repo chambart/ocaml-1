@@ -24,6 +24,9 @@ let flet var def body =
   Flet(Not_assigned,var,def,body,
        nid ~name:(Format.asprintf "let %a" Variable.print var) ())
 
+let flets defs body =
+  List.fold_right (fun (var, def) body -> flet var def body) defs body
+
 let fvar var =
   Fvar(var,
        nid ~name:(Format.asprintf "var %a" Variable.print var) ())
@@ -74,6 +77,15 @@ let int_leq e1 e2 =
 let tuple l =
   fprim (Lambda.Pmakeblock(0,Asttypes.Immutable)) l
 
+let atuple l =
+  fprim (Lambda.Pmakeblock(0,Asttypes.Immutable)) (List.map fvar l)
+
+let ffield i t =
+  fprim (Lambda.Pfield i) [t]
+
+let afield i t =
+  fprim (Lambda.Pfield i) [fvar t]
+
 let fccall l =
   let open Primitive in
   let prim =
@@ -113,10 +125,25 @@ let fclosure lst fv =
 let ffunction fu_closure fu_fun =
   Ffunction({ fu_closure; fu_fun; fu_relative_to = None }, nid ())
 
+let afunction fu_closure fu_fun =
+  ffunction (fvar fu_closure) fu_fun
+
 let ffun_fclos ?(fv=[]) f args body =
   ffunction
     (fclosure [f, args, body] fv)
     (Closure_function.wrap f)
+
+let ffun_fclos' ?(fv=[]) args body =
+  let f = new_var "f" in
+  ffunction
+    (fclosure [f, args, body] fv)
+    (Closure_function.wrap f)
+
+let afun_fclos' ?(fv=[]) args body =
+  let f = new_var "f" in
+  let clos = new_var "clos" in
+  flet clos (fclosure [f, args, body] fv)
+    (afunction clos (Closure_function.wrap f))
 
 let fun_decl' params body =
   { stub = false; params; body;
@@ -139,6 +166,9 @@ let fapply ?(kind=Indirect) f args =
       ap_arg = args;
       ap_dbg = Debuginfo.none;
       ap_kind = kind},nid ())
+
+let aapply ?kind f args =
+  fapply ?kind (fvar f) (List.map fvar args)
 
 let fif cond ifso ifnot =
   Fifthenelse(cond,ifso,ifnot,nid ())
