@@ -233,6 +233,7 @@ module HeapBlockSet : sig
   val add : Value.block -> heap -> t -> heap * t
   val union : t -> t -> t
   val equal : t -> t -> bool
+  val equal_heap : heap -> heap -> bool
   val is_empty : t -> bool
 
   val field : heap -> t -> int -> VarSet.t
@@ -254,7 +255,11 @@ end = struct
       heap, set
 
   let union s1 s2 = VarSet.union s1 s2
-  let equal s1 s2 = VarSet.equal s1 s2
+  let equal s1 s2 =
+    VarSet.equal s1 s2
+  let equal_heap h1 h2 =
+    ImmBlockSet.equal h1 h2
+
   let is_empty s = VarSet.is_empty s
 
   let field heap s i =
@@ -282,6 +287,7 @@ module BlockSet : sig
   val add : Value.block -> heap -> t -> heap * t
   val union : t -> t -> t
   val equal : t -> t -> bool
+  val equal_heap : heap -> heap -> bool
   val is_empty : t -> bool
 
   val field : heap -> t -> int -> VarSet.t
@@ -319,6 +325,9 @@ end = struct
   let equal (s1:t) (s2:t) : bool =
     ImmBlockSet.equal s1.immut s2.immut &&
     HeapBlockSet.equal s1.mut s2.mut
+
+  let equal_heap h1 h2 =
+    HeapBlockSet.equal_heap h1 h2
 
   let is_empty t =
     ImmBlockSet.is_empty t.immut &&
@@ -409,6 +418,7 @@ module UFuncSet : sig
   val is_empty : t -> bool
 
   val closure_function : t -> Closure_function.t -> FuncSet.t
+  val functions : t -> FuncSet.t
 end = struct
   type t = FuncSet.t VarMap.t
   let empty = VarMap.empty
@@ -438,6 +448,9 @@ end = struct
     let v = Closure_function.unwrap v in
     try VarMap.find v s with
     | Not_found -> FuncSet.empty
+
+  let functions (s:t) =
+    VarMap.fold (fun _ -> FuncSet.union) s FuncSet.empty
 
 end
 
@@ -497,6 +510,9 @@ module ValueSet = struct
     UFuncSet.equal s1.ufuncs s2.ufuncs &&
     s1.top = s2.top
 
+  let equal_heap h1 h2 =
+    BlockSet.equal_heap h1 h2
+
   let is_empty s =
     s.top = false &&
     s.other = false &&
@@ -526,6 +542,10 @@ module ValueSet = struct
 
   let functions s =
     { values = FuncSet.elements s.funcs;
+      top = s.top }
+
+  let ufunctions s =
+    { values = UFuncSet.functions s.ufuncs;
       top = s.top }
 
   let set_field (heap:heap) (s:t) i contents : heap =
@@ -651,8 +671,8 @@ type state =
     heap : ValueSet.heap;
     globals : ValueSet.t IntMap.t;
     escape : VarSet.t;
-    escape_fun : VarSet.t; (* last applied argument *)
     current_unit_id : Ident.t;
+    escape_stack : StackSet.t;
   }
 
 let equal_state s1 s2 =
@@ -661,7 +681,7 @@ let equal_state s1 s2 =
   VarMap.equal ValueSet.equal s1.env s2.env &&
   IntMap.equal ValueSet.equal s1.globals s2.globals &&
   VarSet.equal s1.escape s2.escape &&
-  VarSet.equal s1.escape_fun s2.escape_fun
+  ValueSet.equal_heap s1.heap s2.heap
 
 let initial_state current_unit_id =
   { reached = CodeSet.empty;
@@ -670,8 +690,8 @@ let initial_state current_unit_id =
     heap = ValueSet.empty_heap;
     globals = IntMap.empty;
     escape = VarSet.empty;
-    escape_fun = VarSet.empty;
-    current_unit_id}
+    current_unit_id;
+    escape_stack = StackSet.empty }
 
 let push_stack (stack:stack) (ret:Variable.t) (kont:ExprId.t flambda) =
   let spart = { return_var = ret; return_point = kont } in
@@ -686,7 +706,10 @@ let reached state expr =
 
 let entry_point current_unit_id ~return ~uncaught expr =
   let state = reached (initial_state current_unit_id) expr in
-  { state with stacks = CodeMap.singleton expr (StackSet.toplevel ~return ~uncaught) }
+  let escape_stack = StackSet.toplevel ~return ~uncaught in
+  { state with
+    stacks = CodeMap.singleton expr escape_stack;
+    escape_stack = escape_stack }
 
 let add_stack state stack expr =
   (* iprintf "add_stack %a@." Printflambda.flambda expr; *)
@@ -1064,6 +1087,21 @@ let escape_variables state =
   done;
   { state with escape = !escaping }
 
+let escape_functions state =
+  let escape_function state ((arg, _, (other_args, code)):Value.func) =
+    let state = List.fold_left assign_top state (arg :: other_args) in
+    goto_branch state state.escape_stack code
+  in
+  let aux v state =
+    let value = binding state v in
+    let functions = ValueSet.functions value in
+    let state = List.fold_left escape_function state functions.values in
+    let ufunctions = ValueSet.ufunctions value in
+    List.fold_left escape_function state
+      (FuncSet.elements ufunctions.values)
+  in
+  VarSet.fold aux state.escape state
+
 let step state =
   let aux code state =
     (* iprintf "step: %a@." Printflambda.flambda code; *)
@@ -1071,7 +1109,8 @@ let step state =
     step_expr state stack code
   in
   let state = CodeSet.fold aux state.reached state in
-  escape_variables state
+  let state = escape_variables state in
+  escape_functions state
 
 let steps ~current_compilation_unit code i =
   let current_unit_id =
