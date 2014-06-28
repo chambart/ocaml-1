@@ -2,6 +2,9 @@ open Ext_types
 open Abstract_identifiers
 open Flambda
 
+let print = false
+let iprintf f = Format.ifprintf Format.std_formatter f
+
 let compare_array c a1 a2 =
   let v = compare (Array.length a1) (Array.length a2) in
   if v <> 0
@@ -503,8 +506,14 @@ module ValueSet = struct
 
   (*********************)
 
+  let is_top s = s.top
+
   let field heap s i =
     { values = BlockSet.field heap s.blocks i;
+      top = s.top }
+
+  let fields heap s =
+    { values = BlockSet.fields heap s.blocks;
       top = s.top }
 
   let closure_variable s v =
@@ -680,7 +689,7 @@ let entry_point current_unit_id ~return ~uncaught expr =
   { state with stacks = CodeMap.singleton expr (StackSet.toplevel ~return ~uncaught) }
 
 let add_stack state stack expr =
-  Format.printf "add_stack %a@." Printflambda.flambda expr;
+  (* iprintf "add_stack %a@." Printflambda.flambda expr; *)
   let stacks =
     try CodeMap.find expr state.stacks
     with Not_found -> StackSet.empty in
@@ -759,16 +768,19 @@ let assign_top state v =
   let set = ValueSet.add_top set in
   { state with env = VarMap.add v set state.env }
 
+let escapes state v =
+  { state with escape = VarSet.union (VarSet.of_list v) state.escape }
+
 let ebinding state = function
   | Fvar (v, _) -> binding state v
   | f ->
-      Format.printf "ebinding %a@." Printflambda.flambda f;
+      Format.eprintf "ebinding %a@." Printflambda.flambda f;
       assert false (* forbidden in ANF *)
 
 let var = function
   | Fvar (v, _) -> v
   | f ->
-      Format.printf "var %a@." Printflambda.flambda f;
+      Format.eprintf "var %a@." Printflambda.flambda f;
       assert false (* forbidden in ANF *)
 
 let var_union state (vars: VarSet.t result) =
@@ -776,8 +788,12 @@ let var_union state (vars: VarSet.t result) =
   VarSet.fold (fun v -> ValueSet.union (binding state v))
     vars.values acc
 
+let var_union' state (vars: VarSet.t result) =
+  VarSet.fold (fun v -> ValueSet.union (binding state v))
+    vars.values ValueSet.empty
+
 let rec step_expr state stack expr =
-  Format.printf "go: %a@." Printflambda.flambda expr;
+  (* iprintf "go: %a@." Printflambda.flambda expr; *)
   match expr with
   | Flet(_, v, def, body, _) ->
       let state = step_let state (push_stack stack v body) v def in
@@ -806,7 +822,7 @@ let rec step_expr state stack expr =
       step_raise state stack arg
 
   | _ ->
-      Format.printf "not anf: %a@." Printflambda.flambda expr;
+      Format.eprintf "not anf: %a@." Printflambda.flambda expr;
       assert false
 
 and step_let state stack v def =
@@ -838,6 +854,10 @@ and step_let state stack v def =
 
       | Psetfield (i,_), [dst; contents] ->
           let r = ebinding state dst in
+          let state =
+            if ValueSet.is_top r
+            then escapes state [var contents]
+            else state in
           let contents = VarSet.singleton (var contents) in
           let heap = ValueSet.set_field state.heap r i contents in
           let state = { state with heap } in
@@ -847,8 +867,21 @@ and step_let state stack v def =
         | Pandint | Porint | Pxorint
         | Plslint | Plsrint | Pasrint
         | Pintcomp _), _ ->
-          Format.printf "eval prim@.";
+          iprintf "eval prim@.";
           assign_other state v
+
+      | (Pbintofint _ | Pintofbint _ | Pcvtbint _ | Pnegbint _ | Paddbint _
+        | Psubbint _ | Pmulbint _ | Pdivbint _ | Pmodbint _ | Pandbint _
+        | Porbint _ | Pxorbint _ | Plslbint _ | Plsrbint _ | Pasrbint _
+        | Pbintcomp _), _ ->
+        iprintf "eval bint prim@.";
+          assign_other state v
+
+      | Pidentity, [arg] ->
+          assign state v (ebinding state arg)
+
+      | Pgetglobal _, [] ->
+          assign_top state v
 
       | Pgetglobalfield (id, pos), [] ->
           if Ident.same id state.current_unit_id
@@ -860,13 +893,25 @@ and step_let state stack v def =
       | Psetglobalfield pos, [arg] ->
           let r = ebinding state arg in
           let state = assign_global state pos r in
+          let state = escapes state [var arg] in
           assign_other state v
 
       | Praise, [arg] ->
           step_raise state stack arg
 
+      | Pccall _, args ->
+          let state = escapes state (List.map var args) in
+          assign_top state v
+
+      | Pmakearray _, args ->
+          let state = escapes state (List.map var args) in
+          assign_top state v
+
+      | Pctconst _, _ ->
+          assign_other state v
+
       | _ ->
-          Format.printf "not implemented %a@." Printflambda.flambda def;
+          Format.eprintf "not implemented %a@." Printflambda.flambda def;
           assert false
       end
 
@@ -928,6 +973,17 @@ and step_let state stack v def =
       let state = goto_branch state stack body in
       assign_other state v
 
+  | Fswitch (arg,sw,_) ->
+      ignore(var arg); (* verify that it is a variables *)
+      let branches =
+        (List.map snd sw.fs_consts)
+        @ (List.map snd sw.fs_blocks) in
+      let branches = match sw.fs_failaction with
+        | None -> branches
+        | Some b -> b :: branches in
+      List.fold_left (fun state branch -> goto_branch state stack branch)
+        state branches
+
   (* | Funreachable _ -> () *)
 
 
@@ -937,10 +993,11 @@ and step_let state stack v def =
   (* | Fprim (_,l,_,_) -> *)
 
   (* | Fletrec (defs, body,_) -> *)
-  (* | Fswitch (arg,sw,_) -> *)
   (* | Fsend (_,f1,f2,fl,_,_) -> *)
 
-  | _ -> assert false
+  | _ ->
+      Format.eprintf "not implemented %a@." Printflambda.flambda def;
+      assert false
 
 and step_raise state stack arg =
   let values = ebinding state arg in
@@ -992,13 +1049,29 @@ and step_apply_direct (state:state) (stack:stack) f args =
   let result = if funs.top then ValueSet.top else ValueSet.empty in
   List.fold_left apply_one (state, result) funs.values
 
+let escape_variables state =
+  let q = Queue.create () in
+  let escaping = ref state.escape in
+  VarSet.iter (fun v -> Queue.push v q) state.escape;
+
+  while not (Queue.is_empty q) do
+    let v = Queue.pop q in
+    let value = binding state v in
+    let { values = fields } = ValueSet.fields state.heap value in
+    let new_escaping = VarSet.diff fields !escaping in
+    escaping := VarSet.union fields !escaping;
+    VarSet.iter (fun v -> Queue.push v q) new_escaping;
+  done;
+  { state with escape = !escaping }
+
 let step state =
   let aux code state =
-    Format.printf "step: %a@." Printflambda.flambda code;
+    (* iprintf "step: %a@." Printflambda.flambda code; *)
     let stack = CodeMap.find code state.stacks in
     step_expr state stack code
   in
-  CodeSet.fold aux state.reached state
+  let state = CodeSet.fold aux state.reached state in
+  escape_variables state
 
 let steps ~current_compilation_unit code i =
   let current_unit_id =
@@ -1010,7 +1083,8 @@ let steps ~current_compilation_unit code i =
     if n <= 0
     then state
     else
-      let () = Format.printf "steps: %i@." n in
+      (* let () = iprintf "steps: %i@." n in *)
+      let () = Format.printf "step: %i@." (i-n) in
       let state' = step state in
       if equal_state state state'
       then
