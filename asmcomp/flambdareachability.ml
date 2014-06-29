@@ -565,18 +565,26 @@ module CodeSet : sig
   type t
   val empty : t
   val add : code -> t -> t
+  val mem : code -> t -> bool
   val union : t -> t -> t
   val singleton : code -> t
   val fold : (code -> 'acc -> 'acc) -> t -> 'acc -> 'acc
   val equal : t -> t -> bool
+  val subset : t -> t -> bool
 end = struct
   type t = ExprId.t flambda ExprMap.t
   let empty = ExprMap.empty
   let add f s = ExprMap.add (data_at_toplevel_node f) f s
+  let mem f s = ExprMap.mem (data_at_toplevel_node f) s
   let union s1 s2 = ExprMap.union_right s1 s2
   let singleton f = ExprMap.singleton (data_at_toplevel_node f) f
   let fold f s acc = ExprMap.fold (fun _ code acc -> f code acc) s acc
   let equal s1 s2 = ExprMap.equal (fun _ _ -> true) s1 s2
+  let subset s1 s2 =
+    let aux k _ =
+      if not (ExprMap.mem k s2) then raise Exit
+    in
+    try ExprMap.iter aux s1; true with _ -> false
 end
 
 module CodeMap : sig
@@ -602,6 +610,7 @@ module StackPart : sig
   val empty : t
   val add : stack_part -> t -> t
   val union : t -> t -> t
+  val subset : t -> t -> bool
   val singleton : stack_part -> t
   val remove_return_var : t -> t
   val toplevel : Variable.t -> t
@@ -617,6 +626,9 @@ end = struct
   let union s1 s2 =
     { vars = VarSet.union s1.vars s2.vars;
       points = CodeSet.union s1.points s2.points }
+  let subset s1 s2 =
+    VarSet.subset s1.vars s2.vars &&
+    CodeSet.subset s1.points s2.points
   let singleton { return_var; return_point } =
     { vars = VarSet.singleton return_var;
       points = CodeSet.singleton return_point }
@@ -637,6 +649,7 @@ module StackSet : sig
   val add_raise : stack_part -> t -> t
   val union : t -> t -> t
   val equal : t -> t -> bool
+  val subset : t -> t -> bool
   val remove_return_var : t -> t
   val set_call : stack_part -> t -> t
   val set_raise : stack_part -> t -> t
@@ -656,6 +669,9 @@ end = struct
   let equal s1 s2 =
     StackPart.equal s1.calls s2.calls &&
     StackPart.equal s1.raises s2.raises
+  let subset s1 s2 =
+    StackPart.subset s1.calls s2.calls &&
+    StackPart.subset s1.raises s2.raises
   let remove_return_var s =
     { s with calls = StackPart.remove_return_var s.calls }
   let set_call call s =
@@ -721,7 +737,10 @@ let push_stack_exn (stack:stack) (ret:Variable.t) (kont:ExprId.t flambda) =
   StackSet.set_raise spart stack
 
 let reached state expr =
-  { state with k = { state.k with reached = CodeSet.add expr state.k.reached } }
+  if CodeSet.mem expr state.k.reached
+  then state
+  else
+    { state with k = { state.k with reached = CodeSet.add expr state.k.reached } }
 
 let entry_point current_unit_id ~return ~uncaught expr =
   let state = reached (initial_state current_unit_id) expr in
@@ -738,7 +757,10 @@ let add_stack state stack expr =
   let stacks =
     try CodeMap.find expr state.stacks
     with Not_found -> StackSet.empty in
-  { state with stacks = CodeMap.add expr (StackSet.union stack stacks) state.stacks }
+  if StackSet.subset stack stacks
+  then state
+  else
+    { state with stacks = CodeMap.add expr (StackSet.union stack stacks) state.stacks }
 
 let call (state:state) (stack:stack) (body:ExprId.t flambda) =
   let state = reached state body in
@@ -817,8 +839,12 @@ let assign_top state v =
   { state with env = VarMap.add v set state.env }
 
 let escapes state v =
-  { state with
-    k = { state.k with escape = VarSet.union (VarSet.of_list v) state.k.escape } }
+  let set = VarSet.of_list v in
+  if VarSet.subset set state.k.escape
+  then state
+  else
+    { state with
+      k = { state.k with escape = VarSet.union set state.k.escape } }
 
 let ebinding state = function
   | Fvar (v, _) -> binding state v
