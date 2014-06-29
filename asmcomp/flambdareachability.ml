@@ -676,36 +676,41 @@ end
 
 type stack = StackSet.t
 
-type state =
-  { reached : CodeSet.t;
-    stacks : StackSet.t CodeMap.t;
-    env : ValueSet.t VarMap.t;
-    heap : ValueSet.heap;
-    globals : ValueSet.t IntMap.t;
-    escape : VarSet.t;
-    current_unit_id : Ident.t;
+type kept_state =
+  { current_unit_id : Ident.t;
     escape_stack : StackSet.t;
     static_handler : (Variable.t list * code) StaticExceptionMap.t;
-  }
+    escape : VarSet.t;
+    globals : ValueSet.t IntMap.t;
+    reached : CodeSet.t }
+
+
+type state =
+  { stacks : StackSet.t CodeMap.t;
+    env : ValueSet.t VarMap.t;
+    heap : ValueSet.heap;
+    k : kept_state }
 
 let equal_state s1 s2 =
-  CodeSet.equal s1.reached s2.reached &&
+  CodeSet.equal s1.k.reached s2.k.reached &&
   CodeMap.equal StackSet.equal s1.stacks s2.stacks &&
   VarMap.equal ValueSet.equal s1.env s2.env &&
-  IntMap.equal ValueSet.equal s1.globals s2.globals &&
-  VarSet.equal s1.escape s2.escape &&
+  IntMap.equal ValueSet.equal s1.k.globals s2.k.globals &&
+  VarSet.equal s1.k.escape s2.k.escape &&
   ValueSet.equal_heap s1.heap s2.heap
 
 let initial_state current_unit_id =
-  { reached = CodeSet.empty;
-    stacks = CodeMap.empty;
+  let k = { reached = CodeSet.empty;
+            globals = IntMap.empty;
+            current_unit_id;
+            escape = VarSet.empty;
+            escape_stack = StackSet.empty;
+            static_handler = StaticExceptionMap.empty }
+  in
+  { stacks = CodeMap.empty;
     env = VarMap.empty;
     heap = ValueSet.empty_heap;
-    globals = IntMap.empty;
-    escape = VarSet.empty;
-    current_unit_id;
-    escape_stack = StackSet.empty;
-    static_handler = StaticExceptionMap.empty }
+    k }
 
 let push_stack (stack:stack) (ret:Variable.t) (kont:ExprId.t flambda) =
   let spart = { return_var = ret; return_point = kont } in
@@ -716,15 +721,17 @@ let push_stack_exn (stack:stack) (ret:Variable.t) (kont:ExprId.t flambda) =
   StackSet.set_raise spart stack
 
 let reached state expr =
-  { state with reached = CodeSet.add expr state.reached }
+  { state with k = { state.k with reached = CodeSet.add expr state.k.reached } }
 
 let entry_point current_unit_id ~return ~uncaught expr =
   let state = reached (initial_state current_unit_id) expr in
   let escape_stack = StackSet.toplevel ~return ~uncaught in
   { state with
-    escape = VarSet.of_list [return; uncaught];
     stacks = CodeMap.singleton expr escape_stack;
-    escape_stack = escape_stack }
+    k =
+      { state.k with
+        escape = VarSet.of_list [return; uncaught];
+        escape_stack = escape_stack } }
 
 let add_stack state stack expr =
   (* iprintf "add_stack %a@." Printflambda.flambda expr; *)
@@ -755,7 +762,7 @@ let binding state v =
   | Not_found -> ValueSet.empty
 
 let global state i =
-  try IntMap.find i state.globals with
+  try IntMap.find i state.k.globals with
   | Not_found -> ValueSet.empty
 
 let assign state v contents =
@@ -770,11 +777,11 @@ let assign state v contents =
 let assign_global state pos contents =
   let set =
     try
-      let set = IntMap.find pos state.globals in
+      let set = IntMap.find pos state.k.globals in
       ValueSet.union contents set
     with Not_found -> contents
   in
-  { state with globals = IntMap.add pos set state.globals }
+  { state with k = { state.k with globals = IntMap.add pos set state.k.globals } }
 
 let bound_or_empty state v =
   try VarMap.find v state.env
@@ -810,7 +817,8 @@ let assign_top state v =
   { state with env = VarMap.add v set state.env }
 
 let escapes state v =
-  { state with escape = VarSet.union (VarSet.of_list v) state.escape }
+  { state with
+    k = { state.k with escape = VarSet.union (VarSet.of_list v) state.k.escape } }
 
 let ebinding state = function
   | Fvar (v, _) -> binding state v
@@ -996,6 +1004,9 @@ and step_let state stack v def =
           let state = escapes state [var content] in
           assign_other state v
 
+      | (Pfloatfield _ | Psetfloatfield _), _ ->
+          assign_other state v
+
       | Pidentity, [arg] ->
           assign state v (ebinding state arg)
 
@@ -1003,7 +1014,7 @@ and step_let state stack v def =
           assign_top state v
 
       | Pgetglobalfield (id, pos), [] ->
-          if Ident.same id state.current_unit_id
+          if Ident.same id state.k.current_unit_id
           then
             let r = global state pos in
             assign state v r
@@ -1130,7 +1141,7 @@ and step_for state stack id lo hi body =
   return_other state stack
 
 and step_staticraise state stack sexn args =
-  let vars, handler = StaticExceptionMap.find sexn state.static_handler in
+  let vars, handler = StaticExceptionMap.find sexn state.k.static_handler in
   let args = List.map (ebinding state) args in
   assert(List.length vars = List.length args);
   let state = List.fold_left2 assign state vars args in
@@ -1139,8 +1150,9 @@ and step_staticraise state stack sexn args =
 and step_staticcatch state stack sexn vars body handler =
   let state =
     { state with
-      static_handler =
-        StaticExceptionMap.add sexn (vars, handler) state.static_handler} in
+      k = { state.k with
+            static_handler =
+              StaticExceptionMap.add sexn (vars, handler) state.k.static_handler }} in
   let state = goto_branch state stack body in
   add_stack state stack handler
 
@@ -1207,8 +1219,8 @@ and step_apply_direct (state:state) (stack:stack) f args =
 
 let escape_variables state =
   let q = Queue.create () in
-  let escaping = ref state.escape in
-  VarSet.iter (fun v -> Queue.push v q) state.escape;
+  let escaping = ref state.k.escape in
+  VarSet.iter (fun v -> Queue.push v q) state.k.escape;
 
   while not (Queue.is_empty q) do
     let v = Queue.pop q in
@@ -1218,12 +1230,12 @@ let escape_variables state =
     escaping := VarSet.union fields !escaping;
     VarSet.iter (fun v -> Queue.push v q) new_escaping;
   done;
-  { state with escape = !escaping }
+  { state with k = { state.k with escape = !escaping } }
 
 let escape_functions state =
   let escape_function state ((arg, _, (other_args, code)):Value.func) =
     let state = List.fold_left assign_top state (arg :: other_args) in
-    goto_branch state state.escape_stack code
+    goto_branch state state.k.escape_stack code
   in
   let aux v state =
     let value = binding state v in
@@ -1233,7 +1245,7 @@ let escape_functions state =
     List.fold_left escape_function state
       (FuncSet.elements ufunctions.values)
   in
-  VarSet.fold aux state.escape state
+  VarSet.fold aux state.k.escape state
 
 let step state =
   let aux code state =
@@ -1241,7 +1253,7 @@ let step state =
     let stack = CodeMap.find code state.stacks in
     step_expr state stack code
   in
-  let state = CodeSet.fold aux state.reached state in
+  let state = CodeSet.fold aux state.k.reached state in
   let state = escape_variables state in
   escape_functions state
 
@@ -1257,9 +1269,16 @@ let steps ~current_compilation_unit code i =
     else
       (* let () = iprintf "steps: %i@." n in *)
       let () = Format.printf "step: %i@." (i-n) in
+      let st1 = Gc.quick_stat () in
       let state' = step state in
+      let st2 = Gc.quick_stat () in
       let () = iprintf "escape %a@."
-          VarSet.print state.escape in
+          VarSet.print state.k.escape in
+      let () = Format.printf "minor: %f\nmajor: %f\npromoted_words: %f\ncompact:%i@."
+          (st2.Gc.minor_words -. st1.Gc.minor_words)
+          (st2.Gc.major_words -. st1.Gc.major_words)
+          (st2.Gc.promoted_words -. st1.Gc.promoted_words)
+          (st2.Gc.compactions - st1.Gc.compactions) in
       if equal_state state state'
       then
         let () = Format.printf "fixpoint: %i@." (i-n) in
