@@ -36,7 +36,7 @@ let anf current_compilation_unit tree =
         let binds = Simple (kind,id,elam) :: binds_lam in
         decompose binds body
     | Fletrec (defs, body, _) ->
-        let defs = List.map (fun (id, lam) -> id, decompose_recompose lam) defs in
+        let defs = List.map (fun (id, lam) -> id, anf lam) defs in
         let binds = Rec defs :: binds in
         decompose binds body
     | Fprim(Lambda.Psequand | Lambda.Psequor as prim, [arg1; arg2], dbg, eid) ->
@@ -44,8 +44,10 @@ let anf current_compilation_unit tree =
            to keep it correct we convert it to ifthenelse *)
         let binds, arg1 = decompose_tovar binds arg1 in
         let ifso, ifnot = match prim with
-          | Lambda.Psequand -> anf arg2, Fconst (Fconst_pointer 0, ExprId.create ())
-          | _ -> Fconst (Fconst_pointer 1, ExprId.create ()), anf arg2 in
+          | Lambda.Psequand -> arg2, Fconst (Fconst_pointer 0, ExprId.create ())
+          | _ -> Fconst (Fconst_pointer 1, ExprId.create ()), arg2 in
+        let ifso = anf ifso in
+        let ifnot = anf ifnot in
         binds, Fifthenelse(arg1, ifso, ifnot, eid)
     | Fprim(prim, args, dbg, eid) ->
         let binds, args = decompose_tovar_list binds args in
@@ -168,9 +170,9 @@ let anf current_compilation_unit tree =
     in
     List.fold_left aux body binds
 
-  and decompose_recompose expr =
-    let binds, body = decompose [] expr in
-    recompose binds body
+  (* and decompose_recompose expr = *)
+  (*   let binds, body = decompose [] expr in *)
+  (*   recompose binds body *)
 
   and simple_expr_tovar binds expr = match expr with
     (* control expression are kept as is, var and const also, everything
