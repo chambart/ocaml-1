@@ -529,6 +529,7 @@ module ValueSet = struct
   (*********************)
 
   let is_top s = s.top
+  let is_other s = s.other
 
   let field heap s i =
     { values = BlockSet.field heap s.blocks i;
@@ -697,7 +698,7 @@ type kept_state =
     escape_stack : StackSet.t;
     static_handler : (Variable.t list * code) StaticExceptionMap.t;
     escape : VarSet.t;
-    globals : ValueSet.t IntMap.t;
+    globals : Variable.t IntMap.t;
     reached : CodeSet.t }
 
 
@@ -711,7 +712,7 @@ let equal_state s1 s2 =
   CodeSet.equal s1.k.reached s2.k.reached &&
   CodeMap.equal StackSet.equal s1.stacks s2.stacks &&
   VarMap.equal ValueSet.equal s1.env s2.env &&
-  IntMap.equal ValueSet.equal s1.k.globals s2.k.globals &&
+  IntMap.equal Variable.equal s1.k.globals s2.k.globals &&
   VarSet.equal s1.k.escape s2.k.escape &&
   ValueSet.equal_heap s1.heap s2.heap
 
@@ -784,7 +785,7 @@ let binding state v =
   | Not_found -> ValueSet.empty
 
 let global state i =
-  try IntMap.find i state.k.globals with
+  try binding state (IntMap.find i state.k.globals) with
   | Not_found -> ValueSet.empty
 
 let assign state v contents =
@@ -796,14 +797,14 @@ let assign state v contents =
   in
   { state with env = VarMap.add v set state.env }
 
-let assign_global state pos contents =
-  let set =
-    try
-      let set = IntMap.find pos state.k.globals in
-      ValueSet.union contents set
-    with Not_found -> contents
-  in
-  { state with k = { state.k with globals = IntMap.add pos set state.k.globals } }
+let assign_global state pos v =
+  try
+    let v' = IntMap.find pos state.k.globals in
+    assert(Variable.equal v v');
+    (* there must be a single assignment point for a global *)
+    state
+  with Not_found ->
+    { state with k = { state.k with globals = IntMap.add pos v state.k.globals } }
 
 let bound_or_empty state v =
   try VarMap.find v state.env
@@ -830,13 +831,19 @@ let assign_func_r state v func =
 
 let assign_other state v =
   let set = bound_or_empty state v in
-  let set = ValueSet.add_other set in
-  { state with env = VarMap.add v set state.env }
+  if ValueSet.is_other set
+  then state
+  else
+    let set = ValueSet.add_other set in
+    { state with env = VarMap.add v set state.env }
 
 let assign_top state v =
   let set = bound_or_empty state v in
-  let set = ValueSet.add_top set in
-  { state with env = VarMap.add v set state.env }
+  if ValueSet.is_top set
+  then state
+  else
+    let set = ValueSet.add_top set in
+    { state with env = VarMap.add v set state.env }
 
 let escapes state v =
   let set = VarSet.of_list v in
@@ -960,8 +967,12 @@ and step_let state stack v def =
       let open Lambda in
       begin match prim, args with
       | Pmakeblock(_tag,mut), _ ->
-          let res = Value.block v mut (Array.map var (Array.of_list args)) in
-          assign_block state v res
+          if VarMap.mem v state.env
+          then state
+          else
+            let res = Value.block v mut (Array.map var (Array.of_list args)) in
+            assign_block state v res
+
       | Pfield i, [arg] ->
           let r = ebinding state arg in
           let res = var_union state (ValueSet.field state.heap r i) in
@@ -1047,9 +1058,9 @@ and step_let state stack v def =
           else assign_top state v
 
       | Psetglobalfield pos, [arg] ->
-          let r = ebinding state arg in
-          let state = assign_global state pos r in
-          let state = escapes state [var arg] in
+          let arg = var arg in
+          let state = assign_global state pos arg in
+          let state = escapes state [arg] in
           assign_other state v
 
       | Praise, [arg] ->
