@@ -1296,10 +1296,13 @@ let steps ~current_compilation_unit code i =
       (* let () = iprintf "steps: %i@." n in *)
       let () = Format.printf "step: %i@." (i-n) in
       let st1 = Gc.quick_stat () in
+      let t1 = Sys.time () in
       let state' = step state in
+      let t2 = Sys.time () in
       let st2 = Gc.quick_stat () in
       let () = iprintf "escape %a@."
           VarSet.print state.k.escape in
+      let () = Format.printf "step time: %f@." (t2 -. t1) in
       let () = Format.printf "minor: %f\nmajor: %f\npromoted_words: %f\ncompact:%i@."
           (st2.Gc.minor_words -. st1.Gc.minor_words)
           (st2.Gc.major_words -. st1.Gc.major_words)
@@ -1319,4 +1322,7 @@ let test ~current_compilation_unit expr =
   then
     let expr = Flambdaanf.anf current_compilation_unit expr in
     iprintf "anf: %a@." Printflambda.flambda expr;
-    ignore (steps ~current_compilation_unit expr 20)
+    let t1 = Sys.time () in
+    ignore (steps ~current_compilation_unit expr 20);
+    let t2 = Sys.time () in
+    Format.printf "total time: %f@." (t2 -. t1)
