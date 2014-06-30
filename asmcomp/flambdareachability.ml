@@ -575,7 +575,13 @@ module CodeSet : sig
 end = struct
   type t = ExprId.t flambda ExprMap.t
   let empty = ExprMap.empty
-  let add f s = ExprMap.add (data_at_toplevel_node f) f s
+  let add f s =
+    let d = data_at_toplevel_node f in
+    try
+      let f' = ExprMap.find d s in
+      assert(f == f');
+      s
+    with Not_found -> ExprMap.add d f s
   let mem f s = ExprMap.mem (data_at_toplevel_node f) s
   let union s1 s2 = ExprMap.union_right s1 s2
   let singleton f = ExprMap.singleton (data_at_toplevel_node f) f
