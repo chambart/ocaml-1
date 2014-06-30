@@ -667,8 +667,8 @@ end
 module StackSet : sig
   type t
   val empty : t
-  val add_call : stack_part -> t -> t
-  val add_raise : stack_part -> t -> t
+  (* val add_call : stack_part -> t -> t *)
+  (* val add_raise : stack_part -> t -> t *)
   val union : t -> t -> t
   val equal : t -> t -> bool
   val subset : t -> t -> bool
@@ -683,8 +683,16 @@ module StackSet : sig
 end = struct
   type t = { calls : StackPart.t; raises : StackPart.t }
   let empty = { calls = StackPart.empty; raises = StackPart.empty }
-  let add_call call s = { s with calls = StackPart.add call s.calls }
-  let add_raise raisep s = { s with raises = StackPart.add raisep s.raises }
+  (* let add_call call s = *)
+  (*   let calls = StackPart.add call s.calls in *)
+  (*   if calls == s.calls *)
+  (*   then s *)
+  (*   else { s with calls = StackPart.add call s.calls } *)
+  (* let add_raise raisep s = *)
+  (*   let raises = StackPart.add raisep s.raises in *)
+  (*   if raises == s.raises *)
+  (*   then s *)
+  (*   else { s with raises = StackPart.add raisep s.raises } *)
   let union s1 s2 =
     let calls = StackPart.union s1.calls s2.calls in
     let raises = StackPart.union s1.raises s2.raises in
@@ -699,6 +707,7 @@ end = struct
   let subset s1 s2 =
     StackPart.subset s1.calls s2.calls &&
     StackPart.subset s1.raises s2.raises
+
   let remove_return_var s =
     { s with calls = StackPart.remove_return_var s.calls }
   let set_call call s =
@@ -734,6 +743,23 @@ type state =
     heap : ValueSet.heap;
     new_reached : CodeSet.t;
     k : kept_state }
+
+(* let equal_state s1 s2 = *)
+(*   let f ppf b = *)
+(*     if b *)
+(*     then Format.pp_print_string ppf " true" *)
+(*     else Format.pp_print_string ppf "false" *)
+(*   in *)
+(*   let reached = CodeSet.equal s1.k.reached s2.k.reached in *)
+(*   let stacks = CodeMap.equal StackSet.equal s1.stacks s2.stacks in *)
+(*   let env = VarMap.equal ValueSet.equal s1.env s2.env in *)
+(*   let globals = IntMap.equal Variable.equal s1.k.globals s2.k.globals in *)
+(*   let escape = VarSet.equal s1.k.escape s2.k.escape in *)
+(*   let heap = ValueSet.equal_heap s1.heap s2.heap in *)
+(*   let equal = reached && stacks && env && globals && escape && heap in *)
+(*   Format.printf "equal: %a@   @[reached: %a @ stacks: %a @ env: %a @ globals: %a @ escape: %a @ heap: %a@]@." *)
+(*     f equal f reached f stacks f env f globals f escape f heap; *)
+(*   equal *)
 
 let equal_state s1 s2 =
   CodeSet.equal s1.k.reached s2.k.reached &&
@@ -792,7 +818,9 @@ let add_stack state stack expr =
   if union == stacks
   then state
   else
-    { state with stacks = CodeMap.add expr (StackSet.union stack stacks) state.stacks }
+    { state with
+      stacks = CodeMap.add expr union state.stacks;
+      new_reached = CodeSet.add expr state.new_reached }
 
 let goto_branch (state:state) (stack:stack) (expr:ExprId.t flambda) =
   let state = reached state expr in
@@ -964,7 +992,12 @@ let rec step_expr state stack expr =
       assert false
 
 and step_let' state stack v def body =
-  let state = add_stack state stack body in
+  let state =
+    let state' = add_stack state stack body in
+    (* if not (state == state') *)
+    (* then Format.printf "new stack %a@." Variable.print v; *)
+    state'
+  in
   let state = step_let state (push_stack stack v body) v def in
   if ValueSet.is_empty (binding state v)
   then state
@@ -1248,6 +1281,7 @@ and step_raise state stack arg =
   state
 
 and step_if state stack cond ifso ifnot =
+  (* let () = Format.printf "stepif %a" Printflambda.flambda cond in *)
   let cond = ebinding state cond in
   if ValueSet.is_empty cond
   then state
@@ -1318,7 +1352,7 @@ let escape_functions state =
   VarSet.fold aux state.k.escape state
 
 let substep state =
-  Format.printf "substep@.";
+  (* Format.printf "substep@."; *)
   let aux code state =
     (* iprintf "step: %a@." Printflambda.flambda code; *)
     let stack =
@@ -1339,7 +1373,7 @@ let step state =
     let state = substep state in
     if CodeSet.is_empty state.new_reached
     then
-      let () = Format.printf "escapes@." in
+      (* let () = Format.printf "escapes@." in *)
       let state = escape_variables state in
       let state = escape_functions state in
       if CodeSet.is_empty state.new_reached
@@ -1367,27 +1401,27 @@ let steps ~current_compilation_unit code i =
   let state = entry_point current_unit_id ~return ~uncaught code in
   let rec aux state n =
     if n <= 0
-    then state
+    then state, false
     else
       (* let () = iprintf "steps: %i@." n in *)
-      let () = Format.printf "step: %i@." (i-n) in
-      let st1 = Gc.quick_stat () in
-      let t1 = Sys.time () in
+      (* let () = Format.printf "step: %i@." (i-n) in *)
+      (* let st1 = Gc.quick_stat () in *)
+      (* let t1 = Sys.time () in *)
       let state' = step state in
-      let t2 = Sys.time () in
-      let st2 = Gc.quick_stat () in
+      (* let t2 = Sys.time () in *)
+      (* let st2 = Gc.quick_stat () in *)
       let () = iprintf "escape %a@."
           VarSet.print state.k.escape in
-      let () = Format.printf "step time: %f@." (t2 -. t1) in
-      let () = Format.printf "minor: %f\nmajor: %f\npromoted_words: %f\ncompact:%i@."
-          (st2.Gc.minor_words -. st1.Gc.minor_words)
-          (st2.Gc.major_words -. st1.Gc.major_words)
-          (st2.Gc.promoted_words -. st1.Gc.promoted_words)
-          (st2.Gc.compactions - st1.Gc.compactions) in
+      (* let () = Format.printf "step time: %f@." (t2 -. t1) in *)
+      (* let () = Format.printf "minor: %f\nmajor: %f\npromoted_words: %f\ncompact:%i@." *)
+      (*     (st2.Gc.minor_words -. st1.Gc.minor_words) *)
+      (*     (st2.Gc.major_words -. st1.Gc.major_words) *)
+      (*     (st2.Gc.promoted_words -. st1.Gc.promoted_words) *)
+      (*     (st2.Gc.compactions - st1.Gc.compactions) in *)
       if equal_state state state'
       then
         let () = Format.printf "fixpoint: %i@." (i-n) in
-        state
+        state, true
       else aux state' (n-1)
   in
   aux state i
@@ -1399,7 +1433,16 @@ let test ~current_compilation_unit expr =
     let expr = Flambdaanf.anf current_compilation_unit expr in
     if !Clflags.dump_flambda
     then Format.printf "anf: %a@." Printflambda.flambda expr;
+    (* let st1 = Gc.quick_stat () in *)
     let t1 = Sys.time () in
-    ignore (steps ~current_compilation_unit expr 20);
+    let _, fixpoint = steps ~current_compilation_unit expr 100 in
     let t2 = Sys.time () in
-    Format.printf "total time: %f@." (t2 -. t1)
+    (* let st2 = Gc.quick_stat () in *)
+    Format.printf "total time: %f@." (t2 -. t1);
+    (* let () = Format.printf "minor: %f\nmajor: %f\npromoted_words: %f\ncompact:%i@." *)
+    (*     (st2.Gc.minor_words -. st1.Gc.minor_words) *)
+    (*     (st2.Gc.major_words -. st1.Gc.major_words) *)
+    (*     (st2.Gc.promoted_words -. st1.Gc.promoted_words) *)
+    (*     (st2.Gc.compactions - st1.Gc.compactions) in *)
+    if not fixpoint
+    then failwith "fixpoint not reached"
