@@ -617,6 +617,7 @@ type stack_part = { return_var : Variable.t; return_point : code }
 module StackPart : sig
   type t
   val empty : t
+  val is_empty : t -> bool
   val add : stack_part -> t -> t
   val union : t -> t -> t
   val subset : t -> t -> bool
@@ -629,15 +630,27 @@ module StackPart : sig
 end = struct
   type t = { vars : VarSet.t; points : CodeSet.t }
   let empty = { vars = VarSet.empty; points = CodeSet.empty }
-  let add { return_var; return_point } { vars; points } =
-    { vars = VarSet.add return_var vars;
-      points = CodeSet.add return_point points }
-  let union s1 s2 =
-    { vars = VarSet.union s1.vars s2.vars;
-      points = CodeSet.union s1.points s2.points }
+  let is_empty { vars; points } =
+    VarSet.is_empty vars &&
+    CodeSet.is_empty points
+  let add { return_var; return_point } ({ vars; points } as set) =
+    if VarSet.mem return_var vars && CodeSet.mem return_point points
+    then set
+    else
+      { vars = VarSet.add return_var vars;
+        points = CodeSet.add return_point points }
   let subset s1 s2 =
     VarSet.subset s1.vars s2.vars &&
     CodeSet.subset s1.points s2.points
+  let union s1 s2 =
+    if subset s1 s2
+    then s2
+    else
+      if subset s2 s1
+      then s1
+      else
+        { vars = VarSet.union s1.vars s2.vars;
+          points = CodeSet.union s1.points s2.points }
   let singleton { return_var; return_point } =
     { vars = VarSet.singleton return_var;
       points = CodeSet.singleton return_point }
@@ -673,8 +686,13 @@ end = struct
   let add_call call s = { s with calls = StackPart.add call s.calls }
   let add_raise raisep s = { s with raises = StackPart.add raisep s.raises }
   let union s1 s2 =
-    { calls = StackPart.union s1.calls s2.calls;
-      raises = StackPart.union s1.raises s2.raises }
+    let calls = StackPart.union s1.calls s2.calls in
+    let raises = StackPart.union s1.raises s2.raises in
+    if (calls == s1.calls) && (raises == s1.raises)
+    then s1
+    else if (calls == s2.calls) && (raises == s2.raises)
+    then s2
+    else { calls; raises }
   let equal s1 s2 =
     StackPart.equal s1.calls s2.calls &&
     StackPart.equal s1.raises s2.raises
@@ -770,7 +788,8 @@ let add_stack state stack expr =
   let stacks =
     try CodeMap.find expr state.stacks
     with Not_found -> StackSet.empty in
-  if StackSet.subset stack stacks
+  let union = StackSet.union stack stacks in
+  if union == stacks
   then state
   else
     { state with stacks = CodeMap.add expr (StackSet.union stack stacks) state.stacks }
@@ -900,7 +919,8 @@ let rec step_expr state stack expr =
       then state
       else
         let state = reached state body in
-        step_expr state stack body
+        (* step_expr state stack body *)
+        state
 
   | Fvar(v, _) ->
       let values = binding state v in
@@ -949,8 +969,13 @@ and step_let' state stack v def body =
   if ValueSet.is_empty (binding state v)
   then state
   else
-    let state = reached state body in
-    step_expr state stack body
+    let state =
+      let state' = reached state body in
+      (* if not (state == state') *)
+      (* then Format.printf "new reached body %a@." Variable.print v; *)
+      state' in
+    (* step_expr state stack body *)
+    state
 
 and step_let state stack v def =
   match def with
