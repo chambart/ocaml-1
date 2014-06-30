@@ -211,7 +211,7 @@ let rec iter f = function
       iter f l; f k.ident k.data; iter f r
 
 let compare x y =
-  let c = compare x.stamp y.stamp in
+  let c = x.stamp - y.stamp in
   if c = 0
   then compare x.name y.name
   else
