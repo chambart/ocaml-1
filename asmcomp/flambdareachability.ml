@@ -565,6 +565,7 @@ type code = ExprId.t flambda
 module CodeSet : sig
   type t
   val empty : t
+  val is_empty : t -> bool
   val add : code -> t -> t
   val mem : code -> t -> bool
   val union : t -> t -> t
@@ -575,6 +576,7 @@ module CodeSet : sig
 end = struct
   type t = ExprId.t flambda ExprMap.t
   let empty = ExprMap.empty
+  let is_empty = ExprMap.is_empty
   let add f s =
     let d = data_at_toplevel_node f in
     try
@@ -712,6 +714,7 @@ type state =
   { stacks : StackSet.t CodeMap.t;
     env : ValueSet.t VarMap.t;
     heap : ValueSet.heap;
+    new_reached : CodeSet.t;
     k : kept_state }
 
 let equal_state s1 s2 =
@@ -733,6 +736,7 @@ let initial_state current_unit_id =
   { stacks = CodeMap.empty;
     env = VarMap.empty;
     heap = ValueSet.empty_heap;
+    new_reached = CodeSet.empty;
     k }
 
 let push_stack (stack:stack) (ret:Variable.t) (kont:ExprId.t flambda) =
@@ -747,7 +751,9 @@ let reached state expr =
   if CodeSet.mem expr state.k.reached
   then state
   else
-    { state with k = { state.k with reached = CodeSet.add expr state.k.reached } }
+    { state with
+      new_reached = CodeSet.add expr state.new_reached;
+      k = { state.k with reached = CodeSet.add expr state.k.reached } }
 
 let entry_point current_unit_id ~return ~uncaught expr =
   let state = reached (initial_state current_unit_id) expr in
@@ -769,22 +775,16 @@ let add_stack state stack expr =
   else
     { state with stacks = CodeMap.add expr (StackSet.union stack stacks) state.stacks }
 
-let call (state:state) (stack:stack) (body:ExprId.t flambda) =
-  let state = reached state body in
-  add_stack state stack body
-
 let goto_branch (state:state) (stack:stack) (expr:ExprId.t flambda) =
   let state = reached state expr in
   add_stack state stack expr
 
+let call (state:state) (stack:stack) (body:ExprId.t flambda) =
+  goto_branch state stack body
+
 let goto_branch_no_return (state:state) (stack:stack) (expr:ExprId.t flambda) =
   let stack = StackSet.remove_return_var stack in
-  let state = reached state expr in
-  add_stack state stack expr
-
-let goto_body (state:state) (stack:stack) (expr:ExprId.t flambda) =
-  let state = reached state expr in
-  add_stack state stack expr
+  goto_branch state stack expr
 
 let binding state v =
   try VarMap.find v state.env with
@@ -891,6 +891,7 @@ let rec step_expr state stack expr =
       step_let' state stack v def body
 
   | Fletrec (defs, body,_) ->
+      let state = add_stack state stack body in
       let state =
         List.fold_left (fun state (v, def) ->
             step_let state (push_stack stack v body) v def)
@@ -898,7 +899,7 @@ let rec step_expr state stack expr =
       if List.exists (fun (v,_) -> ValueSet.is_empty (binding state v)) defs
       then state
       else
-        let state = goto_body state stack body in
+        let state = reached state body in
         step_expr state stack body
 
   | Fvar(v, _) ->
@@ -943,11 +944,12 @@ let rec step_expr state stack expr =
       assert false
 
 and step_let' state stack v def body =
+  let state = add_stack state stack body in
   let state = step_let state (push_stack stack v body) v def in
   if ValueSet.is_empty (binding state v)
   then state
   else
-    let state = goto_body state stack body in
+    let state = reached state body in
     step_expr state stack body
 
 and step_let state stack v def =
@@ -1290,15 +1292,47 @@ let escape_functions state =
   in
   VarSet.fold aux state.k.escape state
 
-let step state =
+let substep state =
+  Format.printf "substep@.";
   let aux code state =
     (* iprintf "step: %a@." Printflambda.flambda code; *)
-    let stack = CodeMap.find code state.stacks in
+    let stack =
+      try CodeMap.find code state.stacks
+      with Not_found ->
+        Format.eprintf "missing stack: %a@." Printflambda.flambda code;
+        assert false
+    in
     step_expr state stack code
   in
-  let state = CodeSet.fold aux state.k.reached state in
-  let state = escape_variables state in
-  escape_functions state
+  let new_reached = state.new_reached in
+  let state = { state with new_reached = CodeSet.empty } in
+  let state = CodeSet.fold aux new_reached state in
+  state
+
+let step state =
+  let rec aux state =
+    let state = substep state in
+    if CodeSet.is_empty state.new_reached
+    then
+      let () = Format.printf "escapes@." in
+      let state = escape_variables state in
+      let state = escape_functions state in
+      if CodeSet.is_empty state.new_reached
+      then state
+      else aux state
+    else aux state
+  in
+  aux { state with new_reached = state.k.reached }
+
+(* let step state = *)
+(*   let aux code state = *)
+(*     (\* iprintf "step: %a@." Printflambda.flambda code; *\) *)
+(*     let stack = CodeMap.find code state.stacks in *)
+(*     step_expr state stack code *)
+(*   in *)
+(*   let state = CodeSet.fold aux state.k.reached state in *)
+(*   let state = escape_variables state in *)
+(*   escape_functions state *)
 
 let steps ~current_compilation_unit code i =
   let current_unit_id =
@@ -1338,7 +1372,8 @@ let test ~current_compilation_unit expr =
   if Clflags.experiments
   then
     let expr = Flambdaanf.anf current_compilation_unit expr in
-    iprintf "anf: %a@." Printflambda.flambda expr;
+    if !Clflags.dump_flambda
+    then Format.printf "anf: %a@." Printflambda.flambda expr;
     let t1 = Sys.time () in
     ignore (steps ~current_compilation_unit expr 20);
     let t2 = Sys.time () in
