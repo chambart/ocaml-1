@@ -122,6 +122,8 @@ let test ppf lam =
       lam in
   dump_and_check "flambdagen" flam;
 
+  Flambdareachability.test ~current_compilation_unit flam;
+
   (* keep passes linked in the cma *)
   ignore (Flambdasimplify.passes);
   ignore (Flambdaspec.passes);
