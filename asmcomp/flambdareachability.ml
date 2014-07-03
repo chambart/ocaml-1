@@ -83,6 +83,7 @@ module Value = struct
         VarMap.compare compare_fun u1 u2
 
   let block v mut args : block = v, mut, Array.map VarSet.singleton args
+  let blocks v mut args : block = v, mut, args
 
   let func arg clos n expr : func = arg, clos, (n, expr)
 
@@ -538,6 +539,9 @@ module ValueSet = struct
   let fields heap s =
     { values = BlockSet.fields heap s.blocks;
       top = s.top }
+
+  let field_no_top heap s i =
+    BlockSet.field heap s.blocks i
 
   let closure_variable s v =
     { values = FuncSet.closure_variable s.funcs v;
@@ -1038,6 +1042,15 @@ and step_let state stack v def =
           else
             let res = Value.block v mut (Array.map var (Array.of_list args)) in
             assign_block state v res
+
+      | Pduprecord (_,size), [arg] ->
+          let arg = ebinding state arg in
+          let a = Array.init size (ValueSet.field_no_top state.heap arg) in
+          let res = Value.blocks v Asttypes.Mutable a in
+          let state = assign_block state v res in
+          if ValueSet.is_top arg
+          then assign_top state v
+          else state
 
       | Pfield i, [arg] ->
           let r = ebinding state arg in
