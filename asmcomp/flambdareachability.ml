@@ -2,6 +2,14 @@ open Ext_types
 open Abstract_identifiers
 open Flambda
 
+let print_anf = try Sys.getenv "PANF" = "y" with _ -> false
+
+let print_r = try Sys.getenv "RREACH" = "y" with _ -> false
+let iprintf_r f =
+  if print_r
+  then Format.fprintf Format.std_formatter f
+  else Format.ifprintf Format.std_formatter f
+
 let print = try Sys.getenv "REACH" = "y" with _ -> false
 let iprintf f =
   if print
@@ -607,13 +615,17 @@ module CodeMap : sig
   val singleton : code -> 'a -> 'a t
   val find : code -> 'a t -> 'a
   val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
+  val fold : (code -> 'a -> 'acc -> 'acc) -> 'a t -> 'acc -> 'acc
+  val iter : (code -> 'a -> unit) -> 'a t -> unit
 end = struct
-  type 'a t = 'a ExprMap.t
+  type 'a t = ('a * code) ExprMap.t
   let empty = ExprMap.empty
-  let add f v s = ExprMap.add (data_at_toplevel_node f) v s
-  let singleton f v = ExprMap.singleton (data_at_toplevel_node f) v
-  let find f s = ExprMap.find (data_at_toplevel_node f) s
-  let equal f s1 s2 = ExprMap.equal f s1 s2
+  let add f v s = ExprMap.add (data_at_toplevel_node f) (v,f) s
+  let singleton f v = ExprMap.singleton (data_at_toplevel_node f) (v,f)
+  let find f s = fst (ExprMap.find (data_at_toplevel_node f) s)
+  let equal f s1 s2 = ExprMap.equal (fun (v1,_) (v2,_) -> f v1 v2) s1 s2
+  let fold f s acc = ExprMap.fold (fun _ (v,c) acc -> f c v acc) s acc
+  let iter f s = ExprMap.iter (fun _ (v,c) -> f c v) s
 end
 
 type stack_part = { return_var : Variable.t; return_point : code }
@@ -631,6 +643,7 @@ module StackPart : sig
   val return_vars : t -> VarSet.t
   val return_points : t -> CodeSet.t
   val equal : t -> t -> bool
+  val print : Format.formatter -> t -> unit
 end = struct
   type t = { vars : VarSet.t; points : CodeSet.t }
   let empty = { vars = VarSet.empty; points = CodeSet.empty }
@@ -666,6 +679,7 @@ end = struct
   let toplevel v = { vars = VarSet.singleton v; points = CodeSet.empty }
   let remove_return_var s =
     { vars = VarSet.empty; points = s.points }
+  let print ppf v = VarSet.print ppf v.vars
 end
 
 module StackSet : sig
@@ -684,6 +698,7 @@ module StackSet : sig
   val exn_return_vars : t -> VarSet.t
   val exn_return_points : t -> CodeSet.t
   val toplevel : return:Variable.t -> uncaught:Variable.t -> t
+  val print : Format.formatter -> t -> unit
 end = struct
   type t = { calls : StackPart.t; raises : StackPart.t }
   let empty = { calls = StackPart.empty; raises = StackPart.empty }
@@ -728,6 +743,10 @@ end = struct
   let toplevel ~return ~uncaught =
     { calls = StackPart.toplevel return;
       raises = StackPart.toplevel uncaught }
+
+  let print ppf v =
+    StackPart.print ppf v.calls
+
 end
 
 type stack = StackSet.t
@@ -747,6 +766,32 @@ type state =
     heap : ValueSet.heap;
     new_reached : CodeSet.t;
     k : kept_state }
+
+let print_stacks ppf s =
+  CodeMap.iter
+    (fun code stacks ->
+       match code with
+       | Fvar(v, _) ->
+           Format.fprintf ppf "%a -> %a@ "
+             Variable.print v
+             StackSet.print stacks
+       | _ -> ())
+    s
+
+let print_env heap ppf _ = ()
+
+let print_reached ppf s =
+  CodeSet.fold (fun code () ->
+      Format.fprintf ppf "%s@ "
+        (description_of_toplevel_node code))
+    s ()
+
+let print_state ppf s =
+  Format.fprintf ppf
+    "{@[stacks: %a@ env: %a@ reached: %a@ @]}"
+    print_stacks s.stacks
+    (print_env s.heap) s.env
+    print_reached s.k.reached
 
 (* let equal_state s1 s2 = *)
 (*   let f ppf b = *)
@@ -1444,11 +1489,11 @@ let test ~current_compilation_unit expr =
   if Clflags.experiments
   then
     let expr = Flambdaanf.anf current_compilation_unit expr in
-    if !Clflags.dump_flambda
+    if !Clflags.dump_flambda || print_anf
     then Format.printf "anf: %a@." Printflambda.flambda expr;
     (* let st1 = Gc.quick_stat () in *)
     let t1 = Sys.time () in
-    let _, fixpoint = steps ~current_compilation_unit expr 100 in
+    let result, fixpoint = steps ~current_compilation_unit expr 100 in
     let t2 = Sys.time () in
     (* let st2 = Gc.quick_stat () in *)
     Format.printf "total time: %f@." (t2 -. t1);
@@ -1457,5 +1502,6 @@ let test ~current_compilation_unit expr =
     (*     (st2.Gc.major_words -. st1.Gc.major_words) *)
     (*     (st2.Gc.promoted_words -. st1.Gc.promoted_words) *)
     (*     (st2.Gc.compactions - st1.Gc.compactions) in *)
+    iprintf_r "%a@." print_state result;
     if not fixpoint
     then failwith "fixpoint not reached"
