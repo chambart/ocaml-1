@@ -95,6 +95,14 @@ OTHEROBJS=\
   $(OTOPDIR)/asmcomp/flambdaexport.cmo \
   $(OTOPDIR)/asmcomp/clambda.cmo \
   $(OTOPDIR)/asmcomp/compilenv.cmo \
+  $(OTOPDIR)/asmcomp/flambdapasses.cmo \
+  $(OTOPDIR)/asmcomp/flambdaanf.cmo \
+  $(OTOPDIR)/asmcomp/flambdareachability.cmo \
+  $(OTOPDIR)/asmcomp/flambdaspec.cmo \
+  $(OTOPDIR)/asmcomp/flambdapurity.cmo \
+  $(OTOPDIR)/asmcomp/flambdasubst.cmo \
+  $(OTOPDIR)/asmcomp/flambdaifstaticraise.cmo \
+  $(OTOPDIR)/asmcomp/flambdamovelets.cmo \
   $(OTOPDIR)/asmcomp/flambdasimplify.cmo \
   $(OTOPDIR)/asmcomp/flambdasym.cmo \
   $(OTOPDIR)/asmcomp/clambdagen.cmo \
@@ -142,7 +150,9 @@ lexcmm.ml: lexcmm.mll
 	@$(OCAMLLEX) -q lexcmm.mll
 
 CASES=fib tak quicksort quicksort2 soli \
-      arith checkbound tagged-fib tagged-integr tagged-quicksort tagged-tak
+      arith checkbound tagged-fib tagged-integr tagged-quicksort tagged-tak \
+      catch-try catch-rec
+
 ARGS_fib=-DINT_INT -DFUN=fib main.c
 ARGS_tak=-DUNIT_INT -DFUN=takmain main.c
 ARGS_quicksort=-DSORT -DFUN=quicksort main.c
@@ -155,6 +165,8 @@ ARGS_tagged-fib=-DINT_INT -DFUN=fib main.c
 ARGS_tagged-integr=-DINT_FLOAT -DFUN=test main.c
 ARGS_tagged-quicksort=-DSORT -DFUN=quicksort main.c
 ARGS_tagged-tak=-DUNIT_INT -DFUN=takmain main.c
+ARGS_catch-try=-DINT_INT -DFUN=catch_exit main.c
+ARGS_catch-rec=-DINT_INT -DFUN=catch_fact main.c
 
 tests: $(CASES:=.o)
 	@for c in $(CASES); do \
