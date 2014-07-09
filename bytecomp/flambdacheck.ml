@@ -344,8 +344,8 @@ let every_static_exception_is_caught flam =
   in
   let rec loop env = function
     | Fstaticcatch (i, _, body, handler,_) ->
-        loop env handler;
         let env = StaticExceptionSet.add i env in
+        loop env handler;
         loop env body
     | exp ->
         check env exp;

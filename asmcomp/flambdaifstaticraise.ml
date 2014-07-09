@@ -63,6 +63,8 @@ let union_accum ret1 ret2 = match ret1, ret2 with
   | Others, Cases l -> Cases l
   | Others, Others -> Others
 
+let eid = ExprId.create
+
 (****************************************************************
 
    Pass moving simple expression constructions up in the tree
@@ -792,6 +794,181 @@ let simplify_static_exceptions expr comp_unit =
 
   remove StaticExceptionMap.empty expr
 
+
+let rec replace_tail_calls nargs exn id expr =
+  let loop expr = replace_tail_calls nargs exn id expr in
+  match expr with
+  | Fapply ({ ap_function = Fvar (v, _); ap_arg }, eid)
+    when Variable.equal id v && List.length ap_arg = nargs ->
+      Fstaticraise(Lazy.force exn, ap_arg, eid)
+  | Fapply _ -> expr
+
+  | Flet(kind, var, def, body, d) ->
+      Flet(kind, var, def, loop body, d)
+
+  | Fletrec(defs, body, d) ->
+      Fletrec(defs, loop body, d)
+
+  | Fsequence(e1,e2,d) ->
+      Fsequence(e1,loop e2,d)
+
+  | Fifthenelse(cond, ifso, ifnot, d) ->
+      Fifthenelse(cond, loop ifso, loop ifnot, d)
+
+  | Fstaticcatch(sexn, vars, body, handler, d) ->
+      Fstaticcatch(sexn, vars, loop body, loop handler, d)
+
+  | Ftrywith(body, var, handler, d) ->
+      Ftrywith(body, var, loop handler, d)
+
+  | Fswitch(arg,sw,d) ->
+      let aux (i, e) = i, loop e in
+      let sw =
+        { sw with
+          fs_consts = List.map aux sw.fs_consts;
+          fs_blocks = List.map aux sw.fs_blocks;
+          fs_failaction = Misc.may_map loop sw.fs_failaction }
+      in
+      Fswitch(arg,sw,d)
+
+  | _ -> expr
+
+(******************************************************************
+   Pass rewriting recursive tail calls to static exceptions
+
+   {[
+     let rec list_iter f l =
+       match l with
+       | [] -> ()
+       | h :: t -> f h; list_iter f t
+   ]}
+
+   is rewriten to
+
+   {[
+     let list_iter f l =
+       scatch exit t
+       with t ->
+         match l with
+         | [] -> ()
+         | h :: t -> f h; exit t
+   ]}
+
+*******************************************************************)
+
+
+(* The list of variable that needs to be passed:
+   the constant arguments can be hoisted out of the loop *)
+let not_constants_static_exn_arguments sexn vars expr =
+  let set = ref VarSet.empty in
+  let rec aux = function
+    | Fstaticraise(sexn', args, _)
+      when Static_exception.equal sexn' sexn ->
+        List.iter2 (fun v e ->
+            match e with
+            | Fvar(v', _) when Variable.equal v v' -> ()
+            | _ ->
+                set := VarSet.add v !set;
+                aux e)
+          vars args
+    | expr ->
+        Flambdaiter.apply_on_subexpressions aux expr
+  in
+  aux expr;
+  !set
+
+(* Transform the list of expressions (function arguments) to a
+   sequence of let so that removing some does not change the side
+   effects *)
+let lift_arguments cu args
+  : ExprId.t flambda list * (ExprId.t flambda -> ExprId.t flambda) =
+  List.fold_right
+    (fun arg (args, k) ->
+       match arg with
+       | Fvar _ | Fconst _ | Fsymbol _ ->
+           (arg :: args, k)
+       | _ ->
+           let v = Variable.create cu "stexn_arg" in
+           Fvar(v, eid ()) :: args,
+           fun t -> Flet(Not_assigned, v, arg, k t, eid ()))
+    args ([],(fun t -> t))
+
+let remove_self_tail_calls cu id decl =
+  let recursive = VarSet.mem id decl.free_variables in
+  if recursive
+  then begin
+    let used_exn = ref false in
+    let exn = lazy (used_exn := true; Static_exception.create ()) in
+    let body =
+      replace_tail_calls
+        (List.length decl.params)
+        exn id decl.body in
+    if not !used_exn
+    then decl
+    else
+      let () = Format.printf "rewrite %a@." Variable.print id in
+      let exn = Lazy.force exn in
+      let fv = not_constants_static_exn_arguments exn decl.params body in
+      let usage =
+        List.map (fun v ->
+            let r = VarSet.mem v fv in
+            Format.eprintf "used: %a %b@."
+              Variable.print v r;
+            r)
+          decl.params in
+      let not_hoisted_params =
+        List.combine decl.params usage |>
+        List.filter (fun (_,b) -> b) |>
+        List.map fst
+      in
+      let aux = function
+        | Fstaticraise(sexn, args, d) when Static_exception.equal sexn exn ->
+            let args, k = lift_arguments cu args in
+            let args =
+              List.combine args usage |>
+              List.filter (fun (_,b) -> b) |>
+              List.map fst
+            in
+            k (Fstaticraise(sexn, args, d))
+        | e -> e in
+      let body = Flambdaiter.map_toplevel aux body in
+
+      let new_params = List.map (fun v -> v, Variable.rename cu v) not_hoisted_params in
+
+      let body =
+        let subst = VarMap.of_list new_params in
+        Flambdaiter.toplevel_substitution subst body in
+
+      let body =
+        Fstaticcatch(
+          exn,
+          List.map snd new_params,
+          Fstaticraise(exn,
+                       List.map (fun v -> Fvar(v, eid ())) not_hoisted_params,
+                       eid ()),
+          body,
+          eid ())
+      in
+      { decl with
+        free_variables = Flambdaiter.free_variables body;
+        body }
+  end
+  else decl
+
+let static_exception_loop expr cu =
+  Flambdaiter.map (function
+      | Fclosure ({ cl_fun } as cl, eid) ->
+          let cl_fun =
+            if VarMap.cardinal cl.cl_fun.funs = 1
+            then
+              let id, decl = VarMap.choose cl_fun.funs in
+              { cl_fun with
+                funs = VarMap.singleton id (remove_self_tail_calls cu id decl) }
+            else cl_fun
+          in
+          Fclosure ({ cl with cl_fun }, eid)
+      | e -> e) expr
+
 open Flambdapasses
 
 let if_static_raise_pass =
@@ -806,6 +983,13 @@ let simplify_static_exceptions_pass =
   { name = "simplify_static_exceptions";
     pass = simplify_static_exceptions }
 
+let static_exception_loop_pass =
+  { name = "static_exception_loop";
+    pass = static_exception_loop }
+
+let () =
+  if Clflags.experiments
+  then Flambdapasses.register_pass Loop 6 static_exception_loop_pass
 let () = Flambdapasses.register_pass Loop 7 if_static_raise_pass
 let () = Flambdapasses.register_pass Loop 8 move_in_exn_pass
 let () = Flambdapasses.register_pass Loop 9 simplify_static_exceptions_pass
