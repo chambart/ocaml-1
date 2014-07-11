@@ -41,6 +41,57 @@ let equal_array eq a1 a2 =
   Array.length a1 = Array.length a2 &&
   aux eq (Array.length a1 - 1)
 
+module Val = struct
+  type t =
+    | Var of Variable.t
+    | Ret of Variable.t * int (* function application, with n unapplied parameters *)
+    | Ext of string
+
+  let compare t1 t2 =
+    match t1, t2 with
+    | Ext s1, Ext s2 -> compare s1 s2
+    | Ext _, _ -> -1
+    | _, Ext _ -> 1
+    | Var v1, Var v2
+    | Var v1, Ret (v2,0)
+    | Ret (v1,0), Var v2 ->
+        Variable.compare v1 v2
+    | Ret (v1,n1), Ret (v2,n2) ->
+        let c = Variable.compare v1 v2 in
+        if c <> 0
+        then c
+        else compare n1 n2
+    | Var _, Ret _ -> -1
+    | Ret _, Var _ -> 1
+
+  let hash = function
+    | Var v
+    | Ret (v,0) -> Variable.hash v
+    | Ret (v,n) -> Variable.hash v + n
+    | Ext s -> Hashtbl.hash s
+
+  let equal v1 v2 = compare v1 v2 = 0
+
+  let print ppf = function
+    | Ext s -> Format.fprintf ppf "Ext_%s" s
+    | Var v -> Variable.print ppf v
+    | Ret (v,n) -> Format.fprintf ppf "%a-%i" Variable.print v n
+
+  let output oc v = output_string oc (Format.asprintf "%a" print v)
+end
+
+type t = Val.t =
+  | Var of Variable.t
+  | Ret of Variable.t * int
+  | Ext of string
+
+
+module ValSet = Ext_types.ExtSet(Val)
+module ValMap = Ext_types.ExtMap(Val)
+
+let valset_of_varset s =
+  ValSet.of_list (List.map (fun v -> Var v) (VarSet.elements s))
+
 module Value = struct
 
   type block = Variable.t (* allocation point *)
@@ -628,7 +679,7 @@ end = struct
   let iter f s = ExprMap.iter (fun _ (v,c) -> f c v) s
 end
 
-type stack_part = { return_var : Variable.t; return_point : code }
+type stack_part = { return_var : Val.t; return_point : code }
 
 module StackPart : sig
   type t
@@ -639,25 +690,25 @@ module StackPart : sig
   val subset : t -> t -> bool
   val singleton : stack_part -> t
   val remove_return_var : t -> t
-  val toplevel : Variable.t -> t
-  val return_vars : t -> VarSet.t
+  val toplevel : Val.t -> t
+  val return_vars : t -> ValSet.t
   val return_points : t -> CodeSet.t
   val equal : t -> t -> bool
   val print : Format.formatter -> t -> unit
 end = struct
-  type t = { vars : VarSet.t; points : CodeSet.t }
-  let empty = { vars = VarSet.empty; points = CodeSet.empty }
+  type t = { vars : ValSet.t; points : CodeSet.t }
+  let empty = { vars = ValSet.empty; points = CodeSet.empty }
   let is_empty { vars; points } =
-    VarSet.is_empty vars &&
+    ValSet.is_empty vars &&
     CodeSet.is_empty points
   let add { return_var; return_point } ({ vars; points } as set) =
-    if VarSet.mem return_var vars && CodeSet.mem return_point points
+    if ValSet.mem return_var vars && CodeSet.mem return_point points
     then set
     else
-      { vars = VarSet.add return_var vars;
+      { vars = ValSet.add return_var vars;
         points = CodeSet.add return_point points }
   let subset s1 s2 =
-    VarSet.subset s1.vars s2.vars &&
+    ValSet.subset s1.vars s2.vars &&
     CodeSet.subset s1.points s2.points
   let union s1 s2 =
     if subset s1 s2
@@ -666,20 +717,20 @@ end = struct
       if subset s2 s1
       then s1
       else
-        { vars = VarSet.union s1.vars s2.vars;
+        { vars = ValSet.union s1.vars s2.vars;
           points = CodeSet.union s1.points s2.points }
   let singleton { return_var; return_point } =
-    { vars = VarSet.singleton return_var;
+    { vars = ValSet.singleton return_var;
       points = CodeSet.singleton return_point }
   let equal s1 s2 =
-    VarSet.equal s1.vars s2.vars &&
+    ValSet.equal s1.vars s2.vars &&
     CodeSet.equal s1.points s2.points
   let return_vars { vars } = vars
   let return_points { points } = points
-  let toplevel v = { vars = VarSet.singleton v; points = CodeSet.empty }
+  let toplevel v = { vars = ValSet.singleton v; points = CodeSet.empty }
   let remove_return_var s =
-    { vars = VarSet.empty; points = s.points }
-  let print ppf v = VarSet.print ppf v.vars
+    { vars = ValSet.empty; points = s.points }
+  let print ppf v = ValSet.print ppf v.vars
 end
 
 module StackSet : sig
@@ -693,11 +744,11 @@ module StackSet : sig
   val remove_return_var : t -> t
   val set_call : stack_part -> t -> t
   val set_raise : stack_part -> t -> t
-  val return_vars : t -> VarSet.t
+  val return_vars : t -> ValSet.t
   val return_points : t -> CodeSet.t
-  val exn_return_vars : t -> VarSet.t
+  val exn_return_vars : t -> ValSet.t
   val exn_return_points : t -> CodeSet.t
-  val toplevel : return:Variable.t -> uncaught:Variable.t -> t
+  val toplevel : return:Val.t -> uncaught:Val.t -> t
   val print : Format.formatter -> t -> unit
 end = struct
   type t = { calls : StackPart.t; raises : StackPart.t }
@@ -755,14 +806,14 @@ type kept_state =
   { current_unit_id : Ident.t;
     escape_stack : StackSet.t;
     static_handler : (Variable.t list * code) StaticExceptionMap.t;
-    escape : VarSet.t;
+    escape : ValSet.t;
     globals : Variable.t IntMap.t;
     reached : CodeSet.t }
 
 
 type state =
   { stacks : StackSet.t CodeMap.t;
-    env : ValueSet.t VarMap.t;
+    env : ValueSet.t ValMap.t;
     heap : ValueSet.heap;
     new_reached : CodeSet.t;
     k : kept_state }
@@ -813,31 +864,31 @@ let print_state ppf s =
 let equal_state s1 s2 =
   CodeSet.equal s1.k.reached s2.k.reached &&
   CodeMap.equal StackSet.equal s1.stacks s2.stacks &&
-  VarMap.equal ValueSet.equal s1.env s2.env &&
+  ValMap.equal ValueSet.equal s1.env s2.env &&
   IntMap.equal Variable.equal s1.k.globals s2.k.globals &&
-  VarSet.equal s1.k.escape s2.k.escape &&
+  ValSet.equal s1.k.escape s2.k.escape &&
   ValueSet.equal_heap s1.heap s2.heap
 
 let initial_state current_unit_id =
   let k = { reached = CodeSet.empty;
             globals = IntMap.empty;
             current_unit_id;
-            escape = VarSet.empty;
+            escape = ValSet.empty;
             escape_stack = StackSet.empty;
             static_handler = StaticExceptionMap.empty }
   in
   { stacks = CodeMap.empty;
-    env = VarMap.empty;
+    env = ValMap.empty;
     heap = ValueSet.empty_heap;
     new_reached = CodeSet.empty;
     k }
 
 let push_stack (stack:stack) (ret:Variable.t) (kont:ExprId.t flambda) =
-  let spart = { return_var = ret; return_point = kont } in
+  let spart = { return_var = Var ret; return_point = kont } in
   StackSet.set_call spart stack
 
 let push_stack_exn (stack:stack) (ret:Variable.t) (kont:ExprId.t flambda) =
-  let spart = { return_var = ret; return_point = kont } in
+  let spart = { return_var = Var ret; return_point = kont } in
   StackSet.set_raise spart stack
 
 let reached state expr =
@@ -855,7 +906,7 @@ let entry_point current_unit_id ~return ~uncaught expr =
     stacks = CodeMap.singleton expr escape_stack;
     k =
       { state.k with
-        escape = VarSet.of_list [return; uncaught];
+        escape = ValSet.of_list [return; uncaught];
         escape_stack = escape_stack } }
 
 let add_stack state stack expr =
@@ -882,9 +933,11 @@ let goto_branch_no_return (state:state) (stack:stack) (expr:ExprId.t flambda) =
   let stack = StackSet.remove_return_var stack in
   goto_branch state stack expr
 
-let binding state v =
-  try VarMap.find v state.env with
+let binding' state v =
+  try ValMap.find v state.env with
   | Not_found -> ValueSet.empty
+
+let binding state v = binding' state (Var v)
 
 let global state i =
   try binding state (IntMap.find i state.k.globals) with
@@ -893,11 +946,11 @@ let global state i =
 let assign state v contents =
   let set =
     try
-      let set = VarMap.find v state.env in
+      let set = ValMap.find v state.env in
       ValueSet.union contents set
     with Not_found -> contents
   in
-  { state with env = VarMap.add v set state.env }
+  { state with env = ValMap.add v set state.env }
 
 let assign_global state pos v =
   try
@@ -909,18 +962,18 @@ let assign_global state pos v =
     { state with k = { state.k with globals = IntMap.add pos v state.k.globals } }
 
 let bound_or_empty state v =
-  try VarMap.find v state.env
+  try ValMap.find v state.env
   with Not_found -> ValueSet.empty
 
 let assign_block state v block =
   let set = bound_or_empty state v in
   let heap, set = ValueSet.add_block block state.heap set in
-  { state with env = VarMap.add v set state.env; heap }
+  { state with env = ValMap.add v set state.env; heap }
 
 let assign_ufunc state v ufunc =
   let set = bound_or_empty state v in
   let set = ValueSet.add_ufunc ufunc set in
-  { state with env = VarMap.add v set state.env }
+  { state with env = ValMap.add v set state.env }
 
 let assign_func_r state v func =
   let set = bound_or_empty state v in
@@ -929,7 +982,7 @@ let assign_func_r state v func =
     if func.top
     then ValueSet.add_top set
     else set in
-  { state with env = VarMap.add v set state.env }
+  { state with env = ValMap.add v set state.env }
 
 let assign_other state v =
   let set = bound_or_empty state v in
@@ -937,7 +990,7 @@ let assign_other state v =
   then state
   else
     let set = ValueSet.add_other set in
-    { state with env = VarMap.add v set state.env }
+    { state with env = ValMap.add v set state.env }
 
 let assign_top state v =
   let set = bound_or_empty state v in
@@ -945,15 +998,17 @@ let assign_top state v =
   then state
   else
     let set = ValueSet.add_top set in
-    { state with env = VarMap.add v set state.env }
+    { state with env = ValMap.add v set state.env }
+
+let assign_top' state v = assign_top state (Var v)
 
 let escapes state v =
-  let set = VarSet.of_list v in
-  if VarSet.subset set state.k.escape
+  let set = ValSet.of_list (List.map (fun v -> Var v) v) in
+  if ValSet.subset set state.k.escape
   then state
   else
     { state with
-      k = { state.k with escape = VarSet.union set state.k.escape } }
+      k = { state.k with escape = ValSet.union set state.k.escape } }
 
 let ebinding state = function
   | Fvar (v, _) -> binding state v
@@ -977,7 +1032,7 @@ let var_union' state (vars: VarSet.t result) =
     vars.values ValueSet.empty
 
 let return_other state stack =
-  VarSet.fold (fun ret state -> assign_other state ret)
+  ValSet.fold (fun ret state -> assign_other state ret)
     (StackSet.return_vars stack) state
 
 let rec step_expr state stack expr =
@@ -1005,7 +1060,7 @@ let rec step_expr state stack expr =
       then state
       else
         let state =
-          VarSet.fold (fun ret state -> assign state ret values)
+          ValSet.fold (fun ret state -> assign state ret values)
             (StackSet.return_vars stack) state in
         let state =
           CodeSet.fold (fun code state -> reached state code)
@@ -1069,38 +1124,38 @@ and step_let state stack v def =
       step_let' state stack v def body
 
   | Fsymbol _ ->
-      assign_top state v
+      assign_top state (Var v)
 
   | Fconst _ ->
-      assign_other state v
+      assign_other state (Var v)
 
   | Fvar (v', _) ->
       let r = binding state v' in
-      assign state v r
+      assign state (Var v) r
 
   | Fprim(prim, args, _, _) ->
       let open Lambda in
       begin match prim, args with
       | Pmakeblock(_tag,mut), _ ->
-          if VarMap.mem v state.env
+          if ValMap.mem (Var v) state.env
           then state
           else
             let res = Value.block v mut (Array.map var (Array.of_list args)) in
-            assign_block state v res
+            assign_block state (Var v) res
 
       | Pduprecord (_,size), [arg] ->
           let arg = ebinding state arg in
           let a = Array.init size (ValueSet.field_no_top state.heap arg) in
           let res = Value.blocks v Asttypes.Mutable a in
-          let state = assign_block state v res in
+          let state = assign_block state (Var v) res in
           if ValueSet.is_top arg
-          then assign_top state v
+          then assign_top state (Var v)
           else state
 
       | Pfield i, [arg] ->
           let r = ebinding state arg in
           let res = var_union state (ValueSet.field state.heap r i) in
-          assign state v res
+          assign state (Var v) res
 
       | Psetfield (i,_), [dst; contents] ->
           let r = ebinding state dst in
@@ -1111,81 +1166,81 @@ and step_let state stack v def =
           let contents = VarSet.singleton (var contents) in
           let heap = ValueSet.set_field state.heap r i contents in
           let state = { state with heap } in
-          assign_other state v
+          assign_other state (Var v)
 
       | (Pdivint | Pdivbint _ | Pstringrefs | Pstringsets), _ ->
           let state = step_raise state stack None in
-          assign_other state v
+          assign_other state (Var v)
 
       | (Pnegint | Paddint | Psubint | Pmulint | Pmodint
         | Pandint | Porint | Pxorint
         | Plslint | Plsrint | Pasrint
         | Pintcomp _ | Poffsetint _), _ ->
           iprintf "eval prim %a@." Printflambda.flambda def;
-          assign_other state v
+          assign_other state (Var v)
 
       | (Pintoffloat | Pfloatofint
         | Pnegfloat | Pabsfloat
         | Paddfloat | Psubfloat | Pmulfloat | Pdivfloat
         | Pfloatcomp _), _ ->
           iprintf "eval prim %a@." Printflambda.flambda def;
-          assign_other state v
+          assign_other state (Var v)
 
 
       | Poffsetref _n, [arg] ->
-          let state = assign_other state (var arg) in
-          assign_other state v
+          let state = assign_other state (Var (var arg)) in
+          assign_other state (Var v)
 
       | (Pbintofint _ | Pintofbint _ | Pcvtbint _ | Pnegbint _ | Paddbint _
         | Psubbint _ | Pmulbint _ | Pmodbint _ | Pandbint _
         | Porbint _ | Pxorbint _ | Plslbint _ | Plsrbint _ | Pasrbint _
         | Pbintcomp _), _ ->
           iprintf "eval bint prim@.";
-          assign_other state v
+          assign_other state (Var v)
 
       | (Pstringlength | Pstringrefu | Pstringsetu ), _ ->
           iprintf "eval string prim@.";
-          assign_other state v
+          assign_other state (Var v)
 
       | (Pisint | Pisout | Pbittest | Pnot), _ ->
-          assign_other state v
+          assign_other state (Var v)
 
       | Parraylength _, _ ->
-          assign_other state v
+          assign_other state (Var v)
       | Parrayrefu _, _ ->
-          assign_top state v
+          assign_top state (Var v)
       | Parraysetu _, [_array; _index; content]  ->
           let state = escapes state [var content] in
-          assign_other state v
+          assign_other state (Var v)
       | Parrayrefs _, _ ->
           let state = step_raise state stack None in
-          assign_top state v
+          assign_top state (Var v)
       | Parraysets _, [_array; _index; content] ->
           let state = step_raise state stack None in
           let state = escapes state [var content] in
-          assign_other state v
+          assign_other state (Var v)
 
       | (Pfloatfield _ | Psetfloatfield _), _ ->
-          assign_other state v
+          assign_other state (Var v)
 
       | Pidentity, [arg] ->
-          assign state v (ebinding state arg)
+          assign state (Var v) (ebinding state arg)
 
       | Pgetglobal _, [] ->
-          assign_top state v
+          assign_top state (Var v)
 
       | Pgetglobalfield (id, pos), [] ->
           if Ident.same id state.k.current_unit_id
           then
             let r = global state pos in
-            assign state v r
-          else assign_top state v
+            assign state (Var v) r
+          else assign_top state (Var v)
 
       | Psetglobalfield pos, [arg] ->
           let arg = var arg in
           let state = assign_global state pos arg in
           let state = escapes state [arg] in
-          assign_other state v
+          assign_other state (Var v)
 
       | Praise, [arg] ->
           step_raise state stack (Some arg)
@@ -1193,14 +1248,14 @@ and step_let state stack v def =
       | Pccall _, args ->
           let state = step_raise state stack None in
           let state = escapes state (List.map var args) in
-          assign_top state v
+          assign_top state (Var v)
 
       | Pmakearray _, args ->
           let state = escapes state (List.map var args) in
-          assign_top state v
+          assign_top state (Var v)
 
       | (Pctconst _ | Pignore), _ ->
-          assign_other state v
+          assign_other state (Var v)
 
       | _ ->
           Format.eprintf "not implemented %a@." Printflambda.flambda def;
@@ -1209,21 +1264,21 @@ and step_let state stack v def =
 
   | Fassign(x, Fvar (y,_), _) ->
       let r = binding state y in
-      let state = assign state x r in
+      let state = assign state (Var x) r in
       if ValueSet.is_empty r
       then state
-      else assign_other state v
+      else assign_other state (Var v)
 
   | Fassign(_, _, _) -> assert false
 
   | Fvariable_in_closure({vc_closure = f; vc_var = var},_) ->
       let f = ebinding state f in
       let r = ValueSet.closure_variable f var in
-      assign state v (var_union state r)
+      assign state (Var v) (var_union state r)
 
   | Ffunction({fu_closure = f;fu_fun = var},_) ->
       let f = ebinding state f in
-      assign_func_r state v (ValueSet.closure_function f var)
+      assign_func_r state (Var v) (ValueSet.closure_function f var)
 
   | Fclosure ({cl_fun={funs};cl_free_var},_) ->
       let outer_closure = VarMap.map (fun e -> VarSet.singleton (var e)) cl_free_var in
@@ -1233,7 +1288,7 @@ and step_let state stack v def =
         | h :: t -> Value.func h outer_closure t body
       in
       let functions = VarMap.map prepare_function funs in
-      assign_ufunc state v (Value.ufunc functions)
+      assign_ufunc state (Var v) (Value.ufunc functions)
 
   | Fapply ({ap_function = f;ap_arg = args; ap_kind},_) ->
       let f = ebinding state f in
@@ -1244,7 +1299,7 @@ and step_let state stack v def =
             | [] | _::_::_ -> assert false (* ANF *)
             | [arg] -> step_apply_indirect state stack f arg
       in
-      assign state v res
+      assign state (Var v) res
 
   | Fifthenelse (cond,ifso,ifnot,_) ->
       step_if state stack cond ifso ifnot
@@ -1270,7 +1325,7 @@ and step_let state stack v def =
   | Fsend (_,met,obj,args,_,_) ->
       let state = step_raise state stack None in
       let state = escapes state (List.map var (met::obj::args)) in
-      assign_top state v
+      assign_top state (Var v)
 
   | Funreachable _ ->
       state
@@ -1297,7 +1352,7 @@ and step_while state stack cond body =
 
 and step_for state stack id lo hi body =
   ignore(var lo); ignore(var hi); (* verify that they are variables *)
-  let state = assign_other state id in
+  let state = assign_other state (Var id) in
   let state = goto_branch_no_return state stack body in
   return_other state stack
 
@@ -1305,7 +1360,8 @@ and step_staticraise state stack sexn args =
   let vars, handler = StaticExceptionMap.find sexn state.k.static_handler in
   let args = List.map (ebinding state) args in
   assert(List.length vars = List.length args);
-  let state = List.fold_left2 assign state vars args in
+  let state = List.fold_left2 (fun state var arg -> assign state (Var var) arg)
+      state vars args in
   reached state handler
 
 and step_staticcatch state stack sexn vars body handler =
@@ -1327,10 +1383,10 @@ and step_raise state stack arg =
     match arg with
     | Some arg ->
         let values = ebinding state arg in
-        VarSet.fold (fun ret state -> assign state ret values)
+        ValSet.fold (fun ret state -> assign state ret values)
           (StackSet.exn_return_vars stack) state
     | None ->
-        VarSet.fold (fun ret state -> assign_top state ret)
+        ValSet.fold (fun ret state -> assign_top state ret)
           (StackSet.exn_return_vars stack) state
   in
   let state =
@@ -1350,7 +1406,7 @@ and step_if state stack cond ifso ifnot =
 and step_apply_indirect (state:state) (stack:stack) f arg =
   let apply_one (state,result) f =
     let (param, clos, (missing, body)) = f in
-    let state = assign state param (ebinding state arg) in
+    let state = assign state (Var param) (ebinding state arg) in
     match missing with
     | [] ->
         (* completely applied function *)
@@ -1367,10 +1423,11 @@ and step_apply_indirect (state:state) (stack:stack) f arg =
   List.fold_left apply_one (state, result) funs.values
 
 and step_apply_direct (state:state) (stack:stack) f args =
-  let apply_one (state,result) f =
+  let apply_one (state,result) (f:Value.func) =
     let (param, clos, (missing, body)) = f in
     let state =
-      List.fold_left2 (fun state param arg -> assign state param (ebinding state arg))
+      List.fold_left2 (fun state param arg ->
+          assign state (Var param) (ebinding state arg))
         state (param::missing) args in
     let state = call state stack body in
     state, result (* do not call directly *)
@@ -1382,32 +1439,33 @@ and step_apply_direct (state:state) (stack:stack) f args =
 let escape_variables state =
   let q = Queue.create () in
   let escaping = ref state.k.escape in
-  VarSet.iter (fun v -> Queue.push v q) state.k.escape;
+  ValSet.iter (fun v -> Queue.push v q) state.k.escape;
 
   while not (Queue.is_empty q) do
     let v = Queue.pop q in
-    let value = binding state v in
+    let value = binding' state v in
     let { values = fields } = ValueSet.fields state.heap value in
-    let new_escaping = VarSet.diff fields !escaping in
-    escaping := VarSet.union fields !escaping;
-    VarSet.iter (fun v -> Queue.push v q) new_escaping;
+    let fields = valset_of_varset fields in
+    let new_escaping = ValSet.diff fields !escaping in
+    escaping := ValSet.union fields !escaping;
+    ValSet.iter (fun v -> Queue.push v q) new_escaping;
   done;
   { state with k = { state.k with escape = !escaping } }
 
 let escape_functions state =
   let escape_function state ((arg, _, (other_args, code)):Value.func) =
-    let state = List.fold_left assign_top state (arg :: other_args) in
+    let state = List.fold_left assign_top' state (arg :: other_args) in
     goto_branch state state.k.escape_stack code
   in
   let aux v state =
-    let value = binding state v in
+    let value = binding' state v in
     let functions = ValueSet.functions value in
     let state = List.fold_left escape_function state functions.values in
     let ufunctions = ValueSet.ufunctions value in
     List.fold_left escape_function state
       (FuncSet.elements ufunctions.values)
   in
-  VarSet.fold aux state.k.escape state
+  ValSet.fold aux state.k.escape state
 
 let substep state =
   (* Format.printf "substep@."; *)
@@ -1454,8 +1512,8 @@ let step state =
 let steps ~current_compilation_unit code i =
   let current_unit_id =
     Symbol.Compilation_unit.get_persistent_ident current_compilation_unit in
-  let return = Variable.create ~current_compilation_unit "return" in
-  let uncaught = Variable.create ~current_compilation_unit "uncaught" in
+  let return = Ext "return" in
+  let uncaught = Ext "uncaught" in
   let state = entry_point current_unit_id ~return ~uncaught code in
   let rec aux state n =
     if n <= 0
@@ -1469,7 +1527,7 @@ let steps ~current_compilation_unit code i =
       (* let t2 = Sys.time () in *)
       (* let st2 = Gc.quick_stat () in *)
       let () = iprintf "escape %a@."
-          VarSet.print state.k.escape in
+          ValSet.print state.k.escape in
       (* let () = Format.printf "step time: %f@." (t2 -. t1) in *)
       (* let () = Format.printf "minor: %f\nmajor: %f\npromoted_words: %f\ncompact:%i@." *)
       (*     (st2.Gc.minor_words -. st1.Gc.minor_words) *)
