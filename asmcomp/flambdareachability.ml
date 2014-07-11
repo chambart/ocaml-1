@@ -883,12 +883,12 @@ let initial_state current_unit_id =
     new_reached = CodeSet.empty;
     k }
 
-let push_stack (stack:stack) (ret:Variable.t) (kont:ExprId.t flambda) =
-  let spart = { return_var = Var ret; return_point = kont } in
+let push_stack (stack:stack) (ret:Val.t) (kont:ExprId.t flambda) =
+  let spart = { return_var = ret; return_point = kont } in
   StackSet.set_call spart stack
 
-let push_stack_exn (stack:stack) (ret:Variable.t) (kont:ExprId.t flambda) =
-  let spart = { return_var = Var ret; return_point = kont } in
+let push_stack_exn (stack:stack) (ret:Val.t) (kont:ExprId.t flambda) =
+  let spart = { return_var = ret; return_point = kont } in
   StackSet.set_raise spart stack
 
 let reached state expr =
@@ -1045,7 +1045,7 @@ let rec step_expr state stack expr =
       let state = add_stack state stack body in
       let state =
         List.fold_left (fun state (v, def) ->
-            step_let state (push_stack stack v body) v def)
+            step_let state (push_stack stack (Var v) body) v def)
           state defs in
       if List.exists (fun (v,_) -> ValueSet.is_empty (binding state v)) defs
       then state
@@ -1102,7 +1102,7 @@ and step_let' state stack v def body =
     (* then Format.printf "new stack %a@." Variable.print v; *)
     state'
   in
-  let state = step_let state (push_stack stack v body) v def in
+  let state = step_let state (push_stack stack (Var v) body) v def in
   if ValueSet.is_empty (binding state v)
   then state
   else
@@ -1291,15 +1291,11 @@ and step_let state stack v def =
       assign_ufunc state (Var v) (Value.ufunc functions)
 
   | Fapply ({ap_function = f;ap_arg = args; ap_kind},_) ->
-      let f = ebinding state f in
-      let state, res = match ap_kind with
-        | Direct _ -> step_apply_direct state stack f args
-        | Indirect ->
-            match args with
-            | [] | _::_::_ -> assert false (* ANF *)
-            | [arg] -> step_apply_indirect state stack f arg
-      in
-      assign state (Var v) res
+      begin
+        match args with
+        | [] -> assert false
+        | h :: t -> step_apply state stack v (Var (var f)) h t
+      end
 
   | Fifthenelse (cond,ifso,ifnot,_) ->
       step_if state stack cond ifso ifnot
@@ -1374,7 +1370,7 @@ and step_staticcatch state stack sexn vars body handler =
   add_stack state stack handler
 
 and step_trywith state stack body id handler =
-  let body_stack = push_stack_exn stack id handler in
+  let body_stack = push_stack_exn stack (Var id) handler in
   let state = goto_branch state body_stack body in
   goto_branch state stack handler
 
@@ -1403,7 +1399,7 @@ and step_if state stack cond ifso ifnot =
     let state = goto_branch state stack ifso in
     goto_branch state stack ifnot
 
-and step_apply_indirect (state:state) (stack:stack) f arg =
+and step_apply_one (state:state) (stack:stack) f arg =
   let apply_one (state,result) f =
     let (param, clos, (missing, body)) = f in
     let state = assign state (Var param) (ebinding state arg) in
@@ -1422,19 +1418,18 @@ and step_apply_indirect (state:state) (stack:stack) f arg =
   let result = if funs.top then ValueSet.top else ValueSet.empty in
   List.fold_left apply_one (state, result) funs.values
 
-and step_apply_direct (state:state) (stack:stack) f args =
-  let apply_one (state,result) (f:Value.func) =
-    let (param, clos, (missing, body)) = f in
-    let state =
-      List.fold_left2 (fun state param arg ->
-          assign state (Var param) (ebinding state arg))
-        state (param::missing) args in
-    let state = call state stack body in
-    state, result (* do not call directly *)
-  in
-  let funs = ValueSet.functions f in
-  let result = if funs.top then ValueSet.top else ValueSet.empty in
-  List.fold_left apply_one (state, result) funs.values
+and step_apply state stack return_var f arg remaining_args =
+  let return_val =
+    match remaining_args with
+    | [] -> Var return_var
+    | _ -> Ret(return_var, List.length remaining_args) in
+  let f_val = binding' state f in
+  let state, result = step_apply_one (state:state) (stack:stack) f_val arg in
+  let state = assign state return_val result in
+  match remaining_args with
+  | [] -> state
+  | h :: t ->
+      step_apply state stack return_var return_val h t
 
 let escape_variables state =
   let q = Queue.create () in
