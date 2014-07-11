@@ -987,8 +987,12 @@ let static_exception_loop_pass =
   { name = "static_exception_loop";
     pass = static_exception_loop }
 
+let transform_loops =
+  try Sys.getenv "TRANSLOOP" = "y"
+  with _ -> false
+
 let () =
-  if Clflags.experiments
+  if (* Clflags.experiments *) transform_loops
   then Flambdapasses.register_pass Loop 6 static_exception_loop_pass
 let () = Flambdapasses.register_pass Loop 7 if_static_raise_pass
 let () = Flambdapasses.register_pass Loop 8 move_in_exn_pass
