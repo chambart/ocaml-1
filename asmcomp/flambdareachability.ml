@@ -1281,6 +1281,9 @@ and step_let state stack v def =
       assign_func_r state (Var v) (ValueSet.closure_function f var)
 
   | Fclosure ({cl_fun={funs};cl_free_var},_) ->
+      let state =
+        VarMap.fold (fun id expr state -> assign state (Var id) (ebinding state expr))
+          cl_free_var state in
       let outer_closure = VarMap.map (fun e -> VarSet.singleton (var e)) cl_free_var in
       let prepare_function { body; params } : Value.func =
         match params with
