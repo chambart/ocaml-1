@@ -87,8 +87,8 @@ ASMCOMP=asmcomp/arch.cmo \
   asmcomp/reg.cmo asmcomp/mach.cmo asmcomp/proc.cmo \
   asmcomp/flambdaanf.cmo \
   asmcomp/flambdaexport.cmo \
-  asmcomp/flambdareachability.cmo \
   asmcomp/clambda.cmo asmcomp/printclambda.cmo asmcomp/compilenv.cmo \
+  asmcomp/flambdareachability.cmo \
   asmcomp/flambdapurity.cmo \
   asmcomp/flambdapasses.cmo \
   asmcomp/flambdamovelets.cmo \
