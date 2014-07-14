@@ -122,7 +122,7 @@ let test ppf lam =
       lam in
   dump_and_check "flambdagen" flam;
 
-  Flambdareachability.test ~current_compilation_unit flam;
+  (* Flambdareachability.test ~current_compilation_unit flam; *)
 
   (* keep passes linked in the cma *)
   ignore (Flambdasimplify.passes);
@@ -155,6 +155,8 @@ let test ppf lam =
   then Format.fprintf ppf "@.flambda after@.";
 
   let flam = List.fold_left run_pass !flam after in
+
+  Flambdareachability.test ~current_compilation_unit flam;
 
   let fl_sym =
     Flambdasym.convert ~compilation_unit:current_compilation_unit flam in
