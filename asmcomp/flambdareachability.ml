@@ -101,7 +101,8 @@ module Value = struct
   (* only functions of arity 1 *)
   type func = Variable.t (* argument *)
               * VarSet.t VarMap.t (* closure *)
-              * (Variable.t list * ExprId.t flambda) (* missing arguments, code *)
+              * (Variable.t list * ExprId.t flambda option)
+  (* missing arguments, code (no code if external function) *)
 
   (* unspecified function *)
   type ufunc = func VarMap.t
@@ -428,7 +429,7 @@ module FuncSet : sig
 
   val closure_variable : t -> Closure_variable.t -> VarSet.t
 end = struct
-  type t = (VarSet.t VarMap.t * (Variable.t list * ExprId.t flambda)) VarMap.t
+  type t = (VarSet.t VarMap.t * (Variable.t list * ExprId.t flambda option)) VarMap.t
 
   let empty = VarMap.empty
 
@@ -644,6 +645,11 @@ end = struct
     let d = data_at_toplevel_node f in
     try
       let f' = ExprMap.find d s in
+      if not (f == f')
+      then
+        Format.eprintf "different functions with same id:@ %a@.%a@."
+          Printflambda.flambda f
+          Printflambda.flambda f';
       assert(f == f');
       s
     with Not_found -> ExprMap.add d f s
@@ -808,7 +814,8 @@ type kept_state =
     static_handler : (Variable.t list * code) StaticExceptionMap.t;
     escape : ValSet.t;
     globals : Variable.t IntMap.t;
-    reached : CodeSet.t }
+    reached : CodeSet.t;
+    exported : Flambdaexport.exported }
 
 
 type state =
@@ -869,13 +876,14 @@ let equal_state s1 s2 =
   ValSet.equal s1.k.escape s2.k.escape &&
   ValueSet.equal_heap s1.heap s2.heap
 
-let initial_state current_unit_id =
+let initial_state exported current_unit_id =
   let k = { reached = CodeSet.empty;
             globals = IntMap.empty;
             current_unit_id;
             escape = ValSet.empty;
             escape_stack = StackSet.empty;
-            static_handler = StaticExceptionMap.empty }
+            static_handler = StaticExceptionMap.empty;
+            exported }
   in
   { stacks = CodeMap.empty;
     env = ValMap.empty;
@@ -899,8 +907,8 @@ let reached state expr =
       new_reached = CodeSet.add expr state.new_reached;
       k = { state.k with reached = CodeSet.add expr state.k.reached } }
 
-let entry_point current_unit_id ~return ~uncaught expr =
-  let state = reached (initial_state current_unit_id) expr in
+let entry_point exported current_unit_id ~return ~uncaught expr =
+  let state = reached (initial_state exported current_unit_id) expr in
   let escape_stack = StackSet.toplevel ~return ~uncaught in
   { state with
     stacks = CodeMap.singleton expr escape_stack;
@@ -925,9 +933,6 @@ let add_stack state stack expr =
 let goto_branch (state:state) (stack:stack) (expr:ExprId.t flambda) =
   let state = reached state expr in
   add_stack state stack expr
-
-let call (state:state) (stack:stack) (body:ExprId.t flambda) =
-  goto_branch state stack body
 
 let goto_branch_no_return (state:state) (stack:stack) (expr:ExprId.t flambda) =
   let stack = StackSet.remove_return_var stack in
@@ -1001,6 +1006,21 @@ let assign_top state v =
     { state with env = ValMap.add v set state.env }
 
 let assign_top' state v = assign_top state (Var v)
+
+
+let call (state:state) (stack:stack) (body:ExprId.t flambda option) =
+  match body with
+  | Some body -> goto_branch state stack body
+  | None ->
+      (* extenal function: we do know nothing *)
+      let state =
+        ValSet.fold (fun ret state -> assign_top state ret)
+          (StackSet.return_vars stack) state in
+      let state =
+        CodeSet.fold (fun code state -> reached state code)
+          (StackSet.return_points stack) state in
+      state
+
 
 let escapes state v =
   let set = ValSet.of_list (List.map (fun v -> Var v) v) in
@@ -1123,9 +1143,26 @@ and step_let state stack v def =
   | Flet(_, v, def, body, _) ->
       step_let' state stack v def body
 
-  | Fsymbol _ ->
-      assign_top state (Var v)
+  | Fsymbol (sym,_) ->
+      begin
+        let open Flambdaexport in
+        try
+          let eid = Symbol.SymbolMap.find sym
+              state.k.exported.ex_symbol_id in
+          let descr = EidMap.find eid state.k.exported.ex_values in
+          match descr with
+          | Value_closure clos ->
+              assign_top state (Var v)
+              (* let cid = in *)
+              (* let params = ... in *)
+              (* let closure = ... in *)
 
+          | Value_constptr _
+          | Value_int _ -> assign_other state (Var v)
+          | Value_block _
+          | Value_unoffseted_closure _ -> assign_top state (Var v)
+        with Not_found -> assign_top state (Var v)
+      end
   | Fconst _ ->
       assign_other state (Var v)
 
@@ -1278,6 +1315,7 @@ and step_let state stack v def =
 
   | Ffunction({fu_closure = f;fu_fun = var},_) ->
       let f = ebinding state f in
+      iprintf "function %a@." Variable.print v;
       assign_func_r state (Var v) (ValueSet.closure_function f var)
 
   | Fclosure ({cl_fun={funs};cl_free_var},_) ->
@@ -1288,12 +1326,13 @@ and step_let state stack v def =
       let prepare_function { body; params } : Value.func =
         match params with
         | [] -> assert false
-        | h :: t -> Value.func h outer_closure t body
+        | h :: t -> Value.func h outer_closure t (Some body)
       in
       let functions = VarMap.map prepare_function funs in
       assign_ufunc state (Var v) (Value.ufunc functions)
 
   | Fapply ({ap_function = f;ap_arg = args; ap_kind},_) ->
+      iprintf "apply@.";
       begin
         match args with
         | [] -> assert false
@@ -1408,10 +1447,12 @@ and step_apply_one (state:state) (stack:stack) f arg =
     let state = assign state (Var param) (ebinding state arg) in
     match missing with
     | [] ->
+        iprintf "complete apply %a@." Variable.print param;
         (* completely applied function *)
         let state = call state stack body in
         state, result (* do not call directly *)
     | h::t ->
+        iprintf "partial apply %a@." Variable.print param;
         let clos = VarMap.add param (VarSet.singleton (var arg)) clos in
         let next_f = Value.func h clos t body in
         let result = ValueSet.add_func next_f result in
@@ -1419,9 +1460,11 @@ and step_apply_one (state:state) (stack:stack) f arg =
   in
   let funs = ValueSet.functions f in
   let result = if funs.top then ValueSet.top else ValueSet.empty in
+  iprintf "apply one: %i (top: %b)@." (List.length funs.values) funs.top;
   List.fold_left apply_one (state, result) funs.values
 
 and step_apply state stack return_var f arg remaining_args =
+  iprintf "apply %a@." Val.print f;
   let return_val =
     match remaining_args with
     | [] -> Var return_var
@@ -1453,22 +1496,25 @@ let escape_variables state =
 let escape_functions state =
   let escape_function state ((arg, _, (other_args, code)):Value.func) =
     let state = List.fold_left assign_top' state (arg :: other_args) in
-    goto_branch state state.k.escape_stack code
+    call state state.k.escape_stack code
   in
   let aux v state =
     let value = binding' state v in
     let functions = ValueSet.functions value in
     let state = List.fold_left escape_function state functions.values in
     let ufunctions = ValueSet.ufunctions value in
+    if not (FuncSet.is_empty ufunctions.values)
+    then Format.printf "escape ufunctions: %i@."
+        (List.length (FuncSet.elements ufunctions.values));
     List.fold_left escape_function state
       (FuncSet.elements ufunctions.values)
   in
   ValSet.fold aux state.k.escape state
 
 let substep state =
-  (* Format.printf "substep@."; *)
+  iprintf "substep@.";
   let aux code state =
-    (* iprintf "step: %a@." Printflambda.flambda code; *)
+    (* Format.printf "step: %a@." Printflambda.flambda code; *)
     let stack =
       try CodeMap.find code state.stacks
       with Not_found ->
@@ -1507,12 +1553,12 @@ let step state =
 (*   let state = escape_variables state in *)
 (*   escape_functions state *)
 
-let steps ~current_compilation_unit code i =
+let steps ~current_compilation_unit exported code i =
   let current_unit_id =
     Symbol.Compilation_unit.get_persistent_ident current_compilation_unit in
   let return = Ext "return" in
   let uncaught = Ext "uncaught" in
-  let state = entry_point current_unit_id ~return ~uncaught code in
+  let state = entry_point exported current_unit_id ~return ~uncaught code in
   let rec aux state n =
     if n <= 0
     then state, false
@@ -1540,16 +1586,55 @@ let steps ~current_compilation_unit code i =
   in
   aux state i
 
+let other_direct_call state expr =
+  let f expr = match expr with
+    | Fapply ({ap_function = f;ap_arg = args; ap_kind},_)->
+        let f_val = ebinding state f in
+        begin match ValueSet.functions f_val, ap_kind with
+        | { top = false; values = [(arg, _, (rem, _))] }, Indirect ->
+            let largs = List.length args in
+            let lparam = List.length rem + 1 in
+            if largs = lparam
+            then
+              Format.printf "new direct apply: %a -> %a@."
+                Variable.print arg
+                Printflambda.flambda expr
+            else if largs < lparam
+            then
+              Format.printf "new direct surapply: %a -> %a@."
+                Variable.print arg
+                Printflambda.flambda expr
+            else
+              Format.printf "new direct partial apply: %a -> %a@."
+                Variable.print arg
+                Printflambda.flambda expr
+        | { top = false; values = _::_::_ }, Direct _ ->
+            Format.printf "less precise apply: %a@."
+              Printflambda.flambda expr
+        | { top = true; values = _ }, Direct _ ->
+            Format.printf "less precise apply (top): %a@."
+              Printflambda.flambda expr
+        | { top = false; values = [] }, _ ->
+            Format.printf "unreachable apply: %a@."
+              Printflambda.flambda expr
+        | _ -> ()
+        end
+    | _ -> ()
+  in
+  Flambdaiter.iter f expr
 
 let test ~current_compilation_unit expr =
   if Clflags.experiments
   then
+    let expr = Flambdaiter.map_data (fun e -> ExprId.create ?name:(ExprId.name e) ())
+        expr in
     let expr = Flambdaanf.anf current_compilation_unit expr in
     if !Clflags.dump_flambda || print_anf
     then Format.printf "anf: %a@." Printflambda.flambda expr;
     (* let st1 = Gc.quick_stat () in *)
+    let exported = Compilenv.approx_env () in
     let t1 = Sys.time () in
-    let result, fixpoint = steps ~current_compilation_unit expr 100 in
+    let result, fixpoint = steps ~current_compilation_unit exported expr 100 in
     let t2 = Sys.time () in
     (* let st2 = Gc.quick_stat () in *)
     Format.printf "total time: %f@." (t2 -. t1);
@@ -1559,5 +1644,6 @@ let test ~current_compilation_unit expr =
     (*     (st2.Gc.promoted_words -. st1.Gc.promoted_words) *)
     (*     (st2.Gc.compactions - st1.Gc.compactions) in *)
     iprintf_r "%a@." print_state result;
+    other_direct_call result expr;
     if not fixpoint
     then failwith "fixpoint not reached"
