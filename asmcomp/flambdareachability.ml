@@ -440,7 +440,7 @@ end = struct
     let f =
       try
         let (clos', (m',b')) = VarMap.find var s in
-        assert(b == b');
+        assert(match b, b' with Some b, Some b' -> b == b' | None, None -> true | _ -> false);
         (union_closure clos clos', (m,b))
       with Not_found -> (clos, (m,b)) in
     VarMap.add var f s
