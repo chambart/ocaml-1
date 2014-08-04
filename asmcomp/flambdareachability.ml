@@ -104,10 +104,14 @@ module Value = struct
                * Asttypes.mutable_flag
                * VarSet.t array (* fields *)
 
+  type func_code =
+      { selected : ExprId.t flambda;
+        unselected : (Variable.t list * ExprId.t flambda) VarMap.t }
+
   (* only functions of arity 1 *)
   type func = Variable.t (* argument *)
               * VarSet.t VarMap.t (* closure *)
-              * (Variable.t list * ExprId.t flambda option)
+              * (Variable.t list * func_code option)
   (* missing arguments, code (no code if external function) *)
 
   (* unspecified function *)
@@ -424,6 +428,10 @@ end = struct
 
 end
 
+type 'a result =
+  { values : 'a;
+    top : bool }
+
 module FuncSet : sig
   type t
   val empty : t
@@ -435,8 +443,9 @@ module FuncSet : sig
   val elements : t -> Value.func list
 
   val closure_variable : t -> Closure_variable.t -> VarSet.t
+  val closure_function : t -> Closure_function.t -> t result
 end = struct
-  type t = (VarSet.t VarMap.t * (Variable.t list * ExprId.t flambda option)) VarMap.t
+  type t = (VarSet.t VarMap.t * (Variable.t list * Value.func_code option)) VarMap.t
 
   let empty = VarMap.empty
 
@@ -447,7 +456,7 @@ end = struct
     let f =
       try
         let (clos', (m',b')) = VarMap.find var s in
-        assert(match b, b' with Some b, Some b' -> b == b' | None, None -> true | _ -> false);
+        assert(match b, b' with Some b, Some b' -> b.Value.selected == b'.Value.selected | None, None -> true | _ -> false);
         (union_closure clos clos', (m,b))
       with Not_found -> (clos, (m,b)) in
     VarMap.add var f s
@@ -481,6 +490,31 @@ end = struct
         try VarSet.union (VarMap.find v clos) acc with
         | Not_found -> acc) (* assert false ? *)
       s VarSet.empty
+
+  let closure_function (s:t) v : t result =
+    let v = Closure_function.unwrap v in
+    VarMap.fold
+      (fun _ (clos, (_,codes)) acc ->
+       match codes with
+       | None ->
+          { acc with top = true }
+       | Some {Value.unselected} ->
+          try
+            let args, code = VarMap.find v unselected in
+            match args with
+            | [] -> assert false
+            | first_arg :: remaining_args ->
+               assert(not (VarMap.mem first_arg acc.values));
+               (* Not strictly forbidden, but it shouldn't appear.
+                  It was simpler to ignore that case for now *)
+               let values =
+                 VarMap.add first_arg
+                            (clos, (remaining_args,
+                                    Some { Value.selected = code; unselected })) acc.values
+               in
+               { acc with values }
+          with Not_found -> acc) (* assert false ? *)
+      s { top = false; values = VarMap.empty }
 
 end
 
@@ -529,10 +563,6 @@ end = struct
     VarMap.fold (fun _ -> FuncSet.union) s FuncSet.empty
 
 end
-
-type 'a result =
-  { values : 'a;
-    top : bool }
 
 module ValueSet = struct
 
@@ -619,6 +649,10 @@ module ValueSet = struct
   let closure_function s v =
     { values = UFuncSet.closure_function s.ufuncs v;
       top = s.top }
+
+  let closure_relative_function s v =
+    let r = FuncSet.closure_function s.funcs v in
+    { r with top = r.top || s.top }
 
   let functions s =
     { values = FuncSet.elements s.funcs;
@@ -1022,9 +1056,9 @@ let assign_top state v =
 let assign_top' state v = assign_top state (Var v)
 
 
-let call (state:state) (stack:stack) (body:ExprId.t flambda option) =
+let call (state:state) (stack:stack) (body:Value.func_code option) =
   match body with
-  | Some body -> goto_branch state stack body
+  | Some body -> goto_branch state stack body.Value.selected
   | None ->
       (* extenal function: we do know nothing *)
       let state =
@@ -1331,20 +1365,34 @@ and step_let state stack v def =
       let r = ValueSet.closure_variable f var in
       assign state (Var v) (var_union state r)
 
-  | Ffunction({fu_closure = f;fu_fun = var},_) ->
+  | Ffunction({fu_closure = f;fu_fun = var;fu_relative_to},_) ->
       let f = ebinding state f in
       iprintf "function %a@." Variable.print v;
-      assign_func_r state (Var v) (ValueSet.closure_function f var)
+
+      begin
+        match fu_relative_to with
+        | None ->
+           assign_func_r state (Var v) (ValueSet.closure_function f var)
+        | Some _relative_to ->
+           let func_set = ValueSet.closure_relative_function f var in
+           let state = assign_func_r state (Var v) func_set in
+           if func_set.top
+           then assign_top state (Var v)
+           else state
+      end
 
   | Fclosure ({cl_fun={funs};cl_free_var},_) ->
       let state =
         VarMap.fold (fun id expr state -> assign state (Var id) (ebinding state expr))
           cl_free_var state in
       let outer_closure = VarMap.map (fun e -> VarSet.singleton (var e)) cl_free_var in
+      let func_code_map = VarMap.map (fun { params; body } -> params, body) funs in
       let prepare_function { body; params } : Value.func =
         match params with
         | [] -> assert false
-        | h :: t -> Value.func h outer_closure t (Some body)
+        | h :: t ->
+           Value.func h outer_closure t
+                      (Some Value.({ selected = body; unselected = func_code_map }))
       in
       let functions = VarMap.map prepare_function funs in
       let add_recursive_variables fun_var fun_val state =
@@ -1462,10 +1510,10 @@ and step_if state stack cond ifso ifnot =
     let state = goto_branch state stack ifso in
     goto_branch state stack ifnot
 
-and step_apply_one (state:state) (stack:stack) f arg =
-  let apply_one (state,result) f =
+and step_apply_one (state:state) (stack:stack) f (arg:Variable.t) =
+  let apply_one (state,result) (f:Value.func) =
     let (param, clos, (missing, body)) = f in
-    let state = assign state (Var param) (ebinding state arg) in
+    let state = assign state (Var param) (binding state arg) in
     match missing with
     | [] ->
         iprintf "complete apply %a@." Variable.print param;
@@ -1474,13 +1522,21 @@ and step_apply_one (state:state) (stack:stack) f arg =
         state, result (* do not call directly *)
     | h::t ->
         iprintf "partial apply %a@." Variable.print param;
-        let clos = VarMap.add param (VarSet.singleton (var arg)) clos in
+        let clos = VarMap.add param (VarSet.singleton arg) clos in
         let next_f = Value.func h clos t body in
         let result = ValueSet.add_func next_f result in
         state, result
   in
   let funs = ValueSet.functions f in
   let result = if funs.top then ValueSet.top else ValueSet.empty in
+  let state =
+    if funs.top
+    then begin
+        iprintf "escape fun arg %a@." Variable.print arg;
+        escapes state [arg]
+      end
+    else state
+  in
   iprintf "apply one: %i (top: %b)@." (List.length funs.values) funs.top;
   List.fold_left apply_one (state, result) funs.values
 
@@ -1491,7 +1547,7 @@ and step_apply state stack return_var f arg remaining_args =
     | [] -> Var return_var
     | _ -> Ret(return_var, List.length remaining_args) in
   let f_val = binding' state f in
-  let state, result = step_apply_one (state:state) (stack:stack) f_val arg in
+  let state, result = step_apply_one (state:state) (stack:stack) f_val (var arg) in
   let state = assign state return_val result in
   match remaining_args with
   | [] -> state
@@ -1665,7 +1721,7 @@ let test ~current_compilation_unit expr =
         expr in
     let expr = Flambdaanf.anf current_compilation_unit expr in
     if !Clflags.dump_flambda || print_anf
-    then Format.printf "anf: %a@." Printflambda.flambda expr;
+    then Format.eprintf "anf:@ %a@." Printflambda.flambda expr;
     (* let st1 = Gc.quick_stat () in *)
     let exported = Compilenv.approx_env () in
     let t1 = Sys.time () in
