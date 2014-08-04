@@ -46,9 +46,13 @@ module Val = struct
     | Var of Variable.t
     | Ret of Variable.t * int (* function application, with n unapplied parameters *)
     | Ext of string
+    | Sym of Symbol.t
 
   let compare t1 t2 =
     match t1, t2 with
+    | Sym s1, Sym s2 -> Symbol.compare s1 s2
+    | Sym _, _ -> -1
+    | _, Sym _ -> 1
     | Ext s1, Ext s2 -> compare s1 s2
     | Ext _, _ -> -1
     | _, Ext _ -> 1
@@ -69,6 +73,7 @@ module Val = struct
     | Ret (v,0) -> Variable.hash v
     | Ret (v,n) -> Variable.hash v + n
     | Ext s -> Hashtbl.hash s
+    | Sym s -> Symbol.hash s
 
   let equal v1 v2 = compare v1 v2 = 0
 
@@ -76,6 +81,7 @@ module Val = struct
     | Ext s -> Format.fprintf ppf "Ext_%s" s
     | Var v -> Variable.print ppf v
     | Ret (v,n) -> Format.fprintf ppf "%a-%i" Variable.print v n
+    | Sym s -> Symbol.print ppf s
 
   let output oc v = output_string oc (Format.asprintf "%a" print v)
 end
@@ -84,7 +90,7 @@ type t = Val.t =
   | Var of Variable.t
   | Ret of Variable.t * int
   | Ext of string
-
+  | Sym of Symbol.t
 
 module ValSet = Ext_types.ExtSet(Val)
 module ValMap = Ext_types.ExtMap(Val)
@@ -421,6 +427,7 @@ end
 module FuncSet : sig
   type t
   val empty : t
+  val singleton : Value.func -> t
   val add : Value.func -> t -> t
   val union : t -> t -> t
   val equal : t -> t -> bool
@@ -450,6 +457,8 @@ end = struct
   (*   if VarMap.exists (fun _ s -> VarSet.is_empty s) clos *)
   (*   then set *)
   (*   else add' f set *)
+
+  let singleton func = add func empty
 
   let union (s1:t) (s2:t) =
     let aux (s1,e) (s2,_) = union_closure s1 s2, e in
@@ -980,6 +989,11 @@ let assign_ufunc state v ufunc =
   let set = ValueSet.add_ufunc ufunc set in
   { state with env = ValMap.add v set state.env }
 
+let assign_func state v func =
+  let set = bound_or_empty state v in
+  let set = ValueSet.union_func func set in
+  { state with env = ValMap.add v set state.env }
+
 let assign_func_r state v func =
   let set = bound_or_empty state v in
   let set = ValueSet.union_func func.values set in
@@ -1138,7 +1152,9 @@ and step_let state stack v def =
   match def with
   | Fevent _
   | Fsequence _
-  | Fletrec _ -> assert false
+  | Fletrec _ ->
+      (* !!!! FALSE !!!! *)
+      assert false
 
   | Flet(_, v, def, body, _) ->
       step_let' state stack v def body
@@ -1295,6 +1311,8 @@ and step_let state stack v def =
           assign_other state (Var v)
 
       | _ ->
+          (* !!! TODO: bigarray get/set !!! *)
+
           Format.eprintf "not implemented %a@." Printflambda.flambda def;
           assert false
       end
@@ -1329,6 +1347,9 @@ and step_let state stack v def =
         | h :: t -> Value.func h outer_closure t (Some body)
       in
       let functions = VarMap.map prepare_function funs in
+      let add_recursive_variables fun_var fun_val state =
+        assign_func state (Var fun_var) (FuncSet.singleton fun_val) in
+      let state = VarMap.fold add_recursive_variables functions state in
       assign_ufunc state (Var v) (Value.ufunc functions)
 
   | Fapply ({ap_function = f;ap_arg = args; ap_kind},_) ->
@@ -1608,12 +1629,12 @@ let other_direct_call state expr =
               Format.printf "new direct partial apply: %a -> %a@."
                 Variable.print arg
                 Printflambda.flambda expr
-        | { top = false; values = _::_::_ }, Direct _ ->
-            Format.printf "less precise apply: %a@."
-              Printflambda.flambda expr
-        | { top = true; values = _ }, Direct _ ->
-            Format.printf "less precise apply (top): %a@."
-              Printflambda.flambda expr
+        (* | { top = false; values = _::_::_ }, Direct _ -> *)
+        (*     Format.printf "less precise apply: %a@." *)
+        (*       Printflambda.flambda expr *)
+        (* | { top = true; values = _ }, Direct _ -> *)
+        (*     Format.printf "less precise apply (top): %a@." *)
+        (*       Printflambda.flambda expr *)
         | { top = false; values = [] }, _ ->
             Format.printf "unreachable apply: %a@."
               Printflambda.flambda expr
@@ -1622,6 +1643,20 @@ let other_direct_call state expr =
     | _ -> ()
   in
   Flambdaiter.iter f expr
+
+let clean state expr =
+  let f expr = match expr with
+    | Fapply ({ap_function = f;ap_arg = args; ap_kind}, d)->
+        let f_val = ebinding state f in
+        begin match ValueSet.functions f_val, ap_kind with
+        | { top = false; values = [] }, _ ->
+            Funreachable d
+        | _ ->
+            expr
+        end
+    | _ -> expr
+  in
+  Flambdaiter.map f expr
 
 let test ~current_compilation_unit expr =
   if Clflags.experiments
@@ -1646,4 +1681,6 @@ let test ~current_compilation_unit expr =
     iprintf_r "%a@." print_state result;
     other_direct_call result expr;
     if not fixpoint
-    then failwith "fixpoint not reached"
+    then failwith "fixpoint not reached";
+    clean result expr
+  else expr
