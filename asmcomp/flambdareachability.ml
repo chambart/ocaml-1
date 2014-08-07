@@ -204,15 +204,21 @@ end = struct
     let s1 =
       try VarMap.find id set with
       | Not_found -> IntMap.empty in
-    let fields =
-      try
-        let prev_block = IntMap.find size s1 in
-        array_union fields prev_block
+    try
+      let prev_block = IntMap.find size s1 in
+      let fields = array_union fields prev_block in
+
+      if equal_array VarSet.equal fields prev_block
+      then set
+      else
+        VarMap.add id
+                   (IntMap.add size fields s1)
+                   set
       with
-      | Not_found -> fields in
-    VarMap.add id
-      (IntMap.add size fields s1)
-      set
+      | Not_found ->
+         VarMap.add id
+                    (IntMap.add size fields s1)
+                    set
 
   let add = add'
   (* problem with recursive values if we do that: *)
@@ -322,7 +328,11 @@ end = struct
 
   let add' (block:Value.block) (heap:heap) (set:t) =
     let heap = ImmBlockSet.add block heap in
-    let set = VarSet.add (Value.block_id block) set in
+    let id = Value.block_id block in
+    let set =
+      if VarSet.mem id set
+      then set
+      else VarSet.add id set in
     heap, set
 
   let add = add'
