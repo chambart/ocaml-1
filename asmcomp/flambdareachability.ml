@@ -735,6 +735,7 @@ module StackPart : sig
   val empty : t
   val is_empty : t -> bool
   val add : stack_part -> t -> t
+  val add_return_var : Val.t -> t -> t
   val union : t -> t -> t
   val subset : t -> t -> bool
   val singleton : stack_part -> t
@@ -756,6 +757,12 @@ end = struct
     else
       { vars = ValSet.add return_var vars;
         points = CodeSet.add return_point points }
+
+  let add_return_var return_var set =
+    if ValSet.mem return_var set.vars
+    then set
+    else { set with vars = ValSet.add return_var set.vars }
+
   let subset s1 s2 =
     ValSet.subset s1.vars s2.vars &&
     CodeSet.subset s1.points s2.points
@@ -787,6 +794,7 @@ module StackSet : sig
   val empty : t
   (* val add_call : stack_part -> t -> t *)
   (* val add_raise : stack_part -> t -> t *)
+  val add_call_return_var : Val.t -> t -> t
   val union : t -> t -> t
   val equal : t -> t -> bool
   val subset : t -> t -> bool
@@ -812,6 +820,10 @@ end = struct
   (*   if raises == s.raises *)
   (*   then s *)
   (*   else { s with raises = StackPart.add raisep s.raises } *)
+
+  let add_call_return_var return_var s =
+    { s with calls = StackPart.add_return_var return_var s.calls }
+
   let union s1 s2 =
     let calls = StackPart.union s1.calls s2.calls in
     let raises = StackPart.union s1.raises s2.raises in
@@ -1547,7 +1559,8 @@ and step_apply state stack return_var f arg remaining_args =
     | [] -> Var return_var
     | _ -> Ret(return_var, List.length remaining_args) in
   let f_val = binding' state f in
-  let state, result = step_apply_one (state:state) (stack:stack) f_val (var arg) in
+  let call_stack = StackSet.add_call_return_var return_val stack in
+  let state, result = step_apply_one (state:state) (call_stack:stack) f_val (var arg) in
   let state = assign state return_val result in
   match remaining_args with
   | [] -> state
