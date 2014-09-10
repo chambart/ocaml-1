@@ -187,6 +187,8 @@ module ImmBlockSet : sig
   val add_field : t -> int -> VarSet.t -> t
   val add_sub_field : t -> Variable.t -> int -> VarSet.t -> t
 
+  val print_diff : t -> t -> unit
+
   (* used to implement HeapBlockSet *)
   val sub_field : t -> Variable.t -> int -> VarSet.t
   val sub_fields : t -> Variable.t -> VarSet.t
@@ -237,6 +239,21 @@ end = struct
 
   let is_empty t =
     VarMap.is_empty t
+
+  let print_diff (s1:t) (s2:t) =
+    let aux id s1 s2 =
+      match s1, s2 with
+      | None, None -> assert false
+      | None, Some _ -> Format.printf "l %a@ " Variable.print id; None
+      | Some _, None -> Format.printf "r %a@ " Variable.print id; None
+      | Some s1, Some s2 ->
+         if not (IntMap.equal (equal_array VarSet.equal) s1 s2)
+         then Format.printf "d %a@ " Variable.print id;
+         (* else Format.printf "e %a@ " Variable.print id; *)
+         None
+    in
+    let (_ : t) = VarMap.merge aux s1 s2 in
+    ()
 
   (********************)
 
@@ -382,6 +399,8 @@ module BlockSet : sig
   val fields : heap -> t -> VarSet.t
   val set_field : heap -> t -> int -> VarSet.t -> heap
 
+  val print_diff : t -> t -> unit
+
 end = struct
 
   type heap = HeapBlockSet.heap
@@ -418,6 +437,14 @@ end = struct
   let is_empty t =
     ImmBlockSet.is_empty t.immut &&
     HeapBlockSet.is_empty t.mut
+
+  let print_diff s1 s2 =
+    if not (ImmBlockSet.equal s1.immut s2.immut)
+    then
+      (Format.printf "immutable@ ";
+       ImmBlockSet.print_diff s1.immut s2.immut);
+    if not (HeapBlockSet.equal s1.mut s2.mut)
+    then Format.printf "mutable@ "
 
   (********************)
 
@@ -626,6 +653,24 @@ module ValueSet = struct
     UFuncSet.equal s1.ufuncs s2.ufuncs &&
     s1.top = s2.top
 
+  let equal_print s1 s2 =
+    let other = s1.other = s2.other in
+    let block = BlockSet.equal s1.blocks s2.blocks in
+    let funcset = FuncSet.equal s1.funcs s2.funcs in
+    let ufunc = UFuncSet.equal s1.ufuncs s2.ufuncs in
+    let top = s1.top = s2.top in
+    let f s b =
+      if not b then Format.printf "%s " s
+    in
+    Format.printf "           ";
+    f "other" other;
+    f "block" block;
+    BlockSet.print_diff s1.blocks s2.blocks;
+    f "funcset" funcset;
+    f "ufunc" ufunc;
+    f "top" top;
+    Format.printf "@."
+
   let equal_heap h1 h2 =
     BlockSet.equal_heap h1 h2
 
@@ -690,6 +735,8 @@ module CodeSet : sig
   val fold : (code -> 'acc -> 'acc) -> t -> 'acc -> 'acc
   val equal : t -> t -> bool
   val subset : t -> t -> bool
+  val diff : t -> t -> t
+  val iter : (code -> unit) -> t -> unit
 end = struct
   type t = ExprId.t flambda ExprMap.t
   let empty = ExprMap.empty
@@ -716,6 +763,15 @@ end = struct
       if not (ExprMap.mem k s2) then raise Exit
     in
     try ExprMap.iter aux s1; true with _ -> false
+  let diff s1 s2 =
+    let aux k code acc =
+      if ExprMap.mem k s2
+      then acc
+      else ExprMap.add k code acc
+    in
+    ExprMap.fold aux s1 ExprMap.empty
+  let iter f s =
+    ExprMap.iter (fun _ code -> f code) s
 end
 
 module CodeMap : sig
@@ -723,6 +779,7 @@ module CodeMap : sig
   val empty : 'a t
   val add : code -> 'a -> 'a t -> 'a t
   val singleton : code -> 'a -> 'a t
+  val mem : code -> 'a t -> bool
   val find : code -> 'a t -> 'a
   val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
   val fold : (code -> 'a -> 'acc -> 'acc) -> 'a t -> 'acc -> 'acc
@@ -733,6 +790,7 @@ end = struct
   let add f v s = ExprMap.add (data_at_toplevel_node f) (v,f) s
   let singleton f v = ExprMap.singleton (data_at_toplevel_node f) (v,f)
   let find f s = fst (ExprMap.find (data_at_toplevel_node f) s)
+  let mem f s = ExprMap.mem (data_at_toplevel_node f) s
   let equal f s1 s2 = ExprMap.equal (fun (v1,_) (v2,_) -> f v1 v2) s1 s2
   let fold f s acc = ExprMap.fold (fun _ (v,c) acc -> f c v acc) s acc
   let iter f s = ExprMap.iter (fun _ (v,c) -> f c v) s
@@ -873,6 +931,123 @@ end
 
 type stack = StackSet.t
 
+type dependencies = {
+  var_var : VarSet.t VarMap.t;
+  var_expr : CodeSet.t VarMap.t;
+  expr_var : Variable.t CodeMap.t;
+  expr_expr : CodeSet.t CodeMap.t;
+
+  let_expr : code CodeMap.t;
+}
+
+let dependencies expr =
+  let var_var = ref VarMap.empty in
+  let var_expr = ref VarMap.empty in
+  let expr_var : Variable.t CodeMap.t ref = ref CodeMap.empty in
+  let expr_expr = ref CodeMap.empty in
+
+  let let_expr = ref CodeMap.empty in
+
+  let add_var_var src dst =
+    let set =
+      try
+        let set = VarMap.find src !var_var in
+        VarSet.add dst set
+      with Not_found -> VarSet.singleton dst in
+    var_var := VarMap.add src set !var_var
+  in
+
+  let add_var_expr var expr =
+    let set =
+      try
+        let set = VarMap.find var !var_expr in
+        CodeSet.add expr set
+      with Not_found -> CodeSet.singleton expr in
+    var_expr := VarMap.add var set !var_expr
+  in
+
+  let add_expr_var expr var =
+    if CodeMap.mem expr !expr_var
+    then assert false
+    else expr_var := CodeMap.add expr var !expr_var
+  in
+
+  let add_expr_expr src dst =
+    let set =
+      try
+        let set = CodeMap.find src !expr_expr in
+        CodeSet.add dst set
+      with Not_found -> CodeSet.singleton dst in
+    expr_expr := CodeMap.add src set !expr_expr
+  in
+
+  let add_expr_var expr var =
+    match expr with
+    | Fvar (v, _) ->
+       add_var_var v var
+    | _ ->
+       add_expr_var expr var
+  in
+
+  let add_expr_expr src dst =
+    match src with
+    | Fvar (v, _) ->
+       add_var_expr v dst
+    | _ ->
+       add_expr_expr src dst
+  in
+
+  let add_let_expr expr let_exp =
+    if CodeMap.mem expr !let_expr
+    then assert false
+    else let_expr := CodeMap.add expr let_exp !let_expr
+  in
+
+  let add_dependencies expr =
+    match expr with
+    | Fvar _ -> ()
+
+    | Fclosure (clos,_) ->
+       VarMap.iter (fun _ subexpr -> add_expr_expr subexpr expr) clos.cl_free_var
+
+    | Flet (kind, var, def, body, _) ->
+       add_let_expr def expr;
+       add_expr_var def var;
+       add_expr_expr body expr
+
+    | Fletrec (defs, body, _) ->
+       List.iter (fun (var,def) ->
+                  add_let_expr def expr;
+                  add_expr_var def var) defs;
+       add_expr_expr body expr
+
+    | Fassign (var, sexpr, _) ->
+       add_expr_expr sexpr expr;
+       add_expr_var sexpr var
+
+    | Fwhile (cond, body, _) -> ()
+
+    | Ffor (var, lo, hi, _dir, body, _) ->
+       add_expr_var lo var;
+       add_expr_var hi var
+
+    | _ ->
+       Flambdaiter.subexpressions expr
+       |> List.iter (fun subexpr -> add_expr_expr subexpr expr)
+  in
+
+  Flambdaiter.iter add_dependencies expr;
+
+  {
+    var_var = !var_var;
+    var_expr = !var_expr;
+    expr_var = !expr_var;
+    expr_expr = !expr_expr;
+
+    let_expr = !let_expr;
+  }
+
+
 type kept_state =
   { current_unit_id : Ident.t;
     escape_stack : StackSet.t;
@@ -880,8 +1055,10 @@ type kept_state =
     escape : ValSet.t;
     globals : Variable.t IntMap.t;
     reached : CodeSet.t;
-    exported : Flambdaexport.exported }
-
+    exported : Flambdaexport.exported;
+    dependencies : dependencies;
+    variable_scope : CodeSet.t ValMap.t; (* to be removed *)
+  }
 
 type state =
   { stacks : StackSet.t CodeMap.t;
@@ -916,45 +1093,81 @@ let print_state ppf s =
     (print_env s.heap) s.env
     print_reached s.k.reached
 
-(* let equal_state s1 s2 = *)
-(*   let f ppf b = *)
-(*     if b *)
-(*     then Format.pp_print_string ppf " true" *)
-(*     else Format.pp_print_string ppf "false" *)
-(*   in *)
-(*   let reached = CodeSet.equal s1.k.reached s2.k.reached in *)
-(*   let stacks = CodeMap.equal StackSet.equal s1.stacks s2.stacks in *)
-(*   let env = VarMap.equal ValueSet.equal s1.env s2.env in *)
-(*   let globals = IntMap.equal Variable.equal s1.k.globals s2.k.globals in *)
-(*   let escape = VarSet.equal s1.k.escape s2.k.escape in *)
-(*   let heap = ValueSet.equal_heap s1.heap s2.heap in *)
-(*   let equal = reached && stacks && env && globals && escape && heap in *)
-(*   Format.printf "equal: %a@   @[reached: %a @ stacks: %a @ env: %a @ globals: %a @ escape: %a @ heap: %a@]@." *)
-(*     f equal f reached f stacks f env f globals f escape f heap; *)
-(*   equal *)
+let print_env_diff env1 env2 =
+  let diff var v1 v2 =
+    match v1, v2 with
+    | None, None -> assert false
+    | None, Some _ ->
+       Format.printf "l %a@ " Val.print var;
+       None
+    | Some _, None ->
+       Format.printf "r %a@ " Val.print var;
+       None
+    | Some v1, Some v2 ->
+       if not (ValueSet.equal v1 v2)
+       then Format.printf "d %a@ " Val.print var;
+       None
+  in
+  let _ = ValMap.merge diff env1 env2 in
+  ()
 
 let equal_state s1 s2 =
-  CodeSet.equal s1.k.reached s2.k.reached &&
-  CodeMap.equal StackSet.equal s1.stacks s2.stacks &&
-  ValMap.equal ValueSet.equal s1.env s2.env &&
-  IntMap.equal Variable.equal s1.k.globals s2.k.globals &&
-  ValSet.equal s1.k.escape s2.k.escape &&
-  ValueSet.equal_heap s1.heap s2.heap
+  let reached = CodeSet.equal s1.k.reached s2.k.reached in
+  let stacks = CodeMap.equal StackSet.equal s1.stacks s2.stacks in
+  let env = ValMap.equal ValueSet.equal s1.env s2.env in
+  let globals = IntMap.equal Variable.equal s1.k.globals s2.k.globals in
+  let escape = ValSet.equal s1.k.escape s2.k.escape in
+  let heap = ValueSet.equal_heap s1.heap s2.heap in
+  let equal = reached && stacks && env && globals && escape && heap in
 
-let initial_state exported current_unit_id =
+(*
+  let f s b =
+    if not b then Format.printf "%s " s
+  in
+  Format.printf "           ";
+  (* f "equal" equal; *)
+  f "reached" reached;
+  f "stacks" stacks;
+  f "env" env;
+  f "globals" globals;
+  f "escape" escape;
+  f "heap" heap;
+  Format.printf "@.";
+  if not env then print_env_diff s1.env s2.env;
+  Format.printf "@.";
+*)
+
+  equal
+
+let initial_state exported current_unit_id dependencies =
   let k = { reached = CodeSet.empty;
             globals = IntMap.empty;
             current_unit_id;
             escape = ValSet.empty;
             escape_stack = StackSet.empty;
             static_handler = StaticExceptionMap.empty;
-            exported }
+            exported;
+            dependencies;
+            variable_scope = ValMap.empty;
+          }
   in
   { stacks = CodeMap.empty;
     env = ValMap.empty;
     heap = ValueSet.empty_heap;
     new_reached = CodeSet.empty;
     k }
+
+let add_variable_scope var code state : state =
+  try
+    let set = ValMap.find var state.k.variable_scope in
+    if CodeSet.mem code set
+    then state
+    else
+      let set = CodeSet.add code set in
+      { state with k = { state.k with variable_scope = ValMap.add var set state.k.variable_scope } }
+  with Not_found ->
+    let set = CodeSet.singleton code in
+    { state with k = { state.k with variable_scope = ValMap.add var set state.k.variable_scope } }
 
 let push_stack (stack:stack) (ret:Val.t) (kont:ExprId.t flambda) =
   let spart = { return_var = ret; return_point = kont } in
@@ -972,8 +1185,28 @@ let reached state expr =
       new_reached = CodeSet.add expr state.new_reached;
       k = { state.k with reached = CodeSet.add expr state.k.reached } }
 
+let rereached state expr =
+  if CodeSet.mem expr state.k.reached
+  then
+    { state with
+      new_reached = CodeSet.add expr state.new_reached }
+  else state
+
+let force_rereached_function state code =
+  match code with
+  | None -> state
+  | Some { Value.selected = expr } ->
+     if CodeSet.mem expr state.k.reached
+     then
+       let () = Format.printf "forced rereach@." in
+       { state with
+         new_reached = CodeSet.add expr state.new_reached }
+     else
+       state
+
 let entry_point exported current_unit_id ~return ~uncaught expr =
-  let state = reached (initial_state exported current_unit_id) expr in
+  let dependencies = dependencies expr in
+  let state = reached (initial_state exported current_unit_id dependencies) expr in
   let escape_stack = StackSet.toplevel ~return ~uncaught in
   { state with
     stacks = CodeMap.singleton expr escape_stack;
@@ -1013,14 +1246,133 @@ let global state i =
   try binding state (IntMap.find i state.k.globals) with
   | Not_found -> ValueSet.empty
 
+let dependent_expressions reached dependencies v =
+  let expr_set = ref CodeSet.empty in
+  let queue = Queue.create () in
+
+  let aux expr expr_set =
+    if not (CodeSet.mem expr expr_set)
+    then begin
+        let expr_set =
+          match expr with
+          | Flet _ | Fletrec _ -> expr_set
+          | _ ->
+             CodeSet.add expr expr_set in
+        Queue.push expr queue;
+        expr_set
+      end
+    else expr_set
+  in
+
+  begin
+    try
+      let first_set = VarMap.find v dependencies.var_expr in
+      expr_set := CodeSet.fold aux first_set !expr_set;
+    with Not_found -> ()
+  end;
+
+  while not (Queue.is_empty queue) do
+    let expr = Queue.pop queue in
+    if CodeSet.mem expr reached
+    then
+      begin
+        let expr_deps =
+          try CodeMap.find expr dependencies.expr_expr with
+          | Not_found -> CodeSet.empty
+        in
+        let set = CodeSet.fold aux expr_deps !expr_set in
+        expr_set := set
+      end;
+  done;
+
+  CodeSet.fold
+    (fun expr set ->
+     try CodeSet.add (CodeMap.find expr dependencies.let_expr) set
+     with Not_found -> set) !expr_set !expr_set
+
+let rereach_variable' state v =
+  (* Format.printf "start rereached %a@." Variable.print v; *)
+  let deps = dependent_expressions
+               state.k.reached state.k.dependencies v in
+  CodeSet.fold
+    (fun expr state ->
+     if CodeSet.mem expr state.k.reached
+     then Format.printf "rereached %a@." Variable.print v;
+     (* Format.printf "rereached %b %a@." *)
+     (*               (CodeSet.mem expr state.k.reached) *)
+     (*               Variable.print v; *)
+     (* if CodeSet.mem expr state.k.reached *)
+     (* then Format.printf "%a@." Printflambda.flambda expr; *)
+
+     rereached state expr)
+    deps state
+
+let rereach_variable state v =
+  match v with
+  | Var v -> rereach_variable' state v
+  | _ -> state
+
+(*
+  try
+    let scope = ValMap.find v state.k.variable_scope in
+    (* Format.printf "rereached %a@." Val.print v; *)
+    CodeSet.fold
+      (fun expr state -> rereached state expr)
+      scope state
+  with Not_found ->
+    (* Format.printf "reached %a@." Val.print v; *)
+    state
+*)
+
+(* let assign state v contents = *)
+(*   let set = *)
+(*     try *)
+(*       let set = ValMap.find v state.env in *)
+(*       ValueSet.union contents set *)
+(*     with Not_found -> contents *)
+(*   in *)
+(*   { state with env = ValMap.add v set state.env } *)
+
 let assign state v contents =
   let set =
     try
       let set = ValMap.find v state.env in
-      ValueSet.union contents set
-    with Not_found -> contents
+
+      let union = ValueSet.union contents set in
+
+      if ValueSet.equal union set
+      (* we should have some kind of subset to check before doing the union *)
+      then
+        (* let () = Format.printf "assign equal %a@." Val.print v in *)
+        None
+      else
+        (* let () = Format.printf "assign diff %a@.@." Val.print v in *)
+        (* let () = ValueSet.equal_print union set in *)
+        Some union
+
+    with Not_found -> Some contents
   in
-  { state with env = ValMap.add v set state.env }
+  match set with
+  | None -> state
+  | Some set ->
+     rereach_variable { state with env = ValMap.add v set state.env } v
+
+let assign_test_equal state v contents =
+  let set =
+    try
+      let set = ValMap.find v state.env in
+      let union = ValueSet.union contents set in
+
+      if ValueSet.equal union set
+      (* we should have some kind of subset to check before doing the union *)
+      then None
+      else Some union
+
+    with Not_found -> Some contents
+  in
+  match set with
+  | None -> true, state
+  | Some set -> false, { state with env = ValMap.add v set state.env }
 
 let assign_global state pos v =
   try
@@ -1035,20 +1387,40 @@ let bound_or_empty state v =
   try ValMap.find v state.env
   with Not_found -> ValueSet.empty
 
+(* let assign_block state v block = *)
+(*   let set = bound_or_empty state v in *)
+(*   let heap, set = ValueSet.add_block block state.heap set in *)
+(*   { state with env = ValMap.add v set state.env; heap } *)
+
 let assign_block state v block =
-  let set = bound_or_empty state v in
-  let heap, set = ValueSet.add_block block state.heap set in
-  { state with env = ValMap.add v set state.env; heap }
+  let old_set = bound_or_empty state v in
+  let heap, set = ValueSet.add_block block state.heap old_set in
+  if ValueSet.equal set old_set && state.heap == heap
+  then state
+  else
+    rereach_variable
+      { state with env = ValMap.add v set state.env; heap }
+      v
 
 let assign_ufunc state v ufunc =
-  let set = bound_or_empty state v in
-  let set = ValueSet.add_ufunc ufunc set in
-  { state with env = ValMap.add v set state.env }
+  let old_set = bound_or_empty state v in
+  let set = ValueSet.add_ufunc ufunc old_set in
+  if ValueSet.equal set old_set
+  then state
+  else
+    rereach_variable
+      { state with env = ValMap.add v set state.env }
+      v
 
 let assign_func state v func =
-  let set = bound_or_empty state v in
-  let set = ValueSet.union_func func set in
-  { state with env = ValMap.add v set state.env }
+  let old_set = bound_or_empty state v in
+  let set = ValueSet.union_func func old_set in
+  if ValueSet.equal set old_set
+  then state
+  else
+    rereach_variable
+      { state with env = ValMap.add v set state.env }
+      v
 
 let assign_func_r state v func =
   let set = bound_or_empty state v in
@@ -1065,7 +1437,9 @@ let assign_other state v =
   then state
   else
     let set = ValueSet.add_other set in
-    { state with env = ValMap.add v set state.env }
+    rereach_variable
+      { state with env = ValMap.add v set state.env }
+      v
 
 let assign_top state v =
   let set = bound_or_empty state v in
@@ -1073,7 +1447,9 @@ let assign_top state v =
   then state
   else
     let set = ValueSet.add_top set in
-    { state with env = ValMap.add v set state.env }
+    rereach_variable
+      { state with env = ValMap.add v set state.env }
+      v
 
 let assign_top' state v = assign_top state (Var v)
 
@@ -1127,22 +1503,27 @@ let return_other state stack =
 
 let rec step_expr state stack expr =
   (* iprintf "go: %a@." Printflambda.flambda expr; *)
+  let orig_value =
+    try Some (state, CodeMap.find expr state.k.dependencies.expr_var) with
+    | Not_found -> None in
+  let state =
   match expr with
   | Flet(_, v, def, body, _) ->
       step_let' state stack v def body
 
   | Fletrec (defs, body,_) ->
-      let state = add_stack state stack body in
-      let state =
-        List.fold_left (fun state (v, def) ->
-            step_let state (push_stack stack (Var v) body) v def)
-          state defs in
-      if List.exists (fun (v,_) -> ValueSet.is_empty (binding state v)) defs
-      then state
-      else
-        let state = reached state body in
-        (* step_expr state stack body *)
-        state
+     step_let_rec' state stack defs body
+      (* let state = add_stack state stack body in *)
+      (* let state = *)
+      (*   List.fold_left (fun state (v, def) -> *)
+      (*       step_let state (push_stack stack (Var v) body) v def) *)
+      (*     state defs in *)
+      (* if List.exists (fun (v,_) -> ValueSet.is_empty (binding state v)) defs *)
+      (* then state *)
+      (* else *)
+      (*   let state = reached state body in *)
+      (*   (\* step_expr state stack body *\) *)
+      (*   state *)
 
   | Fvar(v, _) ->
       let values = binding state v in
@@ -1184,33 +1565,65 @@ let rec step_expr state stack expr =
   | _ ->
       Format.eprintf "not anf: %a@." Printflambda.flambda expr;
       assert false
+  in
+  match orig_value with
+  | None -> state
+  | Some (orig_state, expr_var) ->
+     Format.printf "plop@.";
+     if ValueSet.equal (binding orig_state expr_var) (binding state expr_var)
+     then state
+     else rereach_variable' state expr_var
 
 and step_let' state stack v def body =
+  (* Format.printf "step_let' %a@." Variable.print v; *)
   let state =
     let state' = add_stack state stack body in
     (* if not (state == state') *)
     (* then Format.printf "new stack %a@." Variable.print v; *)
     state'
   in
+  let state = add_variable_scope (Var v) body state in
+  let orig_state = state in
   let state = step_let state (push_stack stack (Var v) body) v def in
-  if ValueSet.is_empty (binding state v)
+  let state =
+    if ValueSet.is_empty (binding state v)
+    then state
+    else
+      let state =
+        let state' = reached state body in
+        (* if not (state == state') *)
+        (* then Format.printf "new reached body %a@." Variable.print v; *)
+        state' in
+      (* step_expr state stack body *)
+      state
+  in
+  if ValueSet.equal (binding orig_state v) (binding state v)
+  then state
+  else rereach_variable' state v
+
+and step_let_rec' state stack defs body =
+  let state = add_stack state stack body in
+  let state =
+    List.fold_left
+      (fun state (v, def) ->
+       step_let state (push_stack stack (Var v) body) v def)
+      state defs in
+  if List.exists (fun (v,_) -> ValueSet.is_empty (binding state v)) defs
   then state
   else
-    let state =
-      let state' = reached state body in
-      (* if not (state == state') *)
-      (* then Format.printf "new reached body %a@." Variable.print v; *)
-      state' in
+    let state = reached state body in
     (* step_expr state stack body *)
     state
 
 and step_let state stack v def =
   match def with
   | Fevent _
-  | Fsequence _
-  | Fletrec _ ->
+  | Fsequence _ ->
       (* !!!! FALSE !!!! *)
       assert false
+
+  | Fletrec (defs, body,_) ->
+     step_let_rec' state stack defs body
 
   | Flet(_, v, def, body, _) ->
       step_let' state stack v def body
@@ -1366,9 +1779,28 @@ and step_let state stack v def =
       | (Pctconst _ | Pignore), _ ->
           assign_other state (Var v)
 
-      | _ ->
-          (* !!! TODO: bigarray get/set !!! *)
+      | Pbigarraydim i_, _ ->
+         let state = step_raise state stack None in
+         assign_other state (Var v)
 
+      | (Pbswap16 | Pbbswap _), _ ->
+         assign_other state (Var v)
+
+      | Pstring_load_16 unsafe, _ | Pstring_load_32 unsafe, _
+      | Pstring_load_64 unsafe, _ | Pstring_set_16 unsafe, _
+      | Pstring_set_32 unsafe, _ | Pstring_set_64 unsafe, _
+      | Pbigstring_load_16 unsafe, _ | Pbigstring_load_32 unsafe, _
+      | Pbigstring_load_64 unsafe, _ | Pbigstring_set_16 unsafe, _
+      | Pbigstring_set_32 unsafe, _ | Pbigstring_set_64 unsafe, _
+      | Pbigarrayref (unsafe,_,_,_), _
+      | Pbigarrayset (unsafe,_,_,_), _ ->
+          let state =
+            if unsafe
+            then state
+            else step_raise state stack None in
+          assign_other state (Var v)
+
+      | _ ->
           Format.eprintf "not implemented %a@." Printflambda.flambda def;
           assert false
       end
@@ -1471,6 +1903,14 @@ and step_switch state stack arg sw =
   let branches = match sw.fs_failaction with
     | None -> branches
     | Some b -> b :: branches in
+
+  let state = rereached state arg in
+  let state =
+    List.fold_left
+      (fun state branch -> rereached state branch)
+      state branches
+  in
+
   List.fold_left (fun state branch -> goto_branch state stack branch)
     state branches
 
@@ -1491,6 +1931,7 @@ and step_staticraise state stack sexn args =
   assert(List.length vars = List.length args);
   let state = List.fold_left2 (fun state var arg -> assign state (Var var) arg)
       state vars args in
+  let state = rereached state handler in
   reached state handler
 
 and step_staticcatch state stack sexn vars body handler =
@@ -1503,6 +1944,7 @@ and step_staticcatch state stack sexn vars body handler =
   add_stack state stack handler
 
 and step_trywith state stack body id handler =
+  let state = add_variable_scope (Var id) handler state in
   let body_stack = push_stack_exn stack (Var id) handler in
   let state = goto_branch state body_stack body in
   goto_branch state stack handler
@@ -1525,6 +1967,10 @@ and step_raise state stack arg =
 
 and step_if state stack cond ifso ifnot =
   (* let () = Format.printf "stepif %a" Printflambda.flambda cond in *)
+  let state = rereached state cond in
+  let state = rereached state ifso in
+  let state = rereached state ifnot in
+
   let cond = ebinding state cond in
   if ValueSet.is_empty cond
   then state
@@ -1535,7 +1981,34 @@ and step_if state stack cond ifso ifnot =
 and step_apply_one (state:state) (stack:stack) f (arg:Variable.t) =
   let apply_one (state,result) (f:Value.func) =
     let (param, clos, (missing, body)) = f in
+
+
+
+    let state = match body with
+      | None -> state
+      | Some body ->
+         let state = add_variable_scope (Var arg) body.Value.selected state in
+         let state = add_variable_scope (Var param) body.Value.selected state in
+         state
+    in
+
     let state = assign state (Var param) (binding state arg) in
+
+(*
+    let equal_assign, state = assign_test_equal state (Var param) (binding state arg) in
+    let state =
+      (* if the argument change, we force the function code to be reevaluated
+         during this substep *)
+      if not equal_assign
+      then
+        (* let () = Format.printf "force reeval %a@." Variable.print param in *)
+        (* let state = rereach_variable' state param in *)
+        force_rereached_function state body
+        (* state *)
+      else state
+    in
+*)
+
     match missing with
     | [] ->
         iprintf "complete apply %a@." Variable.print param;
@@ -1664,14 +2137,19 @@ let steps ~current_compilation_unit exported code i =
     then state, false
     else
       (* let () = iprintf "steps: %i@." n in *)
-      (* let () = Format.printf "step: %i@." (i-n) in *)
+      let () = Format.printf "step: %i@." (i-n) in
       (* let st1 = Gc.quick_stat () in *)
       (* let t1 = Sys.time () in *)
       let state' = step state in
       (* let t2 = Sys.time () in *)
       (* let st2 = Gc.quick_stat () in *)
-      let () = iprintf "escape %a@."
-          ValSet.print state.k.escape in
+
+      (* let () = iprintf "escape %a@." *)
+      (*     ValSet.print state.k.escape in *)
+
+      let () = Format.printf "escapes %i@."
+          (ValSet.cardinal state.k.escape) in
+
       (* let () = Format.printf "step time: %f@." (t2 -. t1) in *)
       (* let () = Format.printf "minor: %f\nmajor: %f\npromoted_words: %f\ncompact:%i@." *)
       (*     (st2.Gc.minor_words -. st1.Gc.minor_words) *)
@@ -1696,16 +2174,16 @@ let other_direct_call state expr =
             let lparam = List.length rem + 1 in
             if largs = lparam
             then
-              Format.printf "new direct apply: %a -> %a@."
+              iprintf_r "new direct apply: %a -> %a@."
                 Variable.print arg
                 Printflambda.flambda expr
             else if largs < lparam
             then
-              Format.printf "new direct surapply: %a -> %a@."
+              iprintf_r "new direct surapply: %a -> %a@."
                 Variable.print arg
                 Printflambda.flambda expr
             else
-              Format.printf "new direct partial apply: %a -> %a@."
+              iprintf_r "new direct partial apply: %a -> %a@."
                 Variable.print arg
                 Printflambda.flambda expr
         (* | { top = false; values = _::_::_ }, Direct _ -> *)

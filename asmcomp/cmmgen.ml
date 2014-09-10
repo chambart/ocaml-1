@@ -1289,6 +1289,9 @@ let rec transl = function
   | Uassign(id, exp) ->
       return_unit(Cassign(id, transl exp))
 
+  | Uunreachable ->
+     Cop(Cload Word, [Cconst_int 0])
+
 and transl_prim_1 p arg dbg =
   match p with
   (* Generic operations *)

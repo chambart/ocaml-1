@@ -156,7 +156,17 @@ let test ppf lam =
 
   let flam = List.fold_left run_pass !flam after in
 
-  Flambdareachability.test ~current_compilation_unit flam;
+  let flam =
+    if Clflags.experiments
+    then begin
+      let flam = Flambdareachability.test ~current_compilation_unit flam in
+      dump_and_check "clean unreachable calls" flam;
+      let flam = Flambdamovelets.move_lets flam in
+      let flam = Flambdamovelets.remove_trivial_lets flam in
+      dump_and_check "move lets" flam;
+      flam
+    end
+    else flam in
 
   let fl_sym =
     Flambdasym.convert ~compilation_unit:current_compilation_unit flam in

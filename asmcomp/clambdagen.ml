@@ -369,7 +369,8 @@ module Conv(P:Param2) = struct
 
     | Funreachable _ ->
         (* shoudl'nt be executable, maybe build something else *)
-        Uprim(Praise, [Uconst (Uconst_pointer 0, None)], Debuginfo.none)
+       Uunreachable
+    (* Uprim(Praise, [Uconst (Uconst_pointer 0, None)], Debuginfo.none) *)
 
     | Fevent _ -> assert false
 
