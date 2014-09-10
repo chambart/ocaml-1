@@ -40,6 +40,7 @@ and ident_nativeint = ident_create "nativeint"
 and ident_int32 = ident_create "int32"
 and ident_int64 = ident_create "int64"
 and ident_lazy_t = ident_create "lazy_t"
+and ident_sig_t = ident_create "sig_t"
 and ident_string = ident_create "string"
 
 let path_int = Pident ident_int
@@ -56,6 +57,7 @@ and path_nativeint = Pident ident_nativeint
 and path_int32 = Pident ident_int32
 and path_int64 = Pident ident_int64
 and path_lazy_t = Pident ident_lazy_t
+and path_sig_t = Pident ident_sig_t
 and path_string = Pident ident_string
 
 let type_int = newgenty (Tconstr(path_int, [], ref Mnil))
@@ -72,6 +74,7 @@ and type_nativeint = newgenty (Tconstr(path_nativeint, [], ref Mnil))
 and type_int32 = newgenty (Tconstr(path_int32, [], ref Mnil))
 and type_int64 = newgenty (Tconstr(path_int64, [], ref Mnil))
 and type_lazy_t t = newgenty (Tconstr(path_lazy_t, [t], ref Mnil))
+and type_sig_t t = newgenty (Tconstr(path_sig_t, [t], ref Mnil))
 and type_string = newgenty (Tconstr(path_string, [], ref Mnil))
 
 let ident_match_failure = ident_create_predef_exn "Match_failure"
@@ -157,6 +160,12 @@ let common_initial_env add_type add_extension empty_env =
      type_params = [tvar];
      type_arity = 1;
      type_variance = [Variance.covariant]}
+  and decl_sig_t =
+    let tvar = newgenvar() in
+    {decl_abstr with
+     type_params = [tvar];
+     type_arity = 1;
+     type_variance = [Variance.covariant]}
   in
 
   let add_extension id l =
@@ -198,7 +207,8 @@ let common_initial_env add_type add_extension empty_env =
   add_type ident_string decl_abstr (
   add_type ident_char decl_abstr (
   add_type ident_int decl_abstr (
-    empty_env))))))))))))))))))))))))))
+  add_type ident_sig_t decl_sig_t (
+    empty_env)))))))))))))))))))))))))))
 
 let build_initial_env add_type add_exception empty_env =
   let common = common_initial_env add_type add_exception empty_env in
