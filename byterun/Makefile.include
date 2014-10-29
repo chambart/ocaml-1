@@ -1,0 +1,57 @@
+
+BYTERUN_DIR=byterun
+BOOT_CAMLRUN=$(BYTERUN_DIR)/ocamlrun$(EXE)
+
+#Used by makefile builtin rules
+CC=$(BYTECC)
+CFLAGS=-DCAML_NAME_SPACE -O $(BYTECCCOMPOPTS) $(IFLEXDIR) -I $(BYTERUN_DIR)
+DFLAGS=-DCAML_NAME_SPACE -g -DDEBUG $(BYTECCCOMPOPTS) $(IFLEXDIR) -I $(BYTERUN_DIR)
+
+PRIMS:=\
+  alloc.c array.c compare.c extern.c floats.c gc_ctrl.c hash.c \
+  intern.c interp.c ints.c io.c lexing.c md5.c meta.c obj.c parsing.c \
+  signals.c str.c sys.c terminfo.c callback.c weak.c finalise.c stacks.c \
+  dynlink.c backtrace.c
+
+PRIMS:=$(addprefix $(BYTERUN_DIR)/,$(PRIMS))
+
+COMMONOBJS:=\
+  interp.o misc.o stacks.o fix_code.o startup.o \
+  freelist.o major_gc.o minor_gc.o memory.o alloc.o roots.o globroots.o \
+  fail.o signals.o signals_byt.o printexc.o backtrace.o \
+  compare.o ints.o floats.o str.o array.o io.o extern.o intern.o \
+  hash.o sys.o meta.o parsing.o gc_ctrl.o terminfo.o md5.o obj.o \
+  lexing.o callback.o debugger.o weak.o compact.o finalise.o custom.o \
+  dynlink.o
+
+COMMONOBJS:=$(addprefix $(BYTERUN_DIR)/,$(COMMONOBJS))
+
+OBJS=$(COMMONOBJS) $(BYTERUN_DIR)/unix.o $(BYTERUN_DIR)/main.o
+
+$(BYTERUN_DIR)/libcamlrun.a: $(OBJS)
+	ar rc $@.tmp $(OBJS)
+	$(RANLIB) $@.tmp
+	mv $@.tmp $@
+
+$(BOOT_CAMLRUN): $(BYTERUN_DIR)/prims.o $(BYTERUN_DIR)/libcamlrun.a
+	$(MKEXE) $(BYTECCLINKOPTS) $(BYTECCLIBS) -o $@ $^
+
+include Makefile.generating
+
+clean::
+	rm -f $(addprefix $(BYTERUN_DIR)/,*.pic.c *.d.c *.o prims.c opnames.h jumptbl.h version.h)
+
+$(BYTERUN_DIR)/%.c.depend : $(BYTERUN_DIR)/%.c $(BYTERUN_DIR)/opnames.h $(BYTERUN_DIR)/jumptbl.h $(BYTERUN_DIR)/version.h
+	-gcc -MM $(BYTECCCOMPOPTS) $< -MT "$(BYTERUN_DIR)/$*.o" $< > $@.tmp
+	-gcc -MM $(BYTECCCOMPOPTS) -DDEBUG -MT "$(BYTERUN_DIR)/$*.d.o" $< >> $@.tmp
+	-gcc -MM $(BYTECCCOMPOPTS) $< -MT "$(BYTERUN_DIR)/$*.pic.o" $< >> $@.tmp
+	mv $@.tmp $@
+
+$(BYTERUN_DIR)/depend : $(OBJS:.o=.c.depend)
+	cat $^ > $(BYTERUN_DIR)/.depend
+
+.PHONY: depend $(BYTERUN_DIR)/depend
+
+depend:: $(BYTERUN_DIR)/depend
+
+include $(BYTERUN_DIR)/.depend
