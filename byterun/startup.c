@@ -51,7 +51,7 @@
 #include "stacks.h"
 #include "sys.h"
 #include "startup.h"
-#include "version.h"
+#include "../config/version.h"
 
 #ifndef O_BINARY
 #define O_BINARY 0

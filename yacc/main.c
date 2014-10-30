@@ -19,7 +19,7 @@
 #include <unistd.h>
 #endif
 
-#include "version.h"
+#include "../config/version.h"
 
 char dflag;
 char lflag;

@@ -25,6 +25,3 @@ $(BYTERUN_DIR)/opnames.h : $(BYTERUN_DIR)/instruct.h $(BYTERUN_DIR)/Makefile.gen
 $(BYTERUN_DIR)/jumptbl.h : $(BYTERUN_DIR)/instruct.h $(BYTERUN_DIR)/Makefile.generating
 	sed -n -e '/^  /s/ \([A-Z]\)/ \&\&lbl_\1/gp' \
 	       -e '/^}/q' $< > $@
-
-$(BYTERUN_DIR)/version.h : VERSION $(BYTERUN_DIR)/Makefile.generating
-	echo "#define OCAML_VERSION \"`sed -e 1q $<`\"" > $@

@@ -1,4 +1,11 @@
 
+BYTERUN_CFLAGS=-DCAML_NAME_SPACE -O $(BYTECCCOMPOPTS) $(IFLEXDIR) -I $(BYTERUN_DIR)
+BYTERUN_DFLAGS=-DCAML_NAME_SPACE -g -DDEBUG $(BYTECCCOMPOPTS) $(IFLEXDIR) -I $(BYTERUN_DIR)
+
+$(BYTERUN_DIR)/%.o: $(BYTERUN_DIR)/%.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c $(OUTPUT_OPTION) $(BYTERUN_CFLAGS) $<
+
+
 PRIMS:=\
   alloc.c array.c compare.c extern.c floats.c gc_ctrl.c hash.c \
   intern.c interp.c ints.c io.c lexing.c md5.c meta.c obj.c parsing.c \
@@ -31,13 +38,14 @@ $(OCAMLRUN): $(BYTERUN_DIR)/prims.o $(BYTERUN_DIR)/libcamlrun.a
 include $(BYTERUN_DIR)/Makefile.generating
 
 clean::
-	rm -f $(addprefix $(BYTERUN_DIR)/,*.pic.c *.d.c *.o prims.c opnames.h jumptbl.h version.h)
+	rm -f $(addprefix $(BYTERUN_DIR)/,*.pic.c *.d.c *.o prims.c opnames.h jumptbl.h version.h *.c.depend)
 
-$(BYTERUN_DIR)/%.c.depend : $(BYTERUN_DIR)/%.c $(BYTERUN_DIR)/opnames.h $(BYTERUN_DIR)/jumptbl.h $(BYTERUN_DIR)/version.h
+$(BYTERUN_DIR)/%.c.depend : $(BYTERUN_DIR)/%.c $(BYTERUN_DIR)/opnames.h $(BYTERUN_DIR)/jumptbl.h $(VERSION_H)
 	-gcc -MM $(BYTECCCOMPOPTS) $< -MT "$(BYTERUN_DIR)/$*.o" $< > $@.tmp
 	-gcc -MM $(BYTECCCOMPOPTS) -DDEBUG -MT "$(BYTERUN_DIR)/$*.d.o" $< >> $@.tmp
 	-gcc -MM $(BYTECCCOMPOPTS) $< -MT "$(BYTERUN_DIR)/$*.pic.o" $< >> $@.tmp
-	mv $@.tmp $@
+	sed $@.tmp -e "s&$(BYTERUN_DIR)/../&&g" > $@
+	rm -f $@.tmp
 
 $(BYTERUN_DIR)/depend : $(BYTERUN_OBJS:.o=.c.depend)
 	cat $^ > $(BYTERUN_DIR)/.depend

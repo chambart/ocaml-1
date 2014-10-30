@@ -12,36 +12,21 @@
 
 # Makefile for the parser generator.
 
-include ../config/Makefile
+YACC_CFLAGS=-O -DNDEBUG $(BYTECCCOMPOPTS)
 
-CC=$(BYTECC)
-CFLAGS=-O -DNDEBUG $(BYTECCCOMPOPTS)
-
-OBJS= closure.o error.o lalr.o lr0.o main.o mkpar.o output.o reader.o \
+YACC_OBJS:= closure.o error.o lalr.o lr0.o main.o mkpar.o output.o reader.o \
   skeleton.o symtab.o verbose.o warshall.o
 
-all: ocamlyacc$(EXE)
+YACC_OBJS:=$(addprefix $(YACC_DIR)/, $(YACC_OBJS))
 
-ocamlyacc$(EXE): $(OBJS)
-	$(CC) $(CFLAGS) $(CCLINKFLAGS) -o ocamlyacc $(OBJS)
+$(OCAMLYACC): $(YACC_OBJS)
+	$(CC) $(CFLAGS) $(CCLINKFLAGS) -o $@ $^
 
-version.h : ../VERSION
-	echo "#define OCAML_VERSION \"`sed -e 1q ../VERSION`\"" >version.h
+$(YACC_DIR)/%.o: $(YACC_DIR)/%.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c $(OUTPUT_OPTION) $(YACC_CFLAGS) $<
 
-clean:
-	rm -f *.o ocamlyacc$(EXE) *~ version.h
+clean::
+	rm -f (YACC_DIR)/*.o $(OCAMLYACC)
 
-depend:
-
-closure.o: defs.h
-error.o: defs.h
-lalr.o: defs.h
-lr0.o: defs.h
-main.o: defs.h version.h
-mkpar.o: defs.h
-output.o: defs.h
-reader.o: defs.h
-skeleton.o: defs.h
-symtab.o: defs.h
-verbose.o: defs.h
-warshall.o: defs.h
+$(YACC_OBJS):  $(YACC_DIR)/defs.h
+$(YACC_DIR)/main.o: $(VERSION_H)
