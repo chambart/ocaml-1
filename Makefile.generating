@@ -36,7 +36,86 @@ $(STDLIB_DIR)/sys.ml: $(STDLIB_DIR)/sys.mlp VERSION Makefile.generating
 	sed -e "s|%%VERSION%%|`sed -e 1q VERSION`|" $< > $@.tmp
 	mv $@.tmp $@
 
+# utils #
+utils/config.ml: utils/config.mlp config/Makefile Makefile.generating
+	@rm -f $@.tmp
+	sed -e 's|%%LIBDIR%%|$(LIBDIR)|' \
+	    -e 's|%%BYTERUN%%|$(BINDIR)/ocamlrun|' \
+	    -e 's|%%CCOMPTYPE%%|cc|' \
+	    -e 's|%%BYTECC%%|$(BYTECC) $(BYTECCCOMPOPTS) $(SHAREDCCCOMPOPTS)|' \
+	    -e 's|%%NATIVECC%%|$(NATIVECC) $(NATIVECCCOMPOPTS)|' \
+	    -e 's|%%PACKLD%%|$(PACKLD)|' \
+	    -e 's|%%BYTECCLIBS%%|$(BYTECCLIBS)|' \
+	    -e 's|%%NATIVECCLIBS%%|$(NATIVECCLIBS)|' \
+	    -e 's|%%RANLIBCMD%%|$(RANLIBCMD)|' \
+	    -e 's|%%ARCMD%%|$(ARCMD)|' \
+	    -e 's|%%CC_PROFILE%%|$(CC_PROFILE)|' \
+	    -e 's|%%ARCH%%|$(ARCH)|' \
+	    -e 's|%%MODEL%%|$(MODEL)|' \
+	    -e 's|%%SYSTEM%%|$(SYSTEM)|' \
+	    -e 's|%%EXT_OBJ%%|.o|' \
+	    -e 's|%%EXT_ASM%%|.s|' \
+	    -e 's|%%EXT_LIB%%|.a|' \
+	    -e 's|%%EXT_DLL%%|.so|' \
+	    -e 's|%%SYSTHREAD_SUPPORT%%|$(SYSTHREAD_SUPPORT)|' \
+	    -e 's|%%ASM%%|$(ASM)|' \
+	    -e 's|%%ASM_CFI_SUPPORTED%%|$(ASM_CFI_SUPPORTED)|' \
+	    -e 's|%%MKDLL%%|$(MKDLL)|' \
+	    -e 's|%%MKEXE%%|$(MKEXE)|' \
+	    -e 's|%%MKMAINDLL%%|$(MKMAINDLL)|' \
+	    $< > $@.tmp
+	@chmod -w $@.tmp
+	@rm -f $@
+	@mv $@.tmp $@
+
+# bytecomp #
+bytecomp/runtimedef.ml: byterun/primitives byterun/fail.h Makefile.generating
+	(echo 'let builtin_exceptions = [|'; \
+	 sed -n -e 's|.*/\* \("[A-Za-z_]*"\) \*/$$|  \1;|p' byterun/fail.h | \
+	 sed -e '$$s/;$$//'; \
+	 echo '|]'; \
+	 echo 'let builtin_primitives = [|'; \
+	 sed -e 's/.*/  "&";/' -e '$$s/;$$//' byterun/primitives; \
+	 echo '|]') > $@.tmp
+	mv $@.tmp $@
+
+# The numeric opcodes
+bytecomp/opcodes.ml: byterun/instruct.h tools/make-opcodes Makefile.generating
+	sed -n -e '/^enum/p' -e 's/,//g' -e '/^  /p' $< | \
+	awk -f tools/make-opcodes > $@
+
+# Preprocess the code emitters
+
+asmcomp/emit.ml: asmcomp/$(ARCH)/emit.mlp tools/cvt_emit Makefile.generating
+	$(OCAMLRUN) tools/cvt_emit < asmcomp/$(ARCH)/emit.mlp > $@.tmp
+	mv $@.tmp $@
+
+tools/cvt_emit: tools/cvt_emit.mll $(BOOT_OCAMLC) $(BOOT_OCAMLLEX) $(STDLIB_BYTE)
+	$(BOOT_OCAMLLEX) $<
+	$(BOOT_OCAMLC) $(COMPFLAGS) -I stdlib -o $@ $@.ml
+
+# bytecode header #
+$(addprefix $(STDLIB_DIR)/, camlheader camlheaderd camlheader_ur): $(STDLIB_DIR)/header.c config/Makefile Makefile.generating
+	if $(SHARPBANGSCRIPTS); then \
+	  echo '#!$(BINDIR)/ocamlrun' > camlheader && \
+	  echo '#!$(BINDIR)/ocamlrund' > camlheaderd && \
+	  echo '#!' | tr -d '\012' > camlheader_ur; \
+	else \
+	  $(BYTECC) $(BYTECCCOMPOPTS) $(BYTECCLINKOPTS) \
+	            -DRUNTIME_NAME='"$(BINDIR)/ocamlrun"' \
+	            header.c -o tmpheader$(EXE) && \
+	  strip tmpheader$(EXE) && \
+	  mv tmpheader$(EXE) camlheader && \
+	  cp camlheader camlheader_ur && \
+	  $(BYTECC) $(BYTECCCOMPOPTS) $(BYTECCLINKOPTS) \
+	            -DRUNTIME_NAME='"$(BINDIR)/ocamlrund"' \
+	            header.c -o tmpheader$(EXE) && \
+	  strip tmpheader$(EXE) && \
+	  mv tmpheader$(EXE) camlheaderd; \
+	fi
+
+
 
 clean::
-	rm -f $(VERSION_H) $(STDLIB_DIR)/sys.ml
+	rm -f $(VERSION_H) $(STDLIB_DIR)/sys.ml bytecomp/runtimedef.ml
 	rm -f $(addprefix $(BYTERUN_DIR)/, prims.c opnames.h jumptbl.h primitives)

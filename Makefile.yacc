@@ -26,7 +26,7 @@ $(YACC_DIR)/%.o: $(YACC_DIR)/%.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c $(OUTPUT_OPTION) $(YACC_CFLAGS) $<
 
 clean::
-	rm -f (YACC_DIR)/*.o $(OCAMLYACC)
+	rm -f $(YACC_DIR)/*.o $(OCAMLYACC)
 
 $(YACC_OBJS):  $(YACC_DIR)/defs.h
 $(YACC_DIR)/main.o: $(VERSION_H)
