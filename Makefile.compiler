@@ -1,6 +1,7 @@
 
-COMPILER_INCLUDES=-I utils -I parsing -I typing -I bytecomp -I asmcomp -I driver \
-	 -I toplevel
+COMPILER_DIRS= utils parsing typing bytecomp asmcomp driver toplevel
+
+COMPILER_INCLUDES=$(addprefix -I ,$(COMPILER_DIRS))
 
 #TODO replace the utils/ by addprefix
 
@@ -42,6 +43,9 @@ BYTECOMP=bytecomp/meta.cmo bytecomp/instruct.cmo bytecomp/bytegen.cmo \
   bytecomp/bytelink.cmo bytecomp/bytelibrarian.cmo bytecomp/bytepackager.cmo \
   driver/errors.cmo driver/compile.cmo
 
+#Currently subset of ASMCOMP
+ARCHSPECIFIC=arch.ml emit.mlp emit_nt.mlp proc.ml reload.ml scheduling.ml selection.ml
+
 ASMCOMP=asmcomp/arch.cmo asmcomp/debuginfo.cmo \
   asmcomp/cmm.cmo asmcomp/printcmm.cmo \
   asmcomp/reg.cmo asmcomp/mach.cmo asmcomp/proc.cmo \
@@ -73,7 +77,7 @@ compilerlibs/ocamlbytecomp.cma: $(BYTECOMP)
 compilerlibs/ocamloptcomp.cma: $(ASMCOMP)
 	$(BOOT_OCAMLC) -a -o $@ $^
 
-$(FIRST_OCAMLOPT): compilerlibs/ocamlcommon.cma compilerlibs/ocamloptcomp.cma $(OPTSTART) \
+$(FIRST_OCAMLOPT_LOC): compilerlibs/ocamlcommon.cma compilerlibs/ocamloptcomp.cma $(OPTSTART) \
 		$(BOOT_OCAMLC) $(STDLIB_BYTE)
 	$(BOOT_OCAMLC) $(LINKFLAGS) -I stdlib -o $@\
 		compilerlibs/ocamlcommon.cma compilerlibs/ocamloptcomp.cma $(OPTSTART)
@@ -83,7 +87,7 @@ ocamlcompopt.sh: driver/ocamlcomp.sh.in $(FIRST_OCAMLOPT)
 	@chmod +x $@.tmp
 	@mv $@.tmp $@
 
-$(FIRST_OCAMLC): compilerlibs/ocamlcommon.cma compilerlibs/ocamlbytecomp.cma $(BYTESTART) \
+$(FIRST_OCAMLC_LOC): compilerlibs/ocamlcommon.cma compilerlibs/ocamlbytecomp.cma $(BYTESTART) \
 		$(BOOT_OCAMLC) $(STDLIB_BYTE)
 	$(BOOT_OCAMLC) $(LINKFLAGS) -I stdlib -o $@ \
 		compilerlibs/ocamlcommon.cma compilerlibs/ocamlbytecomp.cma $(BYTESTART)
@@ -138,3 +142,13 @@ COMPILER_FILE_DEPEND: $(STDLIB_DIR)/sys.ml
 depend:: compiler/depend
 
 include .compiler.depend
+
+clean::
+	rm -rf $(FIRST_OCAMLC_LOC) $(FIRST_OCAMLOPT_LOC) .compile.depend
+	rm -f $(addsuffix /*.cm*, $(COMPILER_DIRS))
+	rm -f $(addsuffix /*.$(O), $(COMPILER_DIRS))
+	rm -f $(addsuffix /*.$(A), $(COMPILER_DIRS))
+	rm -f $(addsuffix /*.dep.comp, $(COMPILER_DIRS))
+	rm -f parsing/lexer.ml parsing/parser.mli parsing/parser.ml parsing/parser.output
+	rm -f $(addprefix asmcomp/, $(ARCHSPECIFIC) emit.ml emit_nt.ml)
+	rm -f $(addprefix compilerlibs/, ocamlbytecomp.cma ocamlcommon.cma ocamloptcomp.cma)

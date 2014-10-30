@@ -95,27 +95,46 @@ tools/cvt_emit: tools/cvt_emit.mll $(BOOT_OCAMLC) $(BOOT_OCAMLLEX) $(STDLIB_BYTE
 	$(BOOT_OCAMLC) $(COMPFLAGS) -I stdlib -o $@ $@.ml
 
 # bytecode header #
-$(addprefix $(STDLIB_DIR)/, camlheader camlheaderd camlheader_ur): $(STDLIB_DIR)/header.c config/Makefile Makefile.generating
-	if $(SHARPBANGSCRIPTS); then \
-	  echo '#!$(BINDIR)/ocamlrun' > camlheader && \
-	  echo '#!$(BINDIR)/ocamlrund' > camlheaderd && \
-	  echo '#!' | tr -d '\012' > camlheader_ur; \
-	else \
-	  $(BYTECC) $(BYTECCCOMPOPTS) $(BYTECCLINKOPTS) \
-	            -DRUNTIME_NAME='"$(BINDIR)/ocamlrun"' \
-	            header.c -o tmpheader$(EXE) && \
-	  strip tmpheader$(EXE) && \
-	  mv tmpheader$(EXE) camlheader && \
-	  cp camlheader camlheader_ur && \
-	  $(BYTECC) $(BYTECCCOMPOPTS) $(BYTECCLINKOPTS) \
-	            -DRUNTIME_NAME='"$(BINDIR)/ocamlrund"' \
-	            header.c -o tmpheader$(EXE) && \
-	  strip tmpheader$(EXE) && \
-	  mv tmpheader$(EXE) camlheaderd; \
-	fi
 
+ifeq ($(SHARPBANGSCRIPTS),true)
+
+$(STDLIB_DIR)/camlheader: $(STDLIB_DIR)/header.c config/Makefile Makefile.generating
+	  echo '#!$(BINDIR)/ocamlrun' > $@
+
+$(STDLIB_DIR)/camlheaderd: $(STDLIB_DIR)/header.c config/Makefile Makefile.generating
+	  echo '#!$(BINDIR)/ocamlrund' > $@
+
+$(STDLIB_DIR)/camlheader_ur: $(STDLIB_DIR)/header.c config/Makefile Makefile.generating
+	  echo '#!' | tr -d '\012' > $@
+
+else
+
+$(STDLIB_DIR)/camlheader: $(STDLIB_DIR)/header.c config/Makefile Makefile.generating
+	$(BYTECC) $(BYTECCCOMPOPTS) $(BYTECCLINKOPTS) \
+	            -DRUNTIME_NAME='"$(BINDIR)/ocamlrun"' \
+	            header.c -o tmpheader$(EXE)
+	strip tmpheader$(EXE)
+	mv tmpheader$(EXE) $@
+
+$(STDLIB_DIR)/camlheader_ur: $(STDLIB_DIR)/camlheader Makefile.generating
+	@rm -f $@
+	@cp $< $@
+
+
+
+$(STDLIB_DIR)/camlheaderd: $(STDLIB_DIR)/header.c config/Makefile Makefile.generating
+	$(BYTECC) $(BYTECCCOMPOPTS) $(BYTECCLINKOPTS) \
+	            -DRUNTIME_NAME='"$(BINDIR)/ocamlrund"' \
+	            header.c -o tmpheader$(EXE)
+	strip tmpheader$(EXE)
+	mv tmpheader$(EXE) $@
+
+endif
 
 
 clean::
-	rm -f $(VERSION_H) $(STDLIB_DIR)/sys.ml bytecomp/runtimedef.ml
+	rm -f $(VERSION_H) $(STDLIB_DIR)/sys.ml bytecomp/runtimedef.ml bytecomp/opcodes.ml
 	rm -f $(addprefix $(BYTERUN_DIR)/, prims.c opnames.h jumptbl.h primitives)
+	rm -f $(addprefix $(STDLIB_DIR)/, camlheader camlheaderd camlheader_ur)
+	rm -f tools/cvt_emit tools/cvt_emit.cm* tools/cvt_emit.ml
+	rm -f utils/config.ml

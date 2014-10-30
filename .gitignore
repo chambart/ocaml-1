@@ -40,3 +40,7 @@ _build
 /tools/cvt_emit
 /tools/cvt_emit.ml
 /utils/config.ml
+/stdlib/camlheader
+/stdlib/camlheader_ur
+/stdlib/camlheaderd
+/stdlib/stdlib.a

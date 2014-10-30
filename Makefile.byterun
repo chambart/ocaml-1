@@ -37,6 +37,7 @@ $(OCAMLRUN): $(BYTERUN_DIR)/prims.o $(BYTERUN_DIR)/libcamlrun.a
 
 clean::
 	rm -f $(addprefix $(BYTERUN_DIR)/,*.pic.c *.d.c *.o *.c.depend)
+	rm -f $(addprefix $(BYTERUN_DIR)/,ocamlrun libcamlrun.a)
 
 $(BYTERUN_DIR)/%.c.depend : $(BYTERUN_DIR)/%.c $(BYTERUN_DIR)/opnames.h $(BYTERUN_DIR)/jumptbl.h $(VERSION_H)
 	-gcc -MM $(BYTECCCOMPOPTS) $< -MT "$(BYTERUN_DIR)/$*.o" $< > $@.tmp

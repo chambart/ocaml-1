@@ -17,7 +17,7 @@ $(STDLIB_DIR)/stdlib.cma: $(STDLIB_OBJS)
 	$(BOOT_OCAMLC) -a -o $@ $^
 
 $(STDLIB_DIR)/stdlib.cmxa: $(STDLIB_OBJS:.cmo=.cmx)
-	$(BOOT_OCAMLOPT) -a -o $@ $^
+	$(FIRST_OCAMLOPT) -a -o $@ $^
 
 $(STDLIB_CMI): $(STDLIB_OBJS:%.cmo=%.cmi)
 	touch $@
@@ -38,11 +38,11 @@ $(STDLIB_DIR)/%.cmi: $(STDLIB_DIR)/%.mli $(SPECIFIC_COMPFLAGS) $(BOOT_OCAMLC)
 $(STDLIB_DIR)/%.cmo: $(STDLIB_DIR)/%.ml $(SPECIFIC_COMPFLAGS) $(BOOT_OCAMLC)
 	$(BOOT_OCAMLC) $(COMPFLAGS) `$(SPECIFIC_COMPFLAGS) $@` -I $(STDLIB_DIR) -o $@ -c $<
 
-$(STDLIB_DIR)/%.cmx: $(STDLIB_DIR)/%.ml $(SPECIFIC_COMPFLAGS) $(BOOT_OCAMLOPT)
-	$(BOOT_OCAMLOPT) $(OPTCOMPFLAGS) `$(SPECIFIC_COMPFLAGS) $@` -I $(STDLIB_DIR) -o $@ -c $<
+$(STDLIB_DIR)/%.cmx: $(STDLIB_DIR)/%.ml $(SPECIFIC_COMPFLAGS) $(FIRST_OCAMLOPT)
+	$(FIRST_OCAMLOPT) $(OPTCOMPFLAGS) `$(SPECIFIC_COMPFLAGS) $@` -I $(STDLIB_DIR) -o $@ -c $<
 
-$(STDLIB_DIR)/%.p.cmx: $(STDLIB_DIR)/%.ml $(SPECIFIC_COMPFLAGS) $(BOOT_OCAMLOPT)
-	$(BOOT_OCAMLOPT) $(OPTCOMPFLAGS) `$(SPECIFIC_COMPFLAGS) $@` -I $(STDLIB_DIR) -p -c -o $@ $<
+$(STDLIB_DIR)/%.p.cmx: $(STDLIB_DIR)/%.ml $(SPECIFIC_COMPFLAGS) $(FIRST_OCAMLOPT)
+	$(FIRST_OCAMLOPT) $(OPTCOMPFLAGS) `$(SPECIFIC_COMPFLAGS) $@` -I $(STDLIB_DIR) -p -c -o $@ $<
 
 # Dependencies on Pervasives (not tracked by ocamldep)
 $(STDLIB_OTHERS:.cmo=.cmo) std_exit.cmo $(STDLIB_OTHERS:.cmo=.cmi) std_exit.cmi: $(STDLIB_DIR)/pervasives.cmi
@@ -50,7 +50,7 @@ $(STDLIB_OTHERS:.cmo=.cmx) std_exit.cmx $(STDLIB_OTHERS:.cmo=.p.cmx) std_exit.p.
 
 clean::
 	rm -f $(STDLIB_DIR)/*.cm* $(STDLIB_DIR)/*.$(O) $(STDLIB_DIR)/*.$(A)
-	rm -f $(STDLIB_BYTELINK) $(STDLIB_OPTLINK)
+	rm -f $(STDLIB_BYTE) $(STDLIB_OPT) $(STDLIB_CMI)
 
 include $(STDLIB_DIR)/.depend
 
