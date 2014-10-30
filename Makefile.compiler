@@ -66,7 +66,9 @@ BYTESTART=driver/main.cmo
 
 OPTSTART=driver/optmain.cmo
 
-COMPILER_MLI_ONLY=parsing/parsetree.mli parsing/asttypes.mli
+COMPILER_MLI_ONLY= parsing/parsetree.mli parsing/asttypes.mli	\
+	typing/outcometree.mli asmcomp/cmx_format.mli \
+	bytecomp/cmo_format.mli typing/annot.mli
 
 compilerlibs/ocamlcommon.cma: $(COMPILER_COMMON)
 	$(BOOT_OCAMLC) -a -o $@ $^
@@ -122,21 +124,21 @@ asmcomp/%.ml: asmcomp/$(ARCH)/%.ml
 
 COMPILER_FILE_DEPEND= \
 	$(patsubst %.cmo,%.dep.comp, $(COMPILER_COMMON) $(BYTECOMP) $(ASMCOMP) $(BYTESTART) $(OPTSTART)) \
-	$(COMPILER_MLI_ONLY:.mli=.dep.comp)
+	$(COMPILER_MLI_ONLY:.mli=.depi.comp)
 
 
 compiler/depend: $(COMPILER_FILE_DEPEND)
 	cat $(COMPILER_FILE_DEPEND) > .compiler.depend
 
-COMPILER_FILE_DEPEND: $(STDLIB_DIR)/sys.ml
+COMPILER_FILE_DEPEND: $(STDLIB_DIR)/sys.ml $(ARCHSPECIFIC:.mlp=.ml)
 
-%.dep.comp: %.ml %.mli force
+%.dep.comp: %.ml %.mli force $(BOOT_OCAMLDEP)
 	$(BOOT_OCAMLDEP) $(COMPILER_INCLUDES) $< $<i > $@
 
-%.dep.comp: %.ml force
+%.dep.comp: %.ml force $(BOOT_OCAMLDEP)
 	$(BOOT_OCAMLDEP) $(COMPILER_INCLUDES) $< > $@
 
-%.dep.comp: %.mli force
+%.depi.comp: %.mli force $(BOOT_OCAMLDEP)
 	$(BOOT_OCAMLDEP) $(COMPILER_INCLUDES) $< > $@
 
 depend:: compiler/depend
@@ -149,6 +151,7 @@ clean::
 	rm -f $(addsuffix /*.$(O), $(COMPILER_DIRS))
 	rm -f $(addsuffix /*.$(A), $(COMPILER_DIRS))
 	rm -f $(addsuffix /*.dep.comp, $(COMPILER_DIRS))
+	rm -f $(addsuffix /*.depi.comp, $(COMPILER_DIRS))
 	rm -f parsing/lexer.ml parsing/parser.mli parsing/parser.ml parsing/parser.output
 	rm -f $(addprefix asmcomp/, $(ARCHSPECIFIC) emit.ml emit_nt.ml)
 	rm -f $(addprefix compilerlibs/, ocamlbytecomp.cma ocamlcommon.cma ocamloptcomp.cma)

@@ -45,8 +45,8 @@ $(STDLIB_DIR)/%.p.cmx: $(STDLIB_DIR)/%.ml $(SPECIFIC_COMPFLAGS) $(FIRST_OCAMLOPT
 	$(FIRST_OCAMLOPT) $(OPTCOMPFLAGS) `$(SPECIFIC_COMPFLAGS) $@` -I $(STDLIB_DIR) -p -c -o $@ $<
 
 # Dependencies on Pervasives (not tracked by ocamldep)
-$(STDLIB_OTHERS:.cmo=.cmo) std_exit.cmo $(STDLIB_OTHERS:.cmo=.cmi) std_exit.cmi: $(STDLIB_DIR)/pervasives.cmi
-$(STDLIB_OTHERS:.cmo=.cmx) std_exit.cmx $(STDLIB_OTHERS:.cmo=.p.cmx) std_exit.p.cmx: $(STDLIB_DIR)/pervasives.cmi $(STDLIB_DIR)/pervasives.cmx
+$(STDLIB_OTHERS:.cmo=.cmo) $(STDLIB_DIR)/std_exit.cmo $(STDLIB_OTHERS:.cmo=.cmi) $(STDLIB_DIR)/std_exit.cmi: $(STDLIB_DIR)/pervasives.cmi
+$(STDLIB_OTHERS:.cmo=.cmx) $(STDLIB_DIR)/std_exit.cmx $(STDLIB_OTHERS:.cmo=.p.cmx) $(STDLIB_DIR)/std_exit.p.cmx: $(STDLIB_DIR)/pervasives.cmi $(STDLIB_DIR)/pervasives.cmx
 
 clean::
 	rm -f $(STDLIB_DIR)/*.cm* $(STDLIB_DIR)/*.$(O) $(STDLIB_DIR)/*.$(A)
@@ -54,7 +54,7 @@ clean::
 
 include $(STDLIB_DIR)/.depend
 
-$(STDLIB_DIR)/depend: $(STDLIB_DIR)/sys.ml
+$(STDLIB_DIR)/depend: $(STDLIB_DIR)/sys.ml $(BOOT_OCAMLDEP)
 	$(BOOT_OCAMLDEP) -I $(STDLIB_DIR) $(STDLIB_OBJS:.cmo=.mli) $(STDLIB_OBJS:.cmo=.ml) > $(STDLIB_DIR)/.depend
 	$(BOOT_OCAMLDEP) -I $(STDLIB_DIR) $(STDLIB_OBJS:.cmo=.ml) | sed -e 's/\.cmx/.p.cmx/g' >> $(STDLIB_DIR)/.depend
 
