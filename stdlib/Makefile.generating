@@ -1,0 +1,4 @@
+
+$(STDLIB_DIR)/sys.ml: $(STDLIB_DIR)/sys.mlp VERSION $(STDLIB_DIR)/Makefile.generating
+	sed -e "s|%%VERSION%%|`sed -e 1q VERSION`|" $< > $@.tmp
+	mv $@.tmp $@

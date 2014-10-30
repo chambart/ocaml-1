@@ -1,0 +1,53 @@
+
+STDLIB_DIR=stdlib
+
+STDLIB_OTHERS:=array.cmo list.cmo char.cmo string.cmo sys.cmo		\
+  sort.cmo marshal.cmo obj.cmo int32.cmo int64.cmo nativeint.cmo	\
+  lexing.cmo parsing.cmo set.cmo map.cmo stack.cmo queue.cmo		\
+  camlinternalLazy.cmo lazy.cmo stream.cmo buffer.cmo printf.cmo	\
+  arg.cmo printexc.cmo gc.cmo digest.cmo random.cmo hashtbl.cmo		\
+  format.cmo scanf.cmo callback.cmo camlinternalOO.cmo oo.cmo		\
+  camlinternalMod.cmo genlex.cmo weak.cmo filename.cmo complex.cmo	\
+  arrayLabels.cmo listLabels.cmo stringLabels.cmo moreLabels.cmo	\
+  stdLabels.cmo
+
+STDLIB_OTHERS:=$(addprefix $(STDLIB_DIR)/,$(STDLIB_OTHERS))
+
+STDLIB_OBJS=$(STDLIB_DIR)/pervasives.cmo $(STDLIB_OTHERS)
+
+$(STDLIB_DIR)/stdlib.cma: $(STDLIB_OBJS)
+	$(BOOT_OCAMLC) -a -o $@ $^
+
+$(STDLIB_DIR)/stdlib.cmxa: $(STDLIB_OBJS:.cmo=.cmx)
+	$(BOOT_OCAMLOPT) -a -o $@ $^
+
+SPECIFIC_COMPFLAGS=$(STDLIB_DIR)/Compflags
+
+$(STDLIB_DIR)/%.cmi: $(STDLIB_DIR)/%.mli $(SPECIFIC_COMPFLAGS) $(BOOT_OCAMLC)
+	$(BOOT_OCAMLC) $(COMPFLAGS) `$(SPECIFIC_COMPFLAGS) $@` -I $(STDLIB_DIR) -o $@ -c $<
+
+$(STDLIB_DIR)/%.cmo: $(STDLIB_DIR)/%.ml $(SPECIFIC_COMPFLAGS) $(BOOT_OCAMLC)
+	$(BOOT_OCAMLC) $(COMPFLAGS) `$(SPECIFIC_COMPFLAGS) $@` -I $(STDLIB_DIR) -o $@ -c $<
+
+$(STDLIB_DIR)/%.cmx: $(STDLIB_DIR)/%.ml $(SPECIFIC_COMPFLAGS) $(BOOT_OCAMLOPT)
+	$(BOOT_OCAMLOPT) $(OPTCOMPFLAGS) `$(SPECIFIC_COMPFLAGS) $@` -I $(STDLIB_DIR) -o $@ -c $<
+
+$(STDLIB_DIR)/%.p.cmx: $(STDLIB_DIR)/%.ml $(SPECIFIC_COMPFLAGS) $(BOOT_OCAMLOPT)
+	$(BOOT_OCAMLOPT) $(OPTCOMPFLAGS) `$(SPECIFIC_COMPFLAGS) $@` -I $(STDLIB_DIR) -p -c -o $@ $<
+
+# Dependencies on Pervasives (not tracked by ocamldep)
+$(STDLIB_OTHERS:.cmo=.cmo) std_exit.cmo $(STDLIB_OTHERS:.cmo=.cmi) std_exit.cmi: $(STDLIB_DIR)/pervasives.cmi
+$(STDLIB_OTHERS:.cmo=.cmx) std_exit.cmx $(STDLIB_OTHERS:.cmo=.p.cmx) std_exit.p.cmx: $(STDLIB_DIR)/pervasives.cmi $(STDLIB_DIR)/pervasives.cmx
+
+clean::
+	rm -f $(STDLIB_DIR)/*.cm* $(STDLIB_DIR)/*.$(O) $(STDLIB_DIR)/*.$(A)
+
+include $(STDLIB_DIR)/.depend
+
+$(STDLIB_DIR)/depend: $(STDLIB_DIR)/sys.ml
+	$(BOOT_OCAMLDEP) -I $(STDLIB_DIR) $(STDLIB_OBJS:.cmo=.mli) $(STDLIB_OBJS:.cmo=.ml) > $(STDLIB_DIR)/.depend
+	$(BOOT_OCAMLDEP) -I $(STDLIB_DIR) $(STDLIB_OBJS:.cmo=.ml) | sed -e 's/\.cmx/.p.cmx/g' >> $(STDLIB_DIR)/.depend
+
+depend:: $(STDLIB_DIR)/depend
+
+include $(STDLIB_DIR)/Makefile.generating
