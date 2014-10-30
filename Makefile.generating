@@ -1,0 +1,42 @@
+
+# config #
+$(VERSION_H) : VERSION
+	echo "#define OCAML_VERSION \"`sed -e 1q $<`\"" > $@
+
+# byterun #
+$(BYTERUN_DIR)/prims.c : $(BYTERUN_DIR)/primitives Makefile.generating
+	(echo '#include "mlvalues.h"'; \
+	 echo '#include "prims.h"'; \
+	 sed -e 's/.*/extern value &();/' $<; \
+	 echo 'c_primitive caml_builtin_cprim[] = {'; \
+	 sed -e 's/.*/	&,/' $<; \
+	 echo '	 0 };'; \
+	 echo 'char * caml_names_of_builtin_cprim[] = {'; \
+	 sed -e 's/.*/	"&",/' $<; \
+	 echo '	 0 };') > $@
+
+$(BYTERUN_DIR)/primitives : $(PRIMS) Makefile.generating
+	sed -n -e "s/CAMLprim value \([a-z0-9_][a-z0-9_]*\).*/\1/p" \
+	    $^ > $@
+
+$(BYTERUN_DIR)/opnames.h : $(BYTERUN_DIR)/instruct.h Makefile.generating
+	sed -e '/\/\*/d' \
+	    -e '/^#/d' \
+	    -e 's/enum /char * names_of_/' \
+	    -e 's/{$$/[] = {/' \
+	    -e 's/\([[:upper:]][[:upper:]_0-9]*\)/"\1"/g' $< > opnames.h
+
+#   jumptbl.h is required only if you have GCC 2.0 or later
+$(BYTERUN_DIR)/jumptbl.h : $(BYTERUN_DIR)/instruct.h Makefile.generating
+	sed -n -e '/^  /s/ \([A-Z]\)/ \&\&lbl_\1/gp' \
+	       -e '/^}/q' $< > $@
+
+# stdlib #
+$(STDLIB_DIR)/sys.ml: $(STDLIB_DIR)/sys.mlp VERSION Makefile.generating
+	sed -e "s|%%VERSION%%|`sed -e 1q VERSION`|" $< > $@.tmp
+	mv $@.tmp $@
+
+
+clean::
+	rm -f $(VERSION_H) $(STDLIB_DIR)/sys.ml
+	rm -f $(addprefix $(BYTERUN_DIR)/, prims.c opnames.h jumptbl.h primitives)

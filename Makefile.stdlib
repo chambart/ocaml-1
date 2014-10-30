@@ -49,5 +49,3 @@ $(STDLIB_DIR)/depend: $(STDLIB_DIR)/sys.ml
 	$(BOOT_OCAMLDEP) -I $(STDLIB_DIR) $(STDLIB_OBJS:.cmo=.ml) | sed -e 's/\.cmx/.p.cmx/g' >> $(STDLIB_DIR)/.depend
 
 depend:: $(STDLIB_DIR)/depend
-
-include $(STDLIB_DIR)/Makefile.generating

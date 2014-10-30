@@ -35,10 +35,8 @@ $(BYTERUN_DIR)/libcamlrun.a: $(BYTERUN_OBJS)
 $(OCAMLRUN): $(BYTERUN_DIR)/prims.o $(BYTERUN_DIR)/libcamlrun.a
 	$(MKEXE) $(BYTECCLINKOPTS) $(BYTECCLIBS) -o $@ $^
 
-include $(BYTERUN_DIR)/Makefile.generating
-
 clean::
-	rm -f $(addprefix $(BYTERUN_DIR)/,*.pic.c *.d.c *.o prims.c opnames.h jumptbl.h version.h *.c.depend)
+	rm -f $(addprefix $(BYTERUN_DIR)/,*.pic.c *.d.c *.o *.c.depend)
 
 $(BYTERUN_DIR)/%.c.depend : $(BYTERUN_DIR)/%.c $(BYTERUN_DIR)/opnames.h $(BYTERUN_DIR)/jumptbl.h $(VERSION_H)
 	-gcc -MM $(BYTECCCOMPOPTS) $< -MT "$(BYTERUN_DIR)/$*.o" $< > $@.tmp

@@ -23,6 +23,8 @@ YACC_DIR=yacc
 
 OCAMLRUN=$(BYTERUN_DIR)/ocamlrun$(EXE)
 OCAMLYACC=$(YACC_DIR)/ocamlyacc$(EXE)
+VERSION_H=config/version.h
+
 BOOT_OCAMLC=$(OCAMLRUN) $(BOOT_DIR)/ocamlc
 BOOT_OCAMLOPT=$(OCAMLRUN) $(BOOT_DIR)/ocamlopt
 BOOT_OCAMLDEP=$(OCAMLRUN) $(BOOT_DIR)/ocamldep
@@ -30,22 +32,15 @@ BOOT_OCAMLDEP=$(OCAMLRUN) $(BOOT_DIR)/ocamldep
 COMPFLAGS=-strict-sequence -w +33..39 -g -warn-error A -nostdlib
 OPTCOMPFLAGS=-warn-error A -nostdlib -g
 
+
 #temporary
 all: stdlib/stdlib.cma $(OCAMLYACC)
 
+include Makefile.byterun
 
-#version
-VERSION_H=config/version.h
+include Makefile.stdlib
 
-$(VERSION_H) : VERSION
-	echo "#define OCAML_VERSION \"`sed -e 1q $<`\"" > $@
+include Makefile.yacc
 
-clean::
-	rm -f $(VERSION_H)
-
-include byterun/Makefile.include
-
-include stdlib/Makefile.include
-
-include yacc/Makefile.yacc.include
+include Makefile.generating
 
