@@ -1,10 +1,9 @@
 
-BYTERUN_CFLAGS=-DCAML_NAME_SPACE -O $(BYTECCCOMPOPTS) $(IFLEXDIR) -I $(BYTERUN_DIR)
-BYTERUN_DFLAGS=-DCAML_NAME_SPACE -g -DDEBUG $(BYTECCCOMPOPTS) $(IFLEXDIR) -I $(BYTERUN_DIR)
+BYTERUN_CFLAGS=-DCAML_NAME_SPACE -O $(BYTECCCOMPOPTS) $(IFLEXDIR) -I byterun
+BYTERUN_DFLAGS=-DCAML_NAME_SPACE -g -DDEBUG $(BYTECCCOMPOPTS) $(IFLEXDIR) -I byterun
 
-$(BYTERUN_DIR)/%.o: $(BYTERUN_DIR)/%.c
+$(BYTERUN_DIR)/%.o: byterun/%.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c $(OUTPUT_OPTION) $(BYTERUN_CFLAGS) $<
-
 
 PRIMS:=\
   alloc.c array.c compare.c extern.c floats.c gc_ctrl.c hash.c \
@@ -12,7 +11,7 @@ PRIMS:=\
   signals.c str.c sys.c terminfo.c callback.c weak.c finalise.c stacks.c \
   dynlink.c backtrace.c
 
-PRIMS:=$(addprefix $(BYTERUN_DIR)/,$(PRIMS))
+PRIMS:=$(addprefix byterun/,$(PRIMS))
 
 BYTERUN_COMMONOBJS:=\
   interp.o misc.o stacks.o fix_code.o startup.o \
@@ -39,7 +38,7 @@ clean::
 	rm -f $(addprefix $(BYTERUN_DIR)/,*.pic.c *.d.c *.o *.c.depend)
 	rm -f $(addprefix $(BYTERUN_DIR)/,ocamlrun libcamlrun.a)
 
-$(BYTERUN_DIR)/%.c.depend : $(BYTERUN_DIR)/%.c $(BYTERUN_DIR)/opnames.h $(BYTERUN_DIR)/jumptbl.h $(VERSION_H)
+$(BYTERUN_DIR)/%.c.depend : byterun/%.c byterun/opnames.h byterun/jumptbl.h $(VERSION_H)
 	-gcc -MM $(BYTECCCOMPOPTS) $< -MT "$(BYTERUN_DIR)/$*.o" $< > $@.tmp
 	-gcc -MM $(BYTECCCOMPOPTS) -DDEBUG -MT "$(BYTERUN_DIR)/$*.d.o" $< >> $@.tmp
 	-gcc -MM $(BYTECCCOMPOPTS) $< -MT "$(BYTERUN_DIR)/$*.pic.o" $< >> $@.tmp

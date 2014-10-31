@@ -18,7 +18,7 @@ include config/Makefile
 CC=$(BYTECC)
 
 BOOT_DIR=boot
-BYTERUN_DIR=byterun
+BYTERUN_DIR=byterun_build
 YACC_DIR=yacc
 STDLIB_DIR=stdlib
 STDLIB_CMI=$(STDLIB_DIR)/stdlib.cmi.stamp
