@@ -47,7 +47,7 @@ module Env : sig
     closure_depth : int;
   }
 
-  val empty : t
+  val empty : unit -> t
 
   val local : t -> t
 
@@ -83,7 +83,7 @@ end = struct
     closure_depth : int;
   }
 
-  let empty =
+  let empty () =
     { env_approx = Variable.Map.empty;
       current_functions = Set_of_closures_id.Set.empty;
       inlining_level = 0;
@@ -1302,7 +1302,7 @@ and inline_recursive_functions env r funct clos fun_id func fapprox
   loop (activate_substitution env) r expr
 
 let inline tree =
-  let result, r = loop Env.empty init_r tree in
+  let result, r = loop (Env.empty ()) init_r tree in
   if not (Variable.Set.is_empty r.used_variables)
   then begin
     Format.printf "remaining variables: %a@.%a@."
