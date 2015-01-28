@@ -21,7 +21,7 @@ type error =
 exception Error of Location.t * error
 
 type t = {
-  current_compilation_unit : Symbol.compilation_unit;
+  current_compilation_unit : Symbol.Compilation_unit.t;
   current_unit_id : Ident.t;
   symbol_for_global' : (Ident.t -> Symbol.t)
 }
