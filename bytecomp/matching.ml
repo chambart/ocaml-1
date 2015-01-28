@@ -2709,10 +2709,10 @@ let rec lower_bind v arg lam = match lam with
 | _ ->
     bind Alias v [] arg lam
 
-let bind_check str v arg lam = match str,arg with
-| _, Lvar _ ->bind str v [] arg lam
+let bind_check str v arg lam attributes = match str,arg with
+| _, Lvar _ -> bind str v attributes arg lam
 | Alias,_ -> lower_bind v arg lam
-| _,_     -> bind str v [] arg lam
+| _,_     -> bind str v attributes arg lam
 
 let comp_exit ctx m = match m.default with
 | (_,i)::_ -> Lstaticraise (i,[]), jumps_singleton i ctx
@@ -2771,6 +2771,9 @@ let arg_to_var arg cls = match arg with
     let v = name_pattern "match" cls in
     v,Lvar v
 
+let variable_pattern_attribute = function
+  | [[{ pat_desc = Tpat_var _; pat_attributes }], _] -> pat_attributes
+  | _ -> []
 
 (*
   The main compilation function.
@@ -2801,7 +2804,8 @@ let rec compile_match repr partial ctx m = match m with
       comp_match_handlers
         ((if dbg then do_compile_matching_pr else do_compile_matching) repr)
         partial ctx newarg first_match rem in
-    bind_check str v arg lam, total
+    let attributes = variable_pattern_attribute m.cases in
+    bind_check str v arg lam attributes, total
 | _ -> assert false
 
 
