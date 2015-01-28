@@ -188,6 +188,7 @@ module Conv(P:Param1) = struct
   type env =
     { sb : unit flambda Variable.Map.t; (* substitution *)
       cm : Symbol.t Variable.Map.t; (* variables associated to constants *)
+      prevent_subst : Variable.Set.t; (* Variable not to substitute *)
       approx : approx Variable.Map.t }
 
   let infos = init_infos ()
@@ -195,6 +196,7 @@ module Conv(P:Param1) = struct
   let empty_env =
     { sb = Variable.Map.empty;
       cm = Variable.Map.empty;
+      prevent_subst = Variable.Set.empty;
       approx = Variable.Map.empty }
 
   let canonical_symbol s = canonical_symbol s infos
@@ -282,6 +284,7 @@ module Conv(P:Param1) = struct
              constant label *)
           try
             let lbl = Variable.Map.find id env.cm in
+            if Variable.Set.mem id env.prevent_subst then raise Not_found;
             Fsymbol(lbl, ()), Value_symbol lbl
           with Not_found ->
 
@@ -336,7 +339,7 @@ module Conv(P:Param1) = struct
           then add_approx id approx env
           else add_approx id Value_unknown env
         in
-        begin match is_constant id, constant_symbol lam, str with
+        begin match is_constant id, constant_symbol env lam, str with
         | _, _, Assigned
         | false, (Not_const | No_lbl | Const_closure), _ ->
             let ubody, body_approx = conv_approx env body in
@@ -384,7 +387,7 @@ module Conv(P:Param1) = struct
                    env, (id,sym,def)::acc) (env,[]) consts in
 
         List.iter (fun (id,sym,def) ->
-            match constant_symbol (conv env def) with
+            match constant_symbol env (conv env def) with
             | Lbl sym' ->
                 (match symbol_id sym' with
                  | None -> ()
@@ -628,13 +631,15 @@ module Conv(P:Param1) = struct
   and conv_closure env functs param_approxs spec_arg fv =
     let closed = Set_of_closures_id.Set.mem functs.ident P.constant_closures in
 
-    let fv_ulam_approx = Variable.Map.map (conv_approx env) fv in
+    let fv_ulam_approx = Variable.Map.map (conv_approx { env with prevent_subst = Variable.Set.empty }) fv in
     let fv_ulam = Variable.Map.map (fun (lam,approx) -> lam) fv_ulam_approx in
 
     let kept_fv id =
       let cv = Var_within_closure.wrap id in
       not (is_constant id)
-      || (Var_within_closure.Set.mem cv used_variable_withing_closure) in
+      || (Var_within_closure.Set.mem cv used_variable_withing_closure)
+      || Variable.Map.mem id functs.funs
+    in
 
     let used_fv_approx = Variable.Map.filter (fun id _ -> kept_fv id) fv_ulam_approx in
     let used_fv = Variable.Map.map (fun (lam,approx) -> lam) used_fv_approx in
@@ -671,7 +676,9 @@ module Conv(P:Param1) = struct
 
       (* inside the body of the function, we cannot access variables
          declared outside, so take a clean substitution table. *)
-      let env = { env with sb = Variable.Map.empty } in
+      let env = { env with
+                  prevent_subst = Variable.Map.keys functs.funs;
+                  sb = Variable.Map.empty; } in
 
       (* add informations about currently defined functions to
          allow direct call *)
@@ -692,7 +699,7 @@ module Conv(P:Param1) = struct
 
       (* Add to the substitution the value of the free variables *)
       let add_env_variable id lam env =
-        match constant_symbol lam with
+        match constant_symbol env lam with
         | Not_const ->
             assert(not closed);
             env
@@ -754,7 +761,7 @@ module Conv(P:Param1) = struct
     | Fsymbol _ -> true
     | _ -> false
 
-  and constant_symbol : unit flambda -> const_sym = function
+  and constant_symbol env : unit flambda -> const_sym = function
     | Fsymbol(sym, ()) ->
         Lbl sym
     | Fconst(_, ()) ->
@@ -763,6 +770,8 @@ module Conv(P:Param1) = struct
         if Set_of_closures_id.Set.mem cl_fun.ident P.constant_closures
         then Const_closure
         else Not_const
+    | Fvar(var,_) when Variable.Map.mem var env.cm ->
+        Lbl (Variable.Map.find var env.cm)
     | _ -> Not_const
 
 

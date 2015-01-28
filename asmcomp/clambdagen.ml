@@ -261,6 +261,10 @@ module Conv(P:Param2) = struct
     let id = Variable.unique_ident var in
     id, { env with var = Variable.Map.add var id env.var }
 
+  let conv_symbol sym =
+    let lbl = Compilenv.cannonical_symbol (string_of_linkage_name sym.sym_label) in
+    Uconst (Uconst_ref (lbl, None))
+
   let rec conv ?(expected_symbol:Symbol.t option) (env : env) = function
     | Fvar (var,_) ->
         begin
@@ -278,10 +282,7 @@ module Conv(P:Param2) = struct
         end
 
     | Fsymbol (sym,_) ->
-        let lbl = Compilenv.cannonical_symbol (string_of_linkage_name sym.sym_label) in
-        Uconst (Uconst_ref
-                  (* Should delay the conversion a bit more *)
-                  (lbl, None))
+        conv_symbol sym
 
     | Fconst (cst,_) ->
         Uconst (conv_const expected_symbol cst)
@@ -298,7 +299,7 @@ module Conv(P:Param2) = struct
         Uletrec(udefs, conv env body)
 
     | Fset_of_closures({ cl_fun = funct; cl_free_var = fv }, _) ->
-        conv_closure env ~expected_symbol funct fv
+        conv_set_of_closures env ~expected_symbol funct fv
 
     | Fclosure({ fu_closure = lam; fu_fun = id; fu_relative_to = rel }, _) ->
         let ulam = conv env lam in
@@ -486,7 +487,7 @@ module Conv(P:Param2) = struct
     then Usequence(ufunct, apply)
     else apply
 
-  and conv_closure env functs fv ~expected_symbol =
+  and conv_set_of_closures env functs fv ~expected_symbol =
     (* Make the susbtitutions for variables bound by the closure:
        the variables bounds are the functions inside the closure and
        the free variables of the functions.
@@ -574,7 +575,10 @@ module Conv(P:Param2) = struct
            the current closure:
            this can be retrieved by shifting the environment. *)
         if closed
-        then env
+        then
+          List.fold_left (fun env (id,_) ->
+              let sym = Compilenv.closure_symbol (Closure_id.wrap id) in
+              add_sb id (conv_symbol sym) env) env funct
         else
           let add_offset_subst pos env (id,_) =
             let offset = Closure_id.Map.find (Closure_id.wrap id) fun_offset_table in

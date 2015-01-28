@@ -11,7 +11,7 @@
 (***********************************************************************)
 
 open Lambda
-open Symbol
+(* open Symbol *)
 open Abstract_identifiers
 open Flambda
 open Flambdaapprox
@@ -908,10 +908,10 @@ and transform_set_of_closures_expression env r cl annot =
      of closures and associate them to their local variables. We need
      them to recover recursive calls in some functions imported from
      other compilation units. *)
-  let prev_closure_symbols = Variable.Map.fold (fun id _ map ->
-      let cf = Closure_id.wrap id in
-      let sym = Compilenv.closure_symbol cf in
-      SymbolMap.add sym id map) ffuns.funs SymbolMap.empty in
+  (* let prev_closure_symbols = Variable.Map.fold (fun id _ map -> *)
+  (*     let cf = Closure_id.wrap id in *)
+  (*     let sym = Compilenv.closure_symbol cf in *)
+  (*     SymbolMap.add sym id map) ffuns.funs SymbolMap.empty in *)
 
   let module AR =
     Flambdasubst.Alpha_renaming_map_for_ids_and_bound_vars_of_closures
@@ -932,9 +932,9 @@ and transform_set_of_closures_expression env r cl annot =
   in
   (* update the map according to the substitutions added by
      [subst_function_declarations_and_free_variables] *)
-  let prev_closure_symbols =
-    SymbolMap.map apply_substitution prev_closure_symbols
-  in
+  (* let prev_closure_symbols = *)
+  (*   SymbolMap.map apply_substitution prev_closure_symbols *)
+  (* in *)
 
   let env =
     { env with
@@ -976,11 +976,11 @@ and transform_set_of_closures_expression env r cl annot =
     (***** TODO: find something better
            Warning if multiply recursive function ******)
     let body =
-      Flambdaiter.map_toplevel
-        (function
-          | Fsymbol (sym,_) when SymbolMap.mem sym prev_closure_symbols ->
-             Fvar(SymbolMap.find sym prev_closure_symbols,Expr_id.create ())
-          | e -> e) ffun.body in
+      (* Flambdaiter.map_toplevel *)
+      (*   (function *)
+      (*     | Fsymbol (sym,_) when SymbolMap.mem sym prev_closure_symbols -> *)
+      (*        Fvar(SymbolMap.find sym prev_closure_symbols,Expr_id.create ()) *)
+      (*     | e -> e) *) ffun.body in
     (* We replace recursive calls using the function symbol
        This is done before substitution because we could have something like:
        List.iter (List.iter some_fun) l
