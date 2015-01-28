@@ -329,6 +329,8 @@ let should_inline_function_known_to_be_recursive ~func ~clos ~env ~closure
   let essential_condition =
     (not (Env.inside_set_of_closures_declaration clos.ident env))
       && (not (Variable.Set.is_empty closure.kept_params))
+    (* CR pchambart for pchambart: this condition is not necessary.
+       In fact, I'm not even sure why it is here. *)
       && Var_within_closure.Map.is_empty closure.bound_var (* closed *)
   in
   (* CR mshinwell: I'm not sure whether some of the predicate passed to
@@ -351,8 +353,11 @@ let should_inline_function_known_to_be_recursive ~func ~clos ~env ~closure
     match inlining_requirement with
     | Inlining_requirement.None -> false
     | Inlining_requirement.Always loc ->
-      raise (Error (loc,
-          Unable_to_satisfy_request_to_inline_recursive_function))
+      if Env.inside_set_of_closures_declaration clos.ident env then
+        false
+      else
+        raise (Error (loc,
+             Unable_to_satisfy_request_to_inline_recursive_function))
     | Inlining_requirement.Never -> assert false
   else
     match inlining_requirement with
