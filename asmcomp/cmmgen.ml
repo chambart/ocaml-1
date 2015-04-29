@@ -2272,7 +2272,8 @@ let rec emit_structured_constant (symb:(string*bool) list) cst cont =
   | Uconst_nativeint n ->
       emit_block boxedintnat_header symb
         (emit_boxed_nativeint_constant n cont)
-  | Uconst_block (tag, csts) ->
+  | Uconst_block (tag, csts)
+  | Uconst_mutable_block (tag, csts) ->
       let cont = List.fold_right emit_constant csts cont in
       emit_block (block_header tag (List.length csts)) symb cont
   | Uconst_float_array fields ->

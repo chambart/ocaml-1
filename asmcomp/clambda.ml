@@ -24,6 +24,7 @@ type ustructured_constant =
   | Uconst_int64 of int64
   | Uconst_nativeint of nativeint
   | Uconst_block of int * uconstant list
+  | Uconst_mutable_block of int * uconstant list
   | Uconst_float_array of float list
   | Uconst_string of string
   | Uconst_closure of ufunction list * string * uconstant list
@@ -136,6 +137,9 @@ let rank_structured_constant = function
   | Uconst_float_array _ -> 5
   | Uconst_string _ -> 6
   | Uconst_closure _ -> 7
+  | Uconst_mutable_block _ ->
+      (* mutable blocks cannot be shared *)
+      assert false
 
 let compare_structured_constants c1 c2 =
   match c1, c2 with
