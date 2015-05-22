@@ -90,17 +90,25 @@ val function_label : Closure_id.t -> string
 val new_const_label : unit -> int
 
 val new_structured_constant:
+  ?mutability:Asttypes.mutable_flag ->
   Clambda.ustructured_constant ->
   shared:bool -> (* can be shared with another structually equal constant *)
   string
 val add_structured_constant:
+  ?mutability:Asttypes.mutable_flag ->
   string -> Clambda.ustructured_constant ->
-  shared:bool ->
+  shared:bool -> (* can be shared with another structually equal constant *)
   string
 val cannonical_symbol: string -> string
 
+type structured_constant = {
+  label : (string * bool) list;
+  mutability : Asttypes.mutable_flag;
+  value : Clambda.ustructured_constant;
+}
+
 val structured_constants:
-  unit -> ((string * bool) list * Clambda.ustructured_constant) list
+  unit -> structured_constant list
 val add_exported_constant: string -> unit
 val clear_structured_constants: unit -> unit
 

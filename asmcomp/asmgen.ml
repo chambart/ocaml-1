@@ -39,7 +39,7 @@ let clambda_dump_if ppf ulambda =
   if !dump_clambda then
     begin
       Printclambda.clambda ppf ulambda;
-      List.iter (fun (lbls,cst) ->
+      List.iter (fun {Compilenv.label = lbls; value = cst} ->
           let lbl = match lbls with
             | [] -> assert false
             | (lbl, _) :: _ -> lbl in

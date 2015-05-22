@@ -2367,7 +2367,7 @@ let emit_constant_closure symb fundecls clos_vars cont =
 let emit_all_constants cont =
   let c = ref cont in
   List.iter
-    (fun (lbls, cst) ->
+    (fun { Compilenv.label = lbls; value = cst } ->
        let cst = emit_structured_constant lbls cst [] in
          c:= Cdata(cst):: !c)
     (Compilenv.structured_constants());
@@ -2381,8 +2381,13 @@ let emit_all_constants cont =
 
 (* Build the table of mutable structured constants *)
 
-let emit_mutable_globals_table ~glob ~symbols cont =
+let emit_mutable_globals_table ~glob cont =
   let table_symbol = Compilenv.make_symbol (Some "mutable_globals") in
+  let symbols =
+    List.map (fun { Compilenv.label } -> fst (List.hd label))
+      (List.filter (fun { Compilenv.mutability } -> mutability = Mutable )
+         (Compilenv.structured_constants ()))
+  in
   Cdata(Cglobal_symbol table_symbol ::
         Cdefine_symbol table_symbol ::
         Csymbol_address glob ::
@@ -2409,7 +2414,7 @@ let compunit size ulam =
       aux set c3
   in
   let c3 = aux StringSet.empty c1 in
-  let c4 = emit_mutable_globals_table ~glob ~symbols:[] c3 in
+  let c4 = emit_mutable_globals_table ~glob c3 in
   let space =
     (* These words will be registered as roots and as such must contain
        valid values, in case we are in no-naked-pointers mode.  Likewise
