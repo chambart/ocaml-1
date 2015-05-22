@@ -443,7 +443,7 @@ let text_section ?name () =
       | None -> !function_name
       | Some name -> name
     in
-    D.section [".text.caml__"^ Compilenv.current_unit_name () ^ "." ^ name] None []
+    D.section [".text.caml__"^ Compilenv.current_unit_name () ^ "." ^ emit_symbol name] None []
   else
     D.text ()
 
