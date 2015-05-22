@@ -118,3 +118,5 @@ let runtime_variant = ref "";;      (* -runtime-variant *)
 
 let keep_locs = ref false              (* -keep-locs *)
 let unsafe_string = ref true;;         (* -safe-string / -unsafe-string *)
+
+let function_data_section = ref true

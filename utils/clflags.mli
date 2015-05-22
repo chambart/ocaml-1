@@ -99,3 +99,4 @@ val force_slash : bool ref
 val keep_locs : bool ref
 val unsafe_string : bool ref
 val opaque : bool ref
+val function_data_section : bool ref

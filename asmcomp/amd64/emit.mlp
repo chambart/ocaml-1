@@ -436,6 +436,28 @@ let function_name = ref ""
 (* Entry point for tail recursive calls *)
 let tailrec_entry_point = ref 0
 
+let text_section ?name () =
+  if !Clflags.function_data_section then
+    let name =
+      match name with
+      | None -> !function_name
+      | Some name -> name
+    in
+    D.section [".text.caml__"^ Compilenv.current_unit_name () ^ "." ^ name] None []
+  else
+    D.text ()
+
+let data_section_counter = ref 0
+
+let data_section () =
+  if !Clflags.function_data_section then begin
+    D.section [".data.caml__" ^ Compilenv.current_unit_name () ^
+               ".n"^ (string_of_int !data_section_counter)] None [];
+    incr data_section_counter;
+  end
+  else
+    D.data ()
+
 (* Emit an instruction *)
 let emit_instr fallthrough i =
   emit_debug_info i.dbg;
@@ -734,7 +756,7 @@ let emit_instr fallthrough i =
         D.long (ConstSub (ConstLabel(emit_label jumptbl.(i)),
                          ConstLabel lbl))
       done;
-      D.text ()
+      text_section ()
   | Lsetuptrap lbl ->
       I.call (label lbl)
   | Lpushtrap ->
@@ -796,7 +818,7 @@ let fundecl fundecl =
   call_gc_sites := [];
   bound_error_sites := [];
   bound_error_call := 0;
-  D.text ();
+  text_section ();
   D.align 16;
   add_def_symbol fundecl.fun_name;
   if system = S_macosx
@@ -854,7 +876,7 @@ let emit_item = function
   | Calign n -> D.align n
 
 let data l =
-  D.data ();
+  data_section ();
   List.iter emit_item l
 
 (* Beginning / end of an assembly file *)
@@ -864,6 +886,7 @@ let begin_assembly() =
   reset_debug_info();                   (* PR#5603 *)
   reset_imp_table();
   float_constants := [];
+  data_section_counter := 0;
   if system = S_win64 then begin
     D.extrn "caml_young_ptr" QWORD;
     D.extrn "caml_young_limit" QWORD;
@@ -898,11 +921,16 @@ let begin_assembly() =
     D.qword (Const 0xFFFFFFFFFFFFFFFFL);
   end;
 
-  D.data ();
-  emit_global_label "data_begin";
+  (* D.data (); *)
+  data_section ();
+  (* if not !Clflags.function_data_section then *)
+    emit_global_label "data_begin";
 
-  D.text ();
-  emit_global_label "code_begin";
+  (* D.text (); *)
+  text_section ~name:"begin" ();
+  (* if not !Clflags.function_data_section then *)
+    emit_global_label "code_begin";
+
   if system = S_macosx then I.nop (); (* PR#4690 *)
   ()
 
@@ -917,16 +945,19 @@ let end_assembly() =
     List.iter (fun (cst,lbl) -> emit_float_constant cst lbl) !float_constants
   end;
 
-  D.text ();
+  (* D.text (); *)
+  text_section ~name:"end" ();
   if system = S_macosx then I.nop ();
   (* suppress "ld warning: atom sorting error" *)
 
-  emit_global_label "code_end";
+  (* if not !Clflags.function_data_section then *)
+    emit_global_label "code_end";
 
   emit_imp_table();
 
-  D.data ();
-  emit_global_label "data_end";
+  data_section ();
+  (* if not !Clflags.function_data_section then *)
+    emit_global_label "data_end";
   D.long (const 0);
 
   emit_global_label "frametable";
