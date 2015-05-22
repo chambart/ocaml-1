@@ -69,13 +69,13 @@ let reexported_offset extern_fun_offset_table extern_fv_offset_table expr consta
   let fv_map = Var_within_closure.Set.fold (f' extern_fv_offset_table) !set_fv in
   fun_map, fv_map
 
-let structured_constant_label expected_symbol ~shared cst =
+let structured_constant_label expected_symbol ~mutability ~shared cst =
   match expected_symbol with
   | None ->
-      Compilenv.new_structured_constant cst ~shared
+      Compilenv.new_structured_constant cst ~shared ~mutability
   | Some sym ->
       let lbl = string_of_linkage_name sym.sym_label in
-      Compilenv.add_structured_constant lbl cst ~shared
+      Compilenv.add_structured_constant lbl cst ~shared ~mutability
 
 module type Param1 = sig
   type t
@@ -256,6 +256,8 @@ module Conv(P:Param2) = struct
       var = Variable.Map.empty;
       toplevel = false }
 
+  let not_toplevel env = { env with toplevel = false }
+
   let add_sb id subst env =
     { env with subst = Variable.Map.add id subst env.subst }
 
@@ -400,11 +402,11 @@ module Conv(P:Param2) = struct
             Uprim(p, args, dbg)
         | Some l ->
             let cst = Uconst_block (tag,l) in
-            let lbl = structured_constant_label expected_symbol ~shared:true cst in
+            let lbl = structured_constant_label expected_symbol ~shared:true cst
+                ~mutability:Immutable in
             Uconst(Uconst_ref (lbl, Some (cst)))
         end
 
-(*  (* If global mutables are allowed: *)
     | Fprim(Pmakeblock(tag, Asttypes.Mutable) as p, args, dbg, _) when
         env.toplevel ->
         let args = conv_list env args in
@@ -413,10 +415,10 @@ module Conv(P:Param2) = struct
             Uprim(p, args, dbg)
         | Some l ->
             let cst = Uconst_block (tag,l) in
-            let lbl = structured_constant_label expected_symbol ~shared:false cst in
+            let lbl = structured_constant_label expected_symbol ~shared:false cst
+                ~mutability:Mutable in
             Uconst(Uconst_ref (lbl, Some (cst)))
         end
-*)
 
     | Fprim(p, args, dbg, _) ->
         Uprim(p, conv_list env args, dbg)
@@ -437,10 +439,10 @@ module Conv(P:Param2) = struct
     | Fsequence(lam1, lam2, _) ->
         Usequence(conv env lam1, conv env lam2)
     | Fwhile(cond, body, _) ->
-        Uwhile(conv env cond, conv env body)
+        Uwhile(conv env cond, conv (not_toplevel env) body)
     | Ffor(var, lo, hi, dir, body, _) ->
         let id, env_body = add_unique_ident var env in
-        Ufor(id, conv env lo, conv env hi, dir, conv env_body body)
+        Ufor(id, conv env lo, conv env hi, dir, conv (not_toplevel env_body) body)
     | Fassign(var, lam, _) ->
         let id = try find_var var env with Not_found -> assert false in
         Uassign(id, conv env lam)
@@ -629,7 +631,8 @@ module Conv(P:Param2) = struct
   and conv_const expected_symbol cst =
     let open Asttypes in
     let str ~shared cst =
-      let name = structured_constant_label expected_symbol ~shared cst in
+      let name = structured_constant_label expected_symbol ~shared cst
+          ~mutability:Immutable in
       Uconst_ref (name, Some cst)
     in
     match cst with

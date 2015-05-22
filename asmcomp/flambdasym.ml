@@ -200,6 +200,8 @@ module Conv(P:Param1) = struct
       approx = Variable.Map.empty;
       toplevel = false }
 
+  let not_toplevel env = { env with toplevel = false }
+
   let canonical_symbol s = canonical_symbol s infos
   let set_symbol_alias s1 s2 =
     let s1' = canonical_symbol s1 in
@@ -594,7 +596,6 @@ module Conv(P:Param1) = struct
           let sym = add_constant block ex in
           Fsymbol(sym, ()), Value_symbol sym
 
-(*  (* If global mutables are allowed: *)
     | Fprim(Lambda.Pmakeblock(tag, Asttypes.Mutable) as p, args, dbg, _)
       when env.toplevel ->
         let args, _approxs = conv_list_approx env args in
@@ -605,7 +606,6 @@ module Conv(P:Param1) = struct
         else
           let sym = add_constant block ex in
           Fsymbol(sym, ()), Value_symbol sym
-*)
 
     | Fprim(Lambda.Pfield i, [arg], dbg, _) ->
         let block, block_approx = conv_approx env arg in
@@ -646,11 +646,11 @@ module Conv(P:Param1) = struct
         approx
 
     | Fwhile(cond, body, _) ->
-        Fwhile(conv env cond, conv env body, ()),
+        Fwhile(conv env cond, conv (not_toplevel env) body, ()),
         unit_approx ()
 
     | Ffor(id, lo, hi, dir, body, _) ->
-        Ffor(id, conv env lo, conv env hi, dir, conv env body, ()),
+        Ffor(id, conv env lo, conv env hi, dir, conv (not_toplevel env) body, ()),
         unit_approx ()
 
     | Fassign(id, lam, _) ->
