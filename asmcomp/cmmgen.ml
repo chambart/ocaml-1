@@ -2382,7 +2382,7 @@ let emit_all_constants cont =
 
 (* Build the table of mutable structured constants *)
 
-let emit_mutable_globals_table ~glob cont =
+let emit_mutable_globals_table cont =
   let table_symbol = Compilenv.make_symbol (Some "mutable_globals") in
   let symbols =
     List.map (fun { Compilenv.label } -> fst (List.hd label))
@@ -2391,7 +2391,6 @@ let emit_mutable_globals_table ~glob cont =
   in
   Cdata(Cglobal_symbol table_symbol ::
         Cdefine_symbol table_symbol ::
-        Csymbol_address glob ::
         List.map (fun s -> Csymbol_address s) symbols @
         [Cint 0n])
   :: cont
@@ -2399,7 +2398,6 @@ let emit_mutable_globals_table ~glob cont =
 (* Translate a compilation unit *)
 
 let compunit size ulam =
-  let glob = Compilenv.make_symbol None in
   let init_code = transl ulam in
   let c1 = [Cfunction {fun_name = Compilenv.make_symbol (Some "entry");
                        fun_args = [];
@@ -2415,19 +2413,8 @@ let compunit size ulam =
       aux set c3
   in
   let c3 = aux StringSet.empty c1 in
-  let c4 = emit_mutable_globals_table ~glob c3 in
-  let space =
-    (* These words will be registered as roots and as such must contain
-       valid values, in case we are in no-naked-pointers mode.  Likewise
-       the block header must be black, below (see [caml_darken]), since
-       the overall record may be referenced. *)
-    Array.to_list
-      (Array.init size (fun _index ->
-        Cint (Nativeint.of_int 1 (* Val_unit *))))
-  in
-  Cdata ([Cint(black_block_header 0 size);
-         Cglobal_symbol glob;
-         Cdefine_symbol glob] @ space) :: c4
+  let c4 = emit_mutable_globals_table c3 in
+  c4
 
 (*
 CAMLprim value caml_cache_public_method (value meths, value tag, value *cache)

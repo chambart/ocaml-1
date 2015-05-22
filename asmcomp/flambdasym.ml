@@ -68,6 +68,46 @@ let list_used_variable_withing_closure expr =
   Flambdaiter.iter aux expr;
   !used
 
+let remove_constant_initialisation flam =
+  let size = ref 0 in
+  let g = function
+    | Fprim(Psetglobalfield (_ex, i), _, _, _) ->
+        size := max !size i
+    | e -> ()
+  in
+  Flambdaiter.iter g flam;
+
+  let fields = ref Ext_types.Int.Map.empty in
+  let still_set_fields = ref false in
+  let f = function
+    | Fprim(Psetglobalfield (_ex, i), [(Fconst _ | Fsymbol _) as arg], dbg, ()) ->
+        fields := Ext_types.Int.Map.add i arg !fields;
+        Fconst (Fconst_pointer 0, ())
+    | Fprim(Psetglobalfield (_ex, _i), _, _, _) as e ->
+        still_set_fields := true;
+        e
+    | e -> e
+  in
+  let flam = Flambdaiter.map f flam in
+  let mutability =
+    if !still_set_fields then
+      Asttypes.Mutable
+    else
+      Asttypes.Immutable
+  in
+
+  let fields =
+    Array.init !size (fun i ->
+        try Ext_types.Int.Map.find i !fields with
+        | Not_found ->
+            Fconst (Fconst_pointer 0, ()))
+  in
+  let global_module_block =
+    Fprim(Pmakeblock(0, mutability), Array.to_list fields,
+          Debuginfo.none, ())
+  in
+  flam, global_module_block
+
 module type Param1 = sig
   type t
   val expr : t Flambda.flambda
@@ -818,6 +858,8 @@ module Conv(P:Param1) = struct
 
 
   let expr = conv { empty_env with toplevel = true } P.expr
+  let expr, global_module = remove_constant_initialisation expr
+  let () = SymbolTbl.add infos.constants (Compilenv.current_unit_symbol ()) global_module
 
 end
 
