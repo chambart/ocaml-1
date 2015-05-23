@@ -974,6 +974,8 @@ let end_assembly() =
       efa_align = D.align;
       efa_label_rel =
         (fun lbl ofs ->
+           if !Clflags.function_data_section then
+             D.weak (emit_label lbl);
            let c =
              ConstAdd (
                ConstSub(ConstLabel(emit_label lbl), ConstThis),
