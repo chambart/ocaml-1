@@ -285,6 +285,8 @@ let print_line b = function
   | Size (s, c) -> bprintf b "\t.size %s,%a" s cst c
   | Type (s, typ) -> bprintf b "\t.type %s,%s" s typ
 
+  | Weak symbol -> bprintf b "\t.weak\t%s" symbol
+
   (* masm only *)
   | External _
   | Mode386

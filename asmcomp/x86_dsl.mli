@@ -90,6 +90,7 @@ module D : sig
   val text: unit -> unit
   val type_: string -> string -> unit
   val word: constant -> unit
+  val weak: string -> unit
 end
 
 module I : sig

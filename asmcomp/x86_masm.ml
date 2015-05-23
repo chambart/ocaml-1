@@ -243,6 +243,7 @@ let print_line b = function
   | Set _
   | Size _
   | Type _
+  | Weak _
     -> assert false
 
 let generate_asm oc lines =

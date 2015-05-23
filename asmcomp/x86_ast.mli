@@ -213,4 +213,6 @@ type asm_line =
   | Size of string * constant
   | Type of string * string
 
+  | Weak of string
+
 type asm_program = asm_line list
