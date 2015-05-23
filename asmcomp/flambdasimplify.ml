@@ -309,6 +309,9 @@ end)
 let primitive (p : Lambda.primitive) (args, approxs) expr dbg : _ Flambda.t * A.t =
   let fpc = !Clflags.float_const_prop in
   match p with
+  | Pignore ->
+    let eid = Flambdautils.data_at_toplevel_node expr in
+    const_ptr_expr expr 0 eid
   | Pmakeblock(tag, Asttypes.Immutable) ->
     expr, A.value_block(tag, Array.of_list approxs)
   | _ ->
