@@ -105,7 +105,8 @@ let emit_float32_directive directive x =
 (* Record live pointers at call points *)
 
 type frame_descr =
-  { fd_lbl: int;                        (* Return address *)
+  { fd_section_group: string;
+    fd_lbl: int;                        (* Return address *)
     fd_frame_size: int;                 (* Size of stack frame *)
     fd_live_offset: int list;           (* Offsets/regs of live addresses *)
     fd_debuginfo: Debuginfo.t }         (* Location, if any *)
@@ -113,7 +114,8 @@ type frame_descr =
 let frame_descriptors = ref([] : frame_descr list)
 
 type emit_frame_actions =
-  { efa_label: int -> unit;
+  { efa_section_group: string -> string -> unit;
+    efa_label: int -> unit;
     efa_16: int -> unit;
     efa_32: int32 -> unit;
     efa_word: int -> unit;
@@ -132,6 +134,7 @@ let emit_frames a =
       Hashtbl.add filenames name lbl;
       lbl in
   let emit_frame fd =
+    a.efa_section_group (".rodata." ^ fd.fd_section_group) fd.fd_section_group;
     a.efa_label fd.fd_lbl;
     a.efa_16 (if Debuginfo.is_none fd.fd_debuginfo
               then fd.fd_frame_size

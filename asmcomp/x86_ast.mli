@@ -214,5 +214,6 @@ type asm_line =
   | Type of string * string
 
   | Weak of string
+  | Local of string
 
 type asm_program = asm_line list

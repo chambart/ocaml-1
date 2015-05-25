@@ -36,7 +36,8 @@ val emit_debug_info_gen :
   (int -> int -> unit) -> unit
 
 type frame_descr =
-  { fd_lbl: int;                        (* Return address *)
+  { fd_section_group: string;
+    fd_lbl: int;                        (* Return address *)
     fd_frame_size: int;                 (* Size of stack frame *)
     fd_live_offset: int list;           (* Offsets/regs of live addresses *)
     fd_debuginfo: Debuginfo.t }         (* Location, if any *)
@@ -44,7 +45,8 @@ type frame_descr =
 val frame_descriptors : frame_descr list ref
 
 type emit_frame_actions =
-  { efa_label: int -> unit;
+  { efa_section_group: string -> string -> unit;
+    efa_label: int -> unit;
     efa_16: int -> unit;
     efa_32: int32 -> unit;
     efa_word: int -> unit;

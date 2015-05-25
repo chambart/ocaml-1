@@ -393,7 +393,11 @@ let primitive (p : Lambda.primitive) (args, approxs) expr dbg : _ Flambda.t * A.
     | [A.Value_boxed_int(A.Int32, n)] ->
       Simplify_boxed_int32.simplify_unop p Int32 expr n eid
     | [A.Value_boxed_int(A.Int64, n)] ->
-      Simplify_boxed_int64.simplify_unop p Int64 expr n eid
+      begin match p with
+      | Pccall { prim_name = "caml_int64_float_of_bits" } ->
+          const_float_expr expr (Int64.float_of_bits n) eid
+      | _ -> Simplify_boxed_int64.simplify_unop p Int64 expr n eid
+      end
     | [A.Value_boxed_int(A.Nativeint, n1);
        A.Value_boxed_int(A.Nativeint, n2)] ->
       Simplify_boxed_nativeint.simplify_binop p Nativeint expr n1 n2 eid

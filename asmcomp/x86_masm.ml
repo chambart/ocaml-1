@@ -244,6 +244,7 @@ let print_line b = function
   | Size _
   | Type _
   | Weak _
+  | Local _
     -> assert false
 
 let generate_asm oc lines =

@@ -286,6 +286,7 @@ let print_line b = function
   | Type (s, typ) -> bprintf b "\t.type %s,%s" s typ
 
   | Weak symbol -> bprintf b "\t.weak\t%s" symbol
+  | Local symbol -> bprintf b "\t.local\t%s" symbol
 
   (* masm only *)
   | External _

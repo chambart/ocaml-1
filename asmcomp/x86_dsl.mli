@@ -77,6 +77,7 @@ module D : sig
   val global: string -> unit
   val indirect_symbol: string -> unit
   val label: ?typ:data_type -> string -> unit
+  val local: string -> unit
   val loc: int -> int -> unit
   val long: constant -> unit
   val mode386: unit -> unit

@@ -72,6 +72,7 @@ void caml_init_frame_descriptors(void)
   intnat num_descr, tblsize, i, j, len;
   intnat * tbl;
   frame_descr * d;
+  frame_descr * last;
   uintnat nextd;
   uintnat h;
   link *lnk;
@@ -105,8 +106,9 @@ void caml_init_frame_descriptors(void)
   iter_list(frametables,lnk) {
     tbl = (intnat*) lnk->data;
     len = *tbl;
-    d = (frame_descr *)(tbl + 1);
-    for (j = 0; j < len; j++) {
+    last = *((frame_descr **) tbl+1);
+    d = (frame_descr *)(tbl + 2);
+    for (j = 0; j < len && d < last; j++) {
       h = Hash_retaddr(d->retaddr);
       while (caml_frame_descriptors[h] != NULL) {
         h = (h+1) & caml_frame_descriptors_mask;
