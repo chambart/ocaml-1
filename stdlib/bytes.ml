@@ -42,7 +42,8 @@ let init n f =
   done;
   s
 
-let empty = create 0;;
+(* let empty = create 0;; *)
+let empty = unsafe_of_string ""
 
 let copy s =
   let len = length s in
