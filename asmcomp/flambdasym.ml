@@ -90,8 +90,10 @@ let remove_constant_initialisation flam =
   in
   let flam = Flambdaiter.map f flam in
   let mutability =
-    if !still_set_fields then
+    if !still_set_fields then begin
+      Printf.printf "forced module: %s\n%!" (Compilenv.current_unit_name ());
       Asttypes.Mutable
+    end
     else
       Asttypes.Immutable
   in

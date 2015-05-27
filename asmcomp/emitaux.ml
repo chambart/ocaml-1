@@ -114,7 +114,7 @@ type frame_descr =
 let frame_descriptors = ref([] : frame_descr list)
 
 type emit_frame_actions =
-  { efa_section_group: string -> string -> unit;
+  { efa_section_group: string -> string option -> unit;
     efa_label: int -> unit;
     efa_16: int -> unit;
     efa_32: int32 -> unit;
@@ -134,7 +134,7 @@ let emit_frames a =
       Hashtbl.add filenames name lbl;
       lbl in
   let emit_frame fd =
-    a.efa_section_group (".rodata." ^ fd.fd_section_group) fd.fd_section_group;
+    a.efa_section_group (".rodata." ^ fd.fd_section_group) (Some fd.fd_section_group);
     a.efa_label fd.fd_lbl;
     a.efa_16 (if Debuginfo.is_none fd.fd_debuginfo
               then fd.fd_frame_size
@@ -159,11 +159,15 @@ let emit_frames a =
       a.efa_32 (Int64.to_int32 (Int64.shift_right info 32))
     end in
   let emit_filename name lbl =
+    a.efa_section_group (".rodata.caml_filename." ^ (string_of_int lbl)) None;
     a.efa_def_label lbl;
     a.efa_string name;
     a.efa_align Arch.size_addr in
+  let end_label = Linearize.new_label () in
+  a.efa_label end_label;
   a.efa_word (List.length !frame_descriptors);
   List.iter emit_frame !frame_descriptors;
+  a.efa_def_label end_label;
   Hashtbl.iter emit_filename filenames;
   frame_descriptors := []
 

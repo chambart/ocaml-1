@@ -974,7 +974,7 @@ let end_assembly() =
 
   D.section [".rodata.frametable.start"] (Some "a") ["@progbits"];
   emit_global_label "frametable";
-  D.qword (ConstLabel (Compilenv.make_symbol (Some "frametable_end")));
+  (* D.qword (ConstLabel (Compilenv.make_symbol (Some "frametable_end"))); *)
 
   let setcnt = ref 0 in
   emit_frames
@@ -990,10 +990,10 @@ let end_assembly() =
       efa_align = D.align;
       efa_label_rel =
         (fun lbl ofs ->
-           if !Clflags.function_data_section then begin
-             D.local (emit_label lbl);
-             D.weak (emit_label lbl);
-           end;
+           (* if !Clflags.function_data_section then begin *)
+           (*   D.local (emit_label lbl); *)
+           (*   D.weak (emit_label lbl); *)
+           (* end; *)
            let c =
              ConstAdd (
                ConstSub(ConstLabel(emit_label lbl), ConstThis),
@@ -1010,11 +1010,15 @@ let end_assembly() =
       efa_def_label = (fun l -> _label (emit_label l));
       efa_string = (fun s -> D.bytes (s ^ "\000"));
       efa_section_group = (fun section group ->
-          D.section [section] (Some "aG") [ "@progbits"; group ]);
+          match group with
+          | Some group ->
+              D.section [section] (Some "aG") [ "@progbits"; group ]
+          | None ->
+              D.section [section] (Some "a") [ "@progbits" ]);
     };
 
-  D.section [".rodata.frametable.end"] (Some "a") ["@progbits"];
-  emit_global_label "frametable_end";
+  (* D.section [".rodata.frametable.end"] (Some "a") ["@progbits"]; *)
+  (* emit_global_label "frametable_end"; *)
 
   if system = S_linux then
     (* Mark stack as non-executable, PR#4564 *)

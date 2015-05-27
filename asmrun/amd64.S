@@ -666,11 +666,13 @@ G(caml_system__code_end):
         .globl  G(caml_system__frametable)
         .align  EIGHT_ALIGN
 G(caml_system__frametable):
+        .quad   .Lafter_frametable /* one descriptor */
         .quad   1           /* one descriptor */
         .quad   LBL(107)    /* return address into callback */
         .value  -1          /* negative frame size => use callback link */
         .value  0           /* no roots here */
         .align  EIGHT_ALIGN
+.Lafter_frametable:
 
 #if defined(SYS_macosx)
         .literal16

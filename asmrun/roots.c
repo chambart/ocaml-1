@@ -88,7 +88,7 @@ void caml_init_frame_descriptors(void)
   /* Count the frame descriptors */
   num_descr = 0;
   iter_list(frametables,lnk) {
-    num_descr += *((intnat*) lnk->data);
+    num_descr += *((intnat*) lnk->data + 1);
   }
 
   /* The size of the hashtable is a power of 2 greater or equal to
@@ -105,10 +105,12 @@ void caml_init_frame_descriptors(void)
   /* Fill the hash table */
   iter_list(frametables,lnk) {
     tbl = (intnat*) lnk->data;
-    len = *tbl;
-    last = *((frame_descr **) tbl+1);
+    len = *(tbl+1);
+    last = *((frame_descr **) tbl);
     d = (frame_descr *)(tbl + 2);
+    printf("job: len %i d %X end %X diff %X\n", (int) len, (uint) d, (uint) last, ((uint) last) - ((uint) d));
     for (j = 0; j < len && d < last; j++) {
+      printf("record: j %d %X\n", (int) j, (uint) d);
       h = Hash_retaddr(d->retaddr);
       while (caml_frame_descriptors[h] != NULL) {
         h = (h+1) & caml_frame_descriptors_mask;
@@ -122,6 +124,8 @@ void caml_init_frame_descriptors(void)
       if (d->frame_size & 1) nextd += 8;
       d = (frame_descr *) nextd;
     }
+    printf("done: j %d d %X\n", (int) j, (uint) d);
+    fflush(stdout);
   }
 }
 

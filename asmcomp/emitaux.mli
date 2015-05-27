@@ -45,7 +45,7 @@ type frame_descr =
 val frame_descriptors : frame_descr list ref
 
 type emit_frame_actions =
-  { efa_section_group: string -> string -> unit;
+  { efa_section_group: string -> string option -> unit;
     efa_label: int -> unit;
     efa_16: int -> unit;
     efa_32: int32 -> unit;
