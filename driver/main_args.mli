@@ -80,6 +80,7 @@ module type Compiler_options =  sig
   val _where : unit -> unit
 
   val _nopervasives : unit -> unit
+  val _dtimings : unit -> unit
 end
 ;;
 

@@ -283,6 +283,10 @@ let mk_thread f =
   " Generate code that supports the system threads library"
 ;;
 
+let mk_dtimings f =
+  "-dtimings", Arg.Unit f, " Print timings"
+;;
+
 let mk_unsafe f =
   "-unsafe", Arg.Unit f,
   " Do not compile bounds checking on array and string access"
@@ -533,6 +537,7 @@ module type Compiler_options = sig
   val _verbose : unit -> unit
   val _where : unit -> unit
   val _nopervasives : unit -> unit
+  val _dtimings : unit -> unit
 end
 ;;
 
@@ -702,6 +707,7 @@ struct
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
     mk_dinstr F._dinstr;
+    mk_dtimings F._dtimings;
   ]
 end;;
 
@@ -830,6 +836,7 @@ struct
     mk_dscheduling F._dscheduling;
     mk_dlinear F._dlinear;
     mk_dstartup F._dstartup;
+    mk_dtimings F._dtimings;
     mk_opaque F._opaque;
   ]
 end;;
