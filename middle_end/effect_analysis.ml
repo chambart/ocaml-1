@@ -17,21 +17,18 @@ let no_effects_prim (prim : Lambda.primitive) =
   match prim with
   | Pidentity
   | Pignore
-  | Prevapply _
-  | Pdirapply _
   | Ploc _
   | Pgetglobal _
   | Pgetglobalfield _
   | Pmakeblock _
   | Pfield _
   | Pfloatfield _
-  | Plazyforce
   | Pccall { prim_name =
                ( "caml_format_float" | "caml_format_int" |
                  "caml_int32_format" | "caml_nativeint_format" |
                  "caml_int64_format" ) }
   | Psequand | Psequor | Pnot
-  | Pnegint | Paddint | Psubint | Pmulint | Pdivint | Pmodint
+  | Pnegint | Paddint | Psubint | Pmulint
   | Pandint | Porint | Pxorint
   | Plslint | Plsrint | Pasrint
   | Pintcomp _
@@ -75,17 +72,27 @@ let no_effects_prim (prim : Lambda.primitive) =
   | Pctconst _
   | Pbswap16
   | Pbbswap _
+  | Pduprecord _
   | Pint_as_pointer -> true
-  | Psetglobal _ | Psetfield _ | Psetfloatfield _ | Pduprecord _
-  | Pccall _ | Praise _ | Poffsetref _ | Pstringsetu | Pstringsets
-  | Parraysetu _ | Parraysets _ | Pbigarrayset _
-  | Psetglobalfield _
+
+  | Pdivint | Pmodint (* can raise Division_by_zero *)
+
   | Pstringrefs | Parrayrefs _ | Pbigarrayref (false, _, _, _)
   | Pstring_load_16 false | Pstring_load_32 false | Pstring_load_64 false
   | Pbigstring_load_16 false | Pbigstring_load_32 false
-  | Pbigstring_load_64 false
+  | Pbigstring_load_64 false (* can raise on index out of bound *)
+
+  | Psetglobal _ | Psetfield _ | Psetfloatfield _
+  | Pccall _ | Praise _ | Poffsetref _ | Pstringsetu | Pstringsets
+  | Parraysetu _ | Parraysets _ | Pbigarrayset _
+  | Psetglobalfield _
   | Pstring_set_16 _ | Pstring_set_32 _ | Pstring_set_64 _
   | Pbigstring_set_16 _ | Pbigstring_set_32 _ | Pbigstring_set_64 _ -> false
+
+  (* removed by previous passes *)
+  | Plazyforce
+  | Prevapply _
+  | Pdirapply _ -> assert false
 
 let rec no_effects (flam : _ Flambda.t) =
   match flam with
