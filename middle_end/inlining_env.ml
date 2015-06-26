@@ -18,7 +18,8 @@ type t = {
   (* The functions currently being declared: used to avoid inlining
      recursively *)
   inlining_level : int;
-  inside_branch : bool;
+  (* The number of conditionnal branch traversed *)
+  inside_branch : int;
   inside_loop : bool;
   (* Number of times "inline" has been called recursively *)
   freshening : Freshening.t;
@@ -33,7 +34,7 @@ let empty ~never_inline ~backend =
     env_approx = Variable.Map.empty;
     current_functions = Set_of_closures_id.Set.empty;
     inlining_level = 0;
-    inside_branch = false;
+    inside_branch = 0;
     inside_loop = false;
     freshening = Freshening.empty;
     never_inline;
@@ -90,10 +91,11 @@ let inside_set_of_closures_declaration closure_id env =
 let at_toplevel env =
   env.closure_depth = 0
 
-let is_inside_branch env = env.inside_branch
+let is_inside_branch env = env.inside_branch > 0
+let branch_depth env = env.inside_branch
 
 let inside_branch env =
-  { env with inside_branch = true }
+  { env with inside_branch = env.inside_branch + 1 }
 
 let inside_loop env =
   { env with inside_loop = true }

@@ -70,6 +70,7 @@ let inline_non_recursive
       let wsb =
         Inlining_cost.Whether_sufficient_benefit.create
           ~original:(fst (no_transformation()))
+          ~branch_depth:(E.branch_depth env)
           body
           ~probably_a_functor
           (R.benefit r_inlined)
@@ -106,6 +107,7 @@ let inline_non_recursive
       let wsb =
         Inlining_cost.Whether_sufficient_benefit.create
           ~original:(fst (no_transformation()))
+          ~branch_depth:(E.branch_depth env)
           body
           ~probably_a_functor
           (R.benefit r_inlined)
@@ -283,6 +285,7 @@ let inlining_decision_for_call_site ~env ~r
               let wsb =
                 Inlining_cost.Whether_sufficient_benefit.create body
                   ~original:(fst (no_transformation()))
+                  ~branch_depth:(E.branch_depth env)
                   ~probably_a_functor:false
                   (R.benefit r_inlined)
               in
@@ -328,6 +331,7 @@ let inlining_decision_for_call_site ~env ~r
                 let wsb =
                   Inlining_cost.Whether_sufficient_benefit.create
                     ~original:(fst (no_transformation ()))
+                    ~branch_depth:(E.branch_depth env)
                     expr
                     ~probably_a_functor:false
                     (R.benefit r_inlined)

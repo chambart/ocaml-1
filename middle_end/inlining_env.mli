@@ -52,6 +52,7 @@ val at_toplevel : t -> bool
     Toplevel code is the one evaluated when the compilation unit is loaded *)
 
 val is_inside_branch : t -> bool
+val branch_depth : t -> int
 
 val inside_branch : t -> t
 val inside_loop : t -> t

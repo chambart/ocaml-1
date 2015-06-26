@@ -111,6 +111,7 @@ module Options = Main_args.Make_optcomp_options (struct
   let _inline_alloc_cost n = inline_alloc_cost := n
   let _inline_prim_cost n = inline_prim_cost := n
   let _inline_branch_cost n = inline_branch_cost := n
+  let _branch_inline_factor f = branch_inline_factor := f
   let _intf = intf
   let _intf_suffix s = Config.interface_suffix := s
   let _keep_locs = set keep_locs

@@ -123,6 +123,7 @@ module type Optcommon_options = sig
   val _inline_alloc_cost : int -> unit
   val _inline_prim_cost : int -> unit
   val _inline_branch_cost : int -> unit
+  val _branch_inline_factor : float -> unit
 
   val _dclambda : unit -> unit
   val _dcmm : unit -> unit

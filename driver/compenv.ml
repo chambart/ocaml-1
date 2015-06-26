@@ -144,6 +144,14 @@ let int_setter ppf name option s =
       (Warnings.Bad_env_variable
          ("OCAMLPARAM", Printf.sprintf "non-integer parameter for \"%s\"" name))
 
+let float_setter ppf name option s =
+  try
+    option := float_of_string s
+  with _ ->
+    Location.print_warning Location.none ppf
+      (Warnings.Bad_env_variable
+         ("OCAMLPARAM", Printf.sprintf "non-float parameter for \"%s\"" name))
+
 (* 'can-discard=' specifies which arguments can be discarded without warning
    because they are not understood by some versions of OCaml. *)
 let can_discard = ref []
@@ -213,6 +221,7 @@ let read_one_param ppf position name v =
   | "inline-alloc-cost" -> int_setter ppf "inline-alloc-cost" inline_alloc_cost v
   | "inline-prim-cost" -> int_setter ppf "inline-prim-cost" inline_prim_cost v
   | "inline-branch-cost" -> int_setter ppf "inline-branch-cost" inline_branch_cost v
+  | "branch-inline-factor" -> float_setter ppf "branch-inline-factor" branch_inline_factor v
 
   | "functor-heuristics" ->
       if !native_code then
