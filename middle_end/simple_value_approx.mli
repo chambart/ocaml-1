@@ -110,6 +110,40 @@ and descr = private
 and value_closure = {
   closure_id : Closure_id.t;
   set_of_closures : value_set_of_closures;
+  (* If the original set_of_closure (or the closure in case of a
+     relative projection) is let-bound to a variable, the variable can
+     be provided in the field [set_of_closures_var]. This is used to
+     allow simplification of successive closure projection.
+     For instance
+     {[let set = Fset_of_closures ... in
+       let f = Fselect_closure
+           { closure_id = "f";
+             set_of_closures = set;
+             relative_to = None }
+       in
+       let g = Fselect_closure
+           { closure_id = "g";
+             set_of_closures = f;
+             relative_to = Some "f" }
+       in
+       ...
+     ]}
+
+     [g] can be rewritten to
+     {[let g = Fselect_closure
+           { closure_id = "g";
+             set_of_closures = set;
+             relative_to = None }
+       in
+       ...
+     ]}
+
+     This may allow for instance to eliminate [f] if it becomes
+     dead.
+
+     Note that this variable is not the same as the one in the [var]
+     field of the approximation: for [f] set_of_closures_var is [set]
+     while its approximation variable is [f] *)
   set_of_closures_var : Variable.t option;
 }
 

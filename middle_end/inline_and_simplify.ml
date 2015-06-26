@@ -250,10 +250,28 @@ let transform_closure_expression env r closure closure_id rel annot
     let closure : _ Flambda.t =
       match rel with
       | Some relative_to_id when Closure_id.equal closure_id relative_to_id ->
+        (* When a closure is relative to itself, we can avoid adding
+           an indirection.
+
+           {[let f = Fselect_closure { closure_id = "f";
+                                       set_of_closures = set;
+                                       relative_to = ... } in
+             let f' = Fselect_closure { closure_id = "f";
+                                        set_of_closures = f;
+                                        relative_to = Some f } in
+             ... ]}
+
+           in that case we simplify [f'] to
+           {[let f' = f in ... ]}
+        *)
         closure
       | None | Some _ ->
         match set_of_closures_var with
         | Some set_of_closures_var when E.present env set_of_closures_var ->
+          (* If the original set of closures is known, bound to a
+             variable and available in the current environment, we may
+             be able to reduce the number of indirections (see
+             [Simple_value_approx.value_closure] documentation for examples) *)
           let relative_to =
             (* We may not have direct access to the set of closures. In that
                case, this is still a relative closure, but it avoids
