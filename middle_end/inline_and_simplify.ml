@@ -457,6 +457,7 @@ and loop_direct env r (tree : 'a Flambda.t) : 'a Flambda.t * R.t =
   | Fprim ((Psequand | Psequor) as primitive, [arg1; arg2], dbg, annot) ->
     let arg1, r = loop env r arg1 in
     let arg1_approx = R.approx r in
+    let env = E.inside_branch env in
     let arg2, r = loop env r arg2 in
     let arg2_approx = R.approx r in
     let simplifier =
@@ -647,6 +648,7 @@ and loop_direct env r (tree : 'a Flambda.t) : 'a Flambda.t * R.t =
       Fswitch (arg, sw, annot), r
     end
   | Fstringswitch (arg, sw, def, annot) ->
+    let env = E.inside_branch env in
     let arg, r = loop env r arg in
     let sw, r =
       List.fold_right (fun (str, lam) (sw, r) ->
