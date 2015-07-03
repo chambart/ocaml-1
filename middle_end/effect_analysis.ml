@@ -52,8 +52,6 @@ let no_effects_prim (prim : Lambda.primitive) =
   | Paddbint _
   | Psubbint _
   | Pmulbint _
-  | Pdivbint _
-  | Pmodbint _
   | Pandbint _
   | Porbint _
   | Pxorbint _
@@ -75,6 +73,7 @@ let no_effects_prim (prim : Lambda.primitive) =
   | Pduprecord _
   | Pint_as_pointer -> true
 
+  | Pdivbint _ | Pmodbint _
   | Pdivint | Pmodint (* can raise Division_by_zero *)
 
   | Pstringrefs | Parrayrefs _ | Pbigarrayref (false, _, _, _)
@@ -100,6 +99,22 @@ let rec no_effects (flam : _ Flambda.t) =
   | Flet (_, _, def, body, _) -> no_effects def && no_effects body
   | Fletrec (defs, body, _) ->
     no_effects body && List.for_all (fun (_, def) -> no_effects def) defs
+  | Fprim ((Pdivint|Pmodint),
+           [_; Fconst (Fconst_base (Const_int 0),_)], _, _) ->
+    false
+  | Fprim ((Pdivint|Pmodint),
+           [_; Fconst (Fconst_base (Const_int _),_)], _, _) ->
+    true
+  | Fprim ((Pdivbint _ | Pmodbint _),
+           [_; Fconst (Fconst_base (
+                Const_int32 0l | Const_int64 0L | Const_nativeint 0n ),
+                       _)], _, _) ->
+    false
+  | Fprim ((Pdivbint _ | Pmodbint _),
+           [_; Fconst (Fconst_base (
+                Const_int32 _ | Const_int64 _ | Const_nativeint _ ),
+                       _)], _, _) ->
+    true
   | Fprim (p, args, _, _) ->
     no_effects_prim p && List.for_all no_effects args
   | Fset_of_closures ({ free_vars }, _) ->
