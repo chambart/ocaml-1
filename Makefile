@@ -109,6 +109,7 @@ ASMCOMP=\
   asmcomp/import_approx.cmo \
   asmcomp/flambdasym.cmo \
   asmcomp/clambdagen.cmo \
+  asmcomp/un_anf.cmo \
   asmcomp/strmatch.cmo asmcomp/cmmgen.cmo \
   asmcomp/printmach.cmo asmcomp/selectgen.cmo asmcomp/selection.cmo \
   asmcomp/comballoc.cmo \
