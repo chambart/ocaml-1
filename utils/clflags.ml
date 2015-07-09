@@ -90,10 +90,10 @@ let dump_linear = ref false             (* -dlinear *)
 let keep_startup_file = ref false       (* -dstartup *)
 let dump_combine = ref false            (* -dcombine *)
 let native_code = ref false             (* set to true under ocamlopt *)
-let inline_threshold = ref 10
+let inline_threshold = ref 80
 let inlining_stats = ref false
 let simplify_rounds = ref 1
-let unroll = ref 0
+let unroll = ref 1
 let force_slash = ref false             (* for ocamldep *)
 
 let dont_write_files = ref false        (* set to true under ocamldoc *)
@@ -119,10 +119,10 @@ let runtime_variant = ref "";;      (* -runtime-variant *)
 let keep_locs = ref false              (* -keep-locs *)
 let unsafe_string = ref true;;         (* -safe-string / -unsafe-string *)
 let functor_heuristics = ref true;;    (* -no-functor-heuristics *)
-let inline_call_cost = ref 5           (* -inline-call-cost *)
-let inline_alloc_cost = ref 10         (* -inline-alloc-cost *)
+let inline_call_cost = ref 10          (* -inline-call-cost *)
+let inline_alloc_cost = ref 5          (* -inline-alloc-cost *)
 let inline_prim_cost = ref 3           (* -inline-prim-cost *)
-let inline_branch_cost = ref 10        (* -inline-branch-cost *)
+let inline_branch_cost = ref 5         (* -inline-branch-cost *)
 let branch_inline_factor = ref 0.6     (* -branch-inline-factor *)
 
 let remove_unused_arguments_pass = ref true (* only OCAMLPARAM *)
