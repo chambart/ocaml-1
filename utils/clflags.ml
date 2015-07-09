@@ -125,4 +125,6 @@ let inline_prim_cost = ref 3           (* -inline-prim-cost *)
 let inline_branch_cost = ref 10        (* -inline-branch-cost *)
 let branch_inline_factor = ref 0.6     (* -branch-inline-factor *)
 
+let remove_unused_arguments_pass = ref true (* only OCAMLPARAM *)
+
 let print_timings = ref false          (* -timings *)

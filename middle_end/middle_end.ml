@@ -11,6 +11,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
+let remove_unused_arguments flam =
+  if !Clflags.remove_unused_arguments_pass then
+    Remove_unused_arguments.separate_unused_arguments_in_closures flam
+  else
+    flam
+
 let middle_end ppf ~sourcefile ~prefixname ~backend ~exported_fields lam =
   Timings.(start (Flambda_middle_end sourcefile));
   let dump_and_check s flam =
@@ -40,7 +46,7 @@ let middle_end ppf ~sourcefile ~prefixname ~backend ~exported_fields lam =
       |> Inline_and_simplify.run ~never_inline:false ~backend
       |> Lift_code.lift_lets
       |> Remove_unused_closure_vars.remove_unused_closure_variables
-      |> Remove_unused_arguments.separate_unused_arguments_in_closures
+      |> remove_unused_arguments
       |> Lift_code.lift_set_of_closures
       |> Remove_unused_globals.remove_unused_globals
       |> Inline_and_simplify.run ~never_inline:true ~backend

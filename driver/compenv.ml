@@ -231,6 +231,10 @@ let read_one_param ppf position name v =
       if !native_code then
         set "inlining-stats" [ inlining_stats ] v
 
+  | "remove-unused-arguments" ->
+    if !native_code then
+      set "remove-unused-arguments" [ Clflags.remove_unused_arguments_pass ] v
+
   | "intf-suffix" -> Config.interface_suffix := v
 
   | "I" -> begin
