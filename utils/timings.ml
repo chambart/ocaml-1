@@ -27,9 +27,12 @@ let timings : (part, float * float option) Hashtbl.t = Hashtbl.create 20
 let reset () = Hashtbl.clear timings
 
 let start part =
-  assert(not (Hashtbl.mem timings part));
+  begin match Hashtbl.find timings part with
+  | exception Not_found -> ()
+  | (_, Some _) -> ()
+  | (_, None) -> assert false end;
   let time = Sys.time () in
-  Hashtbl.add timings part (time, None)
+  Hashtbl.replace timings part (time, None)
 
 let start_id part x =
   start part; x
