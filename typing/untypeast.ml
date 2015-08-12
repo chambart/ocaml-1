@@ -444,7 +444,7 @@ let expression sub exp =
         Pexp_object (sub.class_structure sub cl)
     | Texp_pack (mexpr) ->
         Pexp_pack (sub.module_expr sub mexpr)
-    | Texp_sig s -> Pexp_sig s
+    | Texp_sig s -> assert false
   in
   List.fold_right (exp_extra sub) exp.exp_extra
     (Exp.mk ~loc ~attrs desc)
