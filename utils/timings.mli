@@ -54,5 +54,14 @@ val stop_id : part -> 'a -> 'a
 val time : part -> ('a -> 'b) -> 'a -> 'b
 (** [time part f arg] Record the runtime of [f arg] *)
 
+val restart : part -> unit
+(** Start a timer for a part that can run multiple times *)
+
+val accumulate : part -> unit
+(** Stop and accumulate a timer started with restart *)
+
+val accumulate_time : part -> ('a -> 'b) -> 'a -> 'b
+(** Like time for parts that can run multiple times *)
+
 val print : Format.formatter -> unit
 (** Prints all recorded timings to the formatter. *)

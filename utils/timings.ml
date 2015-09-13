@@ -41,7 +41,7 @@ let stop part =
   let time = Sys.time () in
   let (start, stop) = Hashtbl.find timings part in
   assert(stop = None);
-  Hashtbl.replace timings part (start, Some time)
+  Hashtbl.replace timings part (start, Some (time -. start))
 
 let stop_id part x =
   stop part; x
@@ -52,9 +52,34 @@ let time part f x =
   stop part;
   r
 
+let restart part =
+  let previous_duration =
+    match Hashtbl.find timings part with
+    | exception Not_found -> 0.
+    | (_, Some duration) -> duration
+    | _, None -> assert false
+  in
+  let time = Sys.time () in
+  Hashtbl.replace timings part (time, Some previous_duration)
+
+let accumulate part =
+  let time = Sys.time () in
+  match Hashtbl.find timings part with
+  | exception Not_found -> assert false
+  | _, None -> assert false
+  | (start, Some duration) ->
+    let duration = duration +. (time -. start) in
+    Hashtbl.replace timings part (start, Some duration)
+
+let accumulate_time part f x =
+  restart part;
+  let r = f x in
+  accumulate part;
+  r
+
 let get part =
   match Hashtbl.find timings part with
-  | start, Some stop -> Some (stop -. start)
+  | _start, Some duration -> Some duration
   | _, None -> None
   | exception Not_found -> None
 
@@ -69,13 +94,18 @@ let part_name = function
   | Cmm file -> Printf.sprintf "cmm(%s)" file
   | Compile_phrases file -> Printf.sprintf "compile_phrases(%s)" file
 
+let timings_list () =
+  let l = Hashtbl.fold (fun part times l -> (part, times) :: l) timings [] in
+  List.sort (fun (_, (start1, _)) (_, (start2, _)) -> compare start1 start2) l
+
 let print ppf =
   let current_time = Sys.time () in
-  Hashtbl.iter (fun part -> function
-      | start, Some stop ->
-          Format.fprintf ppf "%s: %.03fs@." (part_name part) (stop -. start)
-      | start, None ->
-          Format.fprintf ppf "%s: running since %.03fs@." (part_name part)
-            (current_time -. start))
-    timings
+  List.iter (fun (part, (start, stop)) ->
+      match stop with
+      | Some duration ->
+        Format.fprintf ppf "%s: %.03fs@." (part_name part) duration
+      | None ->
+        Format.fprintf ppf "%s: running since %.03fs@." (part_name part)
+          (current_time -. start))
+    (timings_list ())
 
