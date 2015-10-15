@@ -140,8 +140,9 @@ let rec check_recordwith_updates id e =
 ;;
 
 let rec size_of_lambda = function
-  | Lfunction(kind, params, body) as funct ->
-      RHS_function (1 + IdentSet.cardinal(free_variables funct), List.length params)
+  | Lfunction{kind; params; body} as funct ->
+      RHS_function (1 + IdentSet.cardinal(free_variables funct),
+                    List.length params)
   | Llet (Strict, id, Lprim (Pduprecord (kind, size), _), body)
     when check_recordwith_updates id body ->
       begin match kind with
@@ -452,7 +453,7 @@ let rec comp_expr env exp sz cont =
       end
   | Lconst cst ->
       Kconst cst :: cont
-  | Lapply(func, args, loc) ->
+  | Lapply(func, args, info) ->
       let nargs = List.length args in
       if is_tailcall cont then begin
         comp_args env args sz
@@ -492,7 +493,7 @@ let rec comp_expr env exp sz cont =
           comp_args env args' (sz + 3)
             (getmethod :: Kapply nargs :: cont1)
         end
-  | Lfunction(kind, params, body) -> (* assume kind = Curried *)
+  | Lfunction{kind; params; body} -> (* assume kind = Curried *)
       let lbl = new_label() in
       let fv = IdentSet.elements(free_variables exp) in
       let to_compile =
@@ -507,7 +508,7 @@ let rec comp_expr env exp sz cont =
           (add_pop 1 cont))
   | Lletrec(decl, body) ->
       let ndecl = List.length decl in
-      if List.for_all (function (_, Lfunction(_,_,_)) -> true | _ -> false)
+      if List.for_all (function (_, Lfunction _) -> true | _ -> false)
                       decl then begin
         (* let rec of functions *)
         let fv =
@@ -515,7 +516,7 @@ let rec comp_expr env exp sz cont =
         let rec_idents = List.map (fun (id, lam) -> id) decl in
         let rec comp_fun pos = function
             [] -> []
-          | (id, Lfunction(kind, params, body)) :: rem ->
+          | (id, Lfunction{kind; params; body}) :: rem ->
               let lbl = new_label() in
               let to_compile =
                 { params = params; body = body; label = lbl; free_vars = fv;
@@ -552,14 +553,16 @@ let rec comp_expr env exp sz cont =
               comp_init (add_var id (sz+1) new_env) (sz+1) rem
         and comp_nonrec new_env sz i = function
           | [] -> comp_rec new_env sz ndecl decl_size
-          | (id, exp, (RHS_block _ | RHS_floatblock _ | RHS_function _)) :: rem ->
+          | (id, exp, (RHS_block _ | RHS_floatblock _ | RHS_function _))
+            :: rem ->
               comp_nonrec new_env sz (i-1) rem
           | (id, exp, RHS_nonrec) :: rem ->
               comp_expr new_env exp sz
                 (Kassign (i-1) :: comp_nonrec new_env sz (i-1) rem)
         and comp_rec new_env sz i = function
           | [] -> comp_expr new_env body sz (add_pop ndecl cont)
-          | (id, exp, (RHS_block _ | RHS_floatblock _ | RHS_function _)) :: rem ->
+          | (id, exp, (RHS_block _ | RHS_floatblock _ | RHS_function _))
+            :: rem ->
               comp_expr new_env exp sz
                 (Kpush :: Kacc i :: Kccall("caml_update_dummy", 2) ::
                  comp_rec new_env sz (i-1) rem)
@@ -574,7 +577,7 @@ let rec comp_expr env exp sz cont =
       comp_expr env arg sz (add_const_unit cont)
   | Lprim(Pdirapply loc, [func;arg])
   | Lprim(Prevapply loc, [arg;func]) ->
-      let exp = Lapply(func, [arg], loc) in
+      let exp = Lapply(func, [arg], mk_apply_info loc) in
       comp_expr env exp sz cont
   | Lprim(Pnot, [arg]) ->
       let newcont =

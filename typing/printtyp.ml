@@ -207,6 +207,10 @@ let () = Btype.print_raw := raw_type_expr
 
 type param_subst = Id | Nth of int | Map of int list
 
+let is_nth = function
+    Nth _ -> true
+  | _ -> false
+
 let compose l1 = function
   | Id -> Map l1
   | Map l2 -> Map (List.map (List.nth l1) l2)
@@ -448,7 +452,7 @@ let aliasable ty =
   match ty.desc with
     Tvar _ | Tunivar _ | Tpoly _ -> false
   | Tconstr (p, _, _) ->
-      (match best_type_path p with (_, Nth _) -> false | _ -> true)
+      not (is_nth (snd (best_type_path p)))
   | _ -> true
 
 let namable_row row =
@@ -536,7 +540,8 @@ let reset_and_mark_loops_list tyl =
 (* Disabled in classic mode when printing an unification error *)
 let print_labels = ref true
 let print_label ppf l =
-  if !print_labels && l <> Nolabel || is_optional l then fprintf ppf "%s:" (string_of_label l)
+  if !print_labels && l <> Nolabel || is_optional l
+  then fprintf ppf "%s:" (string_of_label l)
 
 let rec tree_of_typexp sch ty =
   let ty = repr ty in
@@ -567,12 +572,10 @@ let rec tree_of_typexp sch ty =
     | Ttuple tyl ->
         Otyp_tuple (tree_of_typlist sch tyl)
     | Tconstr(p, tyl, abbrev) ->
-        begin match best_type_path p with
-          (_, Nth n) -> tree_of_typexp sch (List.nth tyl n)
-        | (p', s) ->
-            let tyl' = apply_subst s tyl in
-            Otyp_constr (tree_of_path p', tree_of_typlist sch tyl')
-        end
+        let p', s = best_type_path p in
+        let tyl' = apply_subst s tyl in
+        if is_nth s then tree_of_typexp sch (List.hd tyl') else
+        Otyp_constr (tree_of_path p', tree_of_typlist sch tyl')
     | Tvariant row ->
         let row = row_repr row in
         let fields =
@@ -591,17 +594,22 @@ let rec tree_of_typexp sch ty =
         begin match row.row_name with
         | Some(p, tyl) when namable_row row ->
             let (p', s) = best_type_path p in
-            assert (s = Id);
             let id = tree_of_path p' in
-            let args = tree_of_typlist sch tyl in
+            let args = tree_of_typlist sch (apply_subst s tyl) in
             if row.row_closed && all_present then
-              Otyp_constr (id, args)
+              if is_nth s then List.hd args else Otyp_constr (id, args)
             else
               let non_gen = is_non_gen sch px in
               let tags =
                 if all_present then None else Some (List.map fst present) in
-              Otyp_variant (non_gen, Ovar_name(id, args),
-                            row.row_closed, tags)
+              let inh =
+                match args with
+                  [Otyp_constr (i, a)] when is_nth s -> Ovar_name (i, a)
+                | _ ->
+                    (* fallback case, should change outcometree... *)
+                    Ovar_name (tree_of_path p, tree_of_typlist sch tyl)
+              in
+              Otyp_variant (non_gen, inh, row.row_closed, tags)
         | _ ->
             let non_gen =
               not (row.row_closed && all_present) && is_non_gen sch px in
@@ -654,10 +662,10 @@ and tree_of_row_field sch (l, f) =
   | Rpresent None | Reither(true, [], _, _) -> (l, false, [])
   | Rpresent(Some ty) -> (l, false, [tree_of_typexp sch ty])
   | Reither(c, tyl, _, _) ->
-      if c (* contradiction: un constructeur constant qui a un argument *)
+      if c (* contradiction: constant constructor with an argument *)
       then (l, true, tree_of_typlist sch tyl)
       else (l, false, tree_of_typlist sch tyl)
-  | Rabsent -> (l, false, [] (* une erreur, en fait *))
+  | Rabsent -> (l, false, [] (* actually, an error *))
 
 and tree_of_typlist sch tyl =
   List.map (tree_of_typexp sch) tyl
@@ -720,7 +728,7 @@ and type_scheme ppf ty = reset_and_mark_loops ty; typexp true 0 ppf ty
 let type_scheme_max ?(b_reset_names=true) ppf ty =
   if b_reset_names then reset_names () ;
   typexp true 0 ppf ty
-(* Fin Maxence *)
+(* End Maxence *)
 
 let tree_of_type_scheme ty = reset_and_mark_loops ty; tree_of_typexp true ty
 
@@ -948,16 +956,37 @@ let extension_constructor id ppf ext =
 
 (* Print a value declaration *)
 
+let rec add_native_repr_attributes ty attrs =
+  match ty, attrs with
+  | Otyp_arrow (label, a, b), attr_opt :: rest ->
+      let b = add_native_repr_attributes b rest in
+      let a =
+        match attr_opt with
+        | None -> a
+        | Some attr -> Otyp_attribute (a, attr)
+      in
+      Otyp_arrow (label, a, b)
+  | _, [Some attr] -> Otyp_attribute (ty, attr)
+  | _ ->
+      assert (List.for_all (fun x -> x = None) attrs);
+      ty
+
 let tree_of_value_description id decl =
   (* Format.eprintf "@[%a@]@." raw_type_expr decl.val_type; *)
   let id = Ident.name id in
   let ty = tree_of_type_scheme decl.val_type in
-  let prims =
-    match decl.val_kind with
-    | Val_prim p -> Primitive.description_list p
-    | _ -> []
+  let vd =
+    { oval_name = id;
+      oval_type = ty;
+      oval_prims = [];
+      oval_attributes = [] }
   in
-  Osig_value (id, ty, prims)
+  let vd =
+    match decl.val_kind with
+    | Val_prim p -> Primitive.print p vd
+    | _ -> vd
+  in
+  Osig_value vd
 
 let value_description id ppf decl =
   !Oprint.out_sig_item ppf (tree_of_value_description id decl)
@@ -1051,7 +1080,9 @@ let rec tree_of_class_type sch params =
       in
       Octy_signature (self_ty, List.rev csil)
   | Cty_arrow (l, ty, cty) ->
-      let lab = if !print_labels || is_optional l then string_of_label l else "" in
+      let lab =
+        if !print_labels || is_optional l then string_of_label l else ""
+      in
       let ty =
        if is_optional l then
          match (repr ty).desc with
@@ -1178,14 +1209,17 @@ let rec tree_of_modtype ?(ellipsis=false) = function
   | Mty_ident p ->
       Omty_ident (tree_of_path p)
   | Mty_signature sg ->
-      Omty_signature (if ellipsis then [Osig_ellipsis] else tree_of_signature sg)
+      Omty_signature (if ellipsis then [Osig_ellipsis]
+                      else tree_of_signature sg)
   | Mty_functor(param, ty_arg, ty_res) ->
       let res =
         match ty_arg with None -> tree_of_modtype ~ellipsis ty_res
         | Some mty ->
-            wrap_env (Env.add_module ~arg:true param mty) (tree_of_modtype ~ellipsis) ty_res
+            wrap_env (Env.add_module ~arg:true param mty)
+                     (tree_of_modtype ~ellipsis) ty_res
       in
-      Omty_functor (Ident.name param, may_map (tree_of_modtype ~ellipsis:false) ty_arg, res)
+      Omty_functor (Ident.name param,
+                    may_map (tree_of_modtype ~ellipsis:false) ty_arg, res)
   | Mty_alias p ->
       Omty_alias (tree_of_path p)
 
@@ -1198,7 +1232,8 @@ and tree_of_signature_rec env' in_type_group = function
       let in_type_group =
         match in_type_group, item with
           true, Sig_type (_, _, Trec_next) -> true
-        | _, Sig_type (_, _, (Trec_not | Trec_first)) -> set_printing_env env'; true
+        | _, Sig_type (_, _, (Trec_not | Trec_first)) ->
+            set_printing_env env'; true
         | _ -> set_printing_env env'; false
       in
       let (sg, rem) = filter_rem_sig item rem in
@@ -1218,7 +1253,8 @@ and trees_of_sigitem = function
       [tree_of_extension_constructor id ext es]
   | Sig_module(id, md, rs) ->
       let ellipsis =
-        List.exists (function ({txt="..."}, Parsetree.PStr []) -> true | _ -> false)
+        List.exists (function ({txt="..."}, Parsetree.PStr []) -> true
+                            | _ -> false)
           md.md_attributes in
       [tree_of_module id md.md_type rs ~ellipsis]
   | Sig_modtype(id, decl) ->

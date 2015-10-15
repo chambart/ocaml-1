@@ -80,7 +80,7 @@ struct caml_thread_struct {
   struct longjmp_buffer * external_raise; /* Saved external_raise */
 #endif
   int backtrace_pos;            /* Saved backtrace_pos */
-  code_t * backtrace_buffer;    /* Saved backtrace_buffer */
+  backtrace_slot * backtrace_buffer;    /* Saved backtrace_buffer */
   value backtrace_last_exn;     /* Saved backtrace_last_exn (root) */
 };
 
@@ -95,10 +95,10 @@ static caml_thread_t curr_thread = NULL;
 /* The master lock protecting the OCaml runtime system */
 static st_masterlock caml_master_lock;
 
-/* Whether the ``tick'' thread is already running */
+/* Whether the "tick" thread is already running */
 static int caml_tick_thread_running = 0;
 
-/* The thread identifier of the ``tick'' thread */
+/* The thread identifier of the "tick" thread */
 static st_thread_id caml_tick_thread_id;
 
 /* The key used for storing the thread descriptor in the specific data
@@ -444,7 +444,12 @@ CAMLprim value caml_thread_initialize(value unit)   /* ML */
 
 CAMLprim value caml_thread_cleanup(value unit)   /* ML */
 {
-  if (caml_tick_thread_running) st_thread_kill(caml_tick_thread_id);
+  if (caml_tick_thread_running){
+    caml_tick_thread_stop = 1;
+    st_thread_join(caml_tick_thread_id);
+    caml_tick_thread_stop = 0;
+    caml_tick_thread_running = 0;
+  }
   return Val_unit;
 }
 

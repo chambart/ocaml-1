@@ -17,7 +17,7 @@ open Lambda
 open Translobj
 open Translcore
 
-(* XXX Rajouter des evenements... *)
+(* XXX Rajouter des evenements... | Add more events... *)
 
 type error = Illegal_class_expr | Tags of label * label
 
@@ -26,10 +26,10 @@ exception Error of Location.t * error
 let lfunction params body =
   if params = [] then body else
   match body with
-    Lfunction (Curried, params', body') ->
-      Lfunction (Curried, params @ params', body')
+  | Lfunction {kind = Curried; params = params'; body = body'} ->
+      Lfunction {kind = Curried; params = params @ params'; body = body'}
   |  _ ->
-      Lfunction (Curried, params, body)
+      Lfunction {kind = Curried; params; body}
 
 let lapply func args loc =
   match func with
@@ -38,7 +38,7 @@ let lapply func args loc =
   | _ ->
       Lapply(func, args, loc)
 
-let mkappl (func, args) = Lapply (func, args, Location.none);;
+let mkappl (func, args) = Lapply (func, args, no_apply_info);;
 
 let lsequence l1 l2 =
   if l2 = lambda_unit then l1 else Lsequence(l1, l2)
@@ -167,13 +167,13 @@ let rec build_object_init cl_table obj params inh_init obj_init cl =
       (inh_init,
        let build params rem =
          let param = name_pattern "param" pat in
-         Lfunction (Curried, param::params,
-                    Matching.for_function
-                      pat.pat_loc None (Lvar param) [pat, rem] partial)
+         Lfunction {kind = Curried; params = param::params;
+                    body = Matching.for_function
+                             pat.pat_loc None (Lvar param) [pat, rem] partial}
        in
        begin match obj_init with
-         Lfunction (Curried, params, rem) -> build params rem
-       | rem                              -> build [] rem
+         Lfunction {kind = Curried; params; body = rem} -> build params rem
+       | rem                                            -> build [] rem
        end)
   | Tcl_apply (cl, oexprs) ->
       let (inh_init, obj_init) =
@@ -397,6 +397,7 @@ let rec get_class_meths cl =
 
 (*
    XXX Il devrait etre peu couteux d'ecrire des classes :
+   |   Writing classes should be cheap
      class c x y = d e f
 *)
 let rec transl_class_rebind obj_init cl vf =
@@ -411,14 +412,14 @@ let rec transl_class_rebind obj_init cl vf =
       let path, obj_init = transl_class_rebind obj_init cl vf in
       let build params rem =
         let param = name_pattern "param" pat in
-        Lfunction (Curried, param::params,
-                   Matching.for_function
-                     pat.pat_loc None (Lvar param) [pat, rem] partial)
+        Lfunction {kind = Curried; params = param::params;
+                   body = Matching.for_function
+                            pat.pat_loc None (Lvar param) [pat, rem] partial}
       in
       (path,
        match obj_init with
-         Lfunction (Curried, params, rem) -> build params rem
-       | rem                              -> build [] rem)
+         Lfunction {kind = Curried; params; body} -> build params body
+       | rem                                      -> build [] rem)
   | Tcl_apply (cl, oexprs) ->
       let path, obj_init = transl_class_rebind obj_init cl vf in
       (path, transl_apply obj_init oexprs Location.none)
@@ -449,7 +450,7 @@ let transl_class_rebind ids cl vf =
   try
     let obj_init = Ident.create "obj_init"
     and self = Ident.create "self" in
-    let obj_init0 = lapply (Lvar obj_init) [Lvar self] Location.none in
+    let obj_init0 = lapply (Lvar obj_init) [Lvar self] no_apply_info in
     let path, obj_init' = transl_class_rebind_0 self obj_init0 cl vf in
     if not (Translcore.check_recursive_lambda ids obj_init') then
       raise(Error(cl.cl_loc, Illegal_class_expr));
@@ -490,7 +491,7 @@ let rec module_path = function
 let const_path local = function
     Lvar id -> not (List.mem id local)
   | Lconst _ -> true
-  | Lfunction (Curried, _, body) ->
+  | Lfunction {kind = Curried; body} ->
       let fv = free_variables body in
       List.for_all (fun x -> not (IdentSet.mem x fv)) local
   | p -> module_path p
@@ -530,7 +531,7 @@ let rec builtin_meths self env env2 body =
   | Lsend(Cached, met, arg, [_;_], _) ->
       let s, args = conv arg in
       ("send_"^s, met :: args)
-  | Lfunction (Curried, [x], body) ->
+  | Lfunction {kind = Curried; params = [x]; body} ->
       let rec enter self = function
         | Lprim(Parraysetu _, [Lvar s; Lvar n; Lvar x'])
           when Ident.same x x' && List.mem s self ->
@@ -580,21 +581,21 @@ open M
 
 
 (*
-   Traduction d'une classe.
-   Plusieurs cas:
-    * reapplication d'une classe connue -> transl_class_rebind
-    * classe sans dependances locales -> traduction directe
-    * avec dependances locale -> creation d'un arbre de stubs,
-      avec un noeud pour chaque classe locale heritee
-   Une classe est un 4-uplet:
+   Class translation.
+   Three subcases:
+    * reapplication of a known class -> transl_class_rebind
+    * class without local dependencies -> direct translation
+    * with local dependencies -> generate a stubs tree,
+      with a node for every local classes inherited
+   A class is a 4-tuple:
     (obj_init, class_init, env_init, env)
-    obj_init: fonction de creation d'objet (unit -> obj)
-    class_init: fonction d'heritage (table -> env_init)
-      (une seule par code source)
-    env_init: parametrage par l'environnement local (env -> params -> obj_init)
-      (une par combinaison de class_init herites)
+    obj_init: creation function (unit -> obj)
+    class_init: inheritance function (table -> env_init)
+      (one by source code)
+    env_init: parameterisation by the local environment (env -> params -> obj_init)
+      (one for each combination of inherited class_init )
     env: environnement local
-   Si ids=0 (objet immediat), alors on ne conserve que env_init.
+   If ids=0 (immediate object), then only env_init is conserved.
 *)
 
 let prerr_ids msg ids =
@@ -638,7 +639,7 @@ let transl_class ids cl_id pub_meths cl vflag =
   in
   let new_ids_meths = ref [] in
   let msubst arr = function
-      Lfunction (Curried, self :: args, body) ->
+      Lfunction {kind = Curried; params = self :: args; body} ->
         let env = Ident.create "env" in
         let body' =
           if new_ids = [] then body else
@@ -710,7 +711,8 @@ let transl_class ids cl_id pub_meths cl vflag =
 
   let concrete = (vflag = Concrete)
   and lclass lam =
-    let cl_init = llets (Lfunction(Curried, [cla], cl_init)) in
+    let cl_init = llets (Lfunction{kind = Curried;
+                                   params = [cla]; body = cl_init}) in
     Llet(Strict, class_init, cl_init, lam (free_variables cl_init))
   and lbody fv =
     if List.for_all (fun id -> not (IdentSet.mem id fv)) ids then
@@ -727,7 +729,10 @@ let transl_class ids cl_id pub_meths cl vflag =
              Lvar class_init; Lvar env_init; lambda_unit]))))
   and lbody_virt lenvs =
     Lprim(Pmakeblock(0, Immutable),
-          [lambda_unit; Lfunction(Curried,[cla], cl_init); lambda_unit; lenvs])
+          [lambda_unit;
+           Lfunction{kind = Curried; params = [cla]; body = cl_init};
+           lambda_unit;
+           lenvs])
   in
   (* Still easy: a class defined at toplevel *)
   if top && concrete then lclass lbody else
@@ -769,7 +774,8 @@ let transl_class ids cl_id pub_meths cl vflag =
     List.map (fun (_,p) -> Lprim(Pfield 1, [transl_normal_path p])) inh_paths in
   let lclass lam =
     Llet(Strict, class_init,
-         Lfunction(Curried, [cla], def_ids cla cl_init), lam)
+         Lfunction{kind = Curried; params = [cla];
+                   body = def_ids cla cl_init}, lam)
   and lcache lam =
     if inh_keys = [] then Llet(Alias, cached, Lvar tables, lam) else
     Llet(Strict, cached,
@@ -785,7 +791,8 @@ let transl_class ids cl_id pub_meths cl vflag =
             Lsequence(mkappl (oo_prim "init_class", [Lvar cla]),
                       lset cached 0 (Lvar env_init))))
   and lclass_virt () =
-    lset cached 0 (Lfunction(Curried, [cla], def_ids cla cl_init))
+    lset cached 0 (Lfunction{kind = Curried;
+                             params = [cla]; body = def_ids cla cl_init})
   in
   llets (
   lcache (

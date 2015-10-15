@@ -2,7 +2,7 @@
 (*                                                                     *)
 (*                                OCaml                                *)
 (*                                                                     *)
-(*                Damien Doligez, Jane Street Capital                  *)
+(*                Damien Doligez, Jane Street Group, LLC               *)
 (*                                                                     *)
 (*  Copyright 2015 Institut National de Recherche en Informatique et   *)
 (*  en Automatique.  All rights reserved.  This file is distributed    *)
@@ -23,7 +23,7 @@ let reference n =
   else if n = 9 then "\\t"
   else if n = 10 then "\\n"
   else if n = 13 then "\\r"
-  else if n = Char.code '"' then "\\\""
+  else if n = Char.code '\"' then "\\\""
   else if n = Char.code '\\' then "\\\\"
   else if n < 32 || n > 126 then Printf.sprintf "\\%03d" n
   else char n
