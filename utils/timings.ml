@@ -27,12 +27,11 @@ let timings : (part, float * float option) Hashtbl.t = Hashtbl.create 20
 let reset () = Hashtbl.clear timings
 
 let start part =
-  begin match Hashtbl.find timings part with
-  | exception Not_found -> ()
-  | (_, Some _) -> ()
-  | (_, None) -> assert false end;
+  (* Cannot assert it is not here: a source file can be compiled
+     multiple times on the same command line *)
+  (* assert(not (Hashtbl.mem timings part)); *)
   let time = Sys.time () in
-  Hashtbl.replace timings part (time, None)
+  Hashtbl.add timings part (time, None)
 
 let start_id part x =
   start part; x
