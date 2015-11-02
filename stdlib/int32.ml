@@ -29,8 +29,10 @@ external of_int : int -> int32 = "%int32_of_int"
 external to_int : int32 -> int = "%int32_to_int"
 external of_float : float -> int32 = "caml_int32_of_float"
 external to_float : int32 -> float = "caml_int32_to_float"
-external bits_of_float : float -> int32 = "caml_int32_bits_of_float"
-external float_of_bits : int32 -> float = "caml_int32_float_of_bits"
+external bits_of_float : (float [@unboxed]) -> (int32 [@unboxed]) =
+  "caml_int32_bits_of_float" "caml_int32_bits_of_float_unboxed"  [@@noalloc]
+external float_of_bits : (int32 [@unboxed]) -> (float [@unboxed]) =
+  "caml_int32_float_of_bits" "caml_int32_float_of_bits_unboxed" [@@noalloc]
 
 let zero = 0l
 let one = 1l

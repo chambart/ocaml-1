@@ -154,14 +154,16 @@ external of_string : string -> int64 = "caml_int64_of_string"
 val to_string : int64 -> string
 (** Return the string representation of its argument, in decimal. *)
 
-external bits_of_float : float -> int64 = "caml_int64_bits_of_float"
+external bits_of_float : (float [@unboxed]) -> (int64 [@unboxed]) =
+  "caml_int64_bits_of_float" "caml_int64_bits_of_float_unboxed" [@@noalloc]
 (** Return the internal representation of the given float according
    to the IEEE 754 floating-point 'double format' bit layout.
    Bit 63 of the result represents the sign of the float;
    bits 62 to 52 represent the (biased) exponent; bits 51 to 0
    represent the mantissa. *)
 
-external float_of_bits : int64 -> float = "caml_int64_float_of_bits"
+external float_of_bits : (int64 [@unboxed]) -> (float [@unboxed]) =
+  "caml_int64_float_of_bits" "caml_int64_float_of_bits_unboxed" [@@noalloc]
 (** Return the floating-point number whose internal representation,
    according to the IEEE 754 floating-point 'double format' bit layout,
    is the given [int64]. *)

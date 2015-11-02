@@ -49,8 +49,10 @@ let to_string n = format "%d" n
 
 external of_string : string -> int64 = "caml_int64_of_string"
 
-external bits_of_float : float -> int64 = "caml_int64_bits_of_float"
-external float_of_bits : int64 -> float = "caml_int64_float_of_bits"
+external bits_of_float : (float [@unboxed]) -> (int64 [@unboxed]) =
+  "caml_int64_bits_of_float" "caml_int64_bits_of_float_unboxed" [@@noalloc]
+external float_of_bits : (int64 [@unboxed]) -> (float [@unboxed]) =
+  "caml_int64_float_of_bits" "caml_int64_float_of_bits_unboxed" [@@noalloc]
 
 type t = int64
 

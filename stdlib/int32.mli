@@ -132,14 +132,16 @@ external of_string : string -> int32 = "caml_int32_of_string"
 val to_string : int32 -> string
 (** Return the string representation of its argument, in signed decimal. *)
 
-external bits_of_float : float -> int32 = "caml_int32_bits_of_float"
+external bits_of_float : (float [@unboxed]) -> (int32 [@unboxed]) =
+  "caml_int32_bits_of_float" "caml_int32_bits_of_float_unboxed" [@@noalloc]
 (** Return the internal representation of the given float according
    to the IEEE 754 floating-point 'single format' bit layout.
    Bit 31 of the result represents the sign of the float;
    bits 30 to 23 represent the (biased) exponent; bits 22 to 0
    represent the mantissa. *)
 
-external float_of_bits : int32 -> float = "caml_int32_float_of_bits"
+external float_of_bits : (int32 [@unboxed]) -> (float [@unboxed]) =
+  "caml_int32_float_of_bits" "caml_int32_float_of_bits_unboxed" [@@noalloc]
 (** Return the floating-point number whose internal representation,
    according to the IEEE 754 floating-point 'single format' bit layout,
    is the given [int32]. *)
