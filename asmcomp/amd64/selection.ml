@@ -114,7 +114,9 @@ let pseudoregs_for_operation op arg res =
 
 let inline_ops =
   [ "sqrt"; "caml_bswap16_direct"; "caml_int32_direct_bswap";
-    "caml_int64_direct_bswap"; "caml_nativeint_direct_bswap" ]
+    "caml_int64_direct_bswap"; "caml_nativeint_direct_bswap";
+    "caml_int64_bits_of_float_unboxed"; "caml_int64_float_of_bits_unboxed";
+    "caml_int32_bits_of_float_unboxed"; "caml_int32_float_of_bits_unboxed"; ]
 
 (* The selector class *)
 
@@ -215,6 +217,10 @@ method! select_operation op args =
   | Cextcall("caml_int64_bits_of_float_unboxed", _, _, _)
   | Cextcall("caml_int64_float_of_bits_unboxed", _, _, _) ->
       (Imove, args)
+  | Cextcall("caml_int32_bits_of_float_unboxed", _, _, _) ->
+      (Ispecific Iint32_bits_of_float, args)
+  | Cextcall("caml_int32_float_of_bits_unboxed", _, _, _) ->
+      (Ispecific Iint32_float_of_bits, args)
   (* AMD64 does not support immediate operands for multiply high signed *)
   | Cmulhi ->
       (Iintop Imulh, args)

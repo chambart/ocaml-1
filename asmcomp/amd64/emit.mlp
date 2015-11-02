@@ -668,6 +668,12 @@ let emit_instr fallthrough i =
       I.sqrtsd (arg i 0) (res i 0)
   | Lop(Ispecific(Ifloatsqrtf addr)) ->
       I.sqrtsd (addressing addr REAL8 i 0) (res i 0)
+  | Lop(Ispecific Iint32_float_of_bits) ->
+      I.mov (arg i 0) (res i 0);
+      I.cvtss2sd (res i 0) (res i 0)
+  | Lop(Ispecific Iint32_bits_of_float) ->
+      I.cvtsd2ss (arg i 0) (arg i 0);
+      I.mov (arg i 0) (res i 0)
   | Lreloadretaddr ->
       ()
   | Lreturn ->
