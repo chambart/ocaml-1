@@ -83,7 +83,7 @@ let typeof = function
   | Reg32 _ -> DWORD
   | Reg64 _ -> QWORD
   | Imm _ | Sym _ -> NONE
-  | Regf _ -> assert false
+  | Regf _ -> QWORD
 
 let suf arg =
   match typeof arg with

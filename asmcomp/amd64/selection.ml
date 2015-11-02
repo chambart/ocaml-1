@@ -212,6 +212,9 @@ method! select_operation op args =
   | Cextcall("caml_int64_direct_bswap", _, _, _)
   | Cextcall("caml_nativeint_direct_bswap", _, _, _) ->
       (Ispecific (Ibswap 64), args)
+  | Cextcall("caml_int64_bits_of_float_unboxed", _, _, _)
+  | Cextcall("caml_int64_float_of_bits_unboxed", _, _, _) ->
+      (Imove, args)
   (* AMD64 does not support immediate operands for multiply high signed *)
   | Cmulhi ->
       (Iintop Imulh, args)
