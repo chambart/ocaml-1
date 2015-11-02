@@ -334,6 +334,20 @@ CAMLprim value caml_int32_float_of_bits(value vi)
   return caml_copy_double(u.d);
 }
 
+int32_t caml_int32_bits_of_float_unboxed(double vd)
+{
+  union { float d; int32_t i; } u;
+  u.d = vd;
+  return u.i;
+}
+
+double caml_int32_float_of_bits_unboxed(int32_t vi)
+{
+  union { float d; int32_t i; } u;
+  u.i = vi;
+  return u.d;
+}
+
 /* 64-bit integers */
 
 #ifdef ARCH_ALIGN_INT64
@@ -587,6 +601,26 @@ CAMLprim value caml_int64_float_of_bits(value vi)
   { int32_t t = u.h[0]; u.h[0] = u.h[1]; u.h[1] = t; }
 #endif
   return caml_copy_double(u.d);
+}
+
+int64_t caml_int64_bits_of_float_unboxed(double vd)
+{
+  union { double d; int64_t i; int32_t h[2]; } u;
+  u.d = vd;
+#if defined(__arm__) && !defined(__ARM_EABI__)
+  { int32_t t = u.h[0]; u.h[0] = u.h[1]; u.h[1] = t; }
+#endif
+  return u.i;
+}
+
+double caml_int64_float_of_bits_unboxed(int64_t vi)
+{
+  union { double d; int64_t i; int32_t h[2]; } u;
+  u.i = vi;
+#if defined(__arm__) && !defined(__ARM_EABI__)
+  { int32_t t = u.h[0]; u.h[0] = u.h[1]; u.h[1] = t; }
+#endif
+  return u.d;
 }
 
 /* Native integers */
