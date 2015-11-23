@@ -137,12 +137,15 @@ static void init_frame_descriptors(link *new_frametables)
     caml_frame_descriptors =
       (frame_descr **) caml_stat_alloc(tblsize * sizeof(frame_descr *));
     for (i = 0; i < tblsize; i++) caml_frame_descriptors[i] = NULL;
+
+    fill_hashtable(new_frametables);
   } else {
     num_descr += increase;
+    fill_hashtable(new_frametables);
+    tail->next = frametables;
   }
 
-  fill_hashtable(new_frametables);
-  tail->next = frametables;
+  frametables = new_frametables;
 }
 
 void caml_init_frame_descriptors(void) {
@@ -240,7 +243,7 @@ void caml_oldify_local_roots (void)
 #else
   unsigned short * p;
 #endif
-  value glob;
+  value * glob;
   value * root;
   struct caml__roots_block *lr;
   link *lnk;
@@ -249,18 +252,20 @@ void caml_oldify_local_roots (void)
   for (i = caml_globals_scanned;
        i <= caml_globals_inited && caml_globals[i] != 0;
        i++) {
-    glob = caml_globals[i];
-    for (j = 0; j < Wosize_val(glob); j++){
-      Oldify (&Field (glob, j));
+    for(glob = caml_globals[i]; *glob != 0; glob++) {
+      for (j = 0; j < Wosize_val(*glob); j++){
+        Oldify (&Field (*glob, j));
+      }
     }
   }
   caml_globals_scanned = caml_globals_inited;
 
   /* Dynamic global roots */
   iter_list(caml_dyn_globals, lnk) {
-    glob = (value) lnk->data;
-    for (j = 0; j < Wosize_val(glob); j++){
-      Oldify (&Field (glob, j));
+    for(glob = (value *) lnk->data; *glob != 0; glob++) {
+      for (j = 0; j < Wosize_val(*glob); j++){
+        Oldify (&Field (*glob, j));
+      }
     }
   }
 
@@ -340,21 +345,23 @@ void caml_darken_all_roots (void)
 void caml_do_roots (scanning_action f)
 {
   int i, j;
-  value glob;
+  value * glob;
   link *lnk;
 
   /* The global roots */
   for (i = 0; caml_globals[i] != 0; i++) {
-    glob = caml_globals[i];
-    for (j = 0; j < Wosize_val(glob); j++)
-      f (Field (glob, j), &Field (glob, j));
+    for(glob = caml_globals[i]; *glob != 0; glob++) {
+      for (j = 0; j < Wosize_val(*glob); j++)
+        f (Field (*glob, j), &Field (*glob, j));
+    }
   }
 
   /* Dynamic global roots */
   iter_list(caml_dyn_globals, lnk) {
-    glob = (value) lnk->data;
-    for (j = 0; j < Wosize_val(glob); j++){
-      f (Field (glob, j), &Field (glob, j));
+    for(glob = (value *) lnk->data; *glob != 0; glob++) {
+      for (j = 0; j < Wosize_val(*glob); j++){
+        f (Field (*glob, j), &Field (*glob, j));
+      }
     }
   }
 

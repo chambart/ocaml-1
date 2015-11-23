@@ -50,6 +50,12 @@
 #define Mark_scanned(sp, retaddr) Saved_return_address(sp) = (retaddr) | 1
 #endif
 
+#ifdef TARGET_s390x
+#define Saved_return_address(sp) *((intnat *)((sp) - SIZEOF_PTR))
+#define Trap_frame_size 16
+#define Callback_link(sp) ((struct caml_context *)((sp) + Trap_frame_size))
+#endif
+
 #ifdef TARGET_arm
 #define Saved_return_address(sp) *((intnat *)((sp) - 4))
 #define Callback_link(sp) ((struct caml_context *)((sp) + 8))
@@ -104,7 +110,7 @@ extern char * caml_bottom_of_stack;
 extern uintnat caml_last_return_address;
 extern value * caml_gc_regs;
 extern char * caml_exception_pointer;
-extern value caml_globals[];
+extern value * caml_globals[];
 extern intnat caml_globals_inited;
 extern intnat * caml_frametable[];
 

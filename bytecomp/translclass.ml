@@ -26,19 +26,24 @@ exception Error of Location.t * error
 let lfunction params body =
   if params = [] then body else
   match body with
-  | Lfunction {kind = Curried; params = params'; body = body'} ->
-      Lfunction {kind = Curried; params = params @ params'; body = body'}
+  | Lfunction {kind = Curried; params = params'; body = body'; attr} ->
+      Lfunction {kind = Curried; params = params @ params'; body = body'; attr}
   |  _ ->
-      Lfunction {kind = Curried; params; body}
+      Lfunction {kind = Curried; params; body; attr = default_function_attribute}
 
-let lapply func args loc =
-  match func with
-    Lapply(func', args', _) ->
-      Lapply(func', args' @ args, loc)
+let lapply ap =
+  match ap.ap_func with
+    Lapply ap' ->
+      Lapply {ap with ap_func = ap'.ap_func; ap_args = ap'.ap_args @ ap.ap_args}
   | _ ->
-      Lapply(func, args, loc)
+      Lapply ap
 
-let mkappl (func, args) = Lapply (func, args, no_apply_info);;
+let mkappl (func, args) =
+  Lapply {ap_should_be_tailcall=false;
+          ap_loc=Location.none;
+          ap_func=func;
+          ap_args=args;
+          ap_inlined=Default_inline};;
 
 let lsequence l1 l2 =
   if l2 = lambda_unit then l1 else Lsequence(l1, l2)
@@ -55,16 +60,6 @@ let transl_meth_list lst =
 let set_inst_var obj id expr =
   let kind = if Typeopt.maybe_pointer expr then Paddrarray else Pintarray in
   Lprim(Parraysetu kind, [Lvar obj; Lvar id; transl_exp expr])
-
-let copy_inst_var obj id expr templ offset =
-  let kind = if Typeopt.maybe_pointer expr then Paddrarray else Pintarray in
-  let id' = Ident.create (Ident.name id) in
-  Llet(Strict, id', Lprim (Pidentity, [Lvar id]),
-  Lprim(Parraysetu kind,
-        [Lvar obj; Lvar id';
-         Lprim(Parrayrefu kind, [Lvar templ; Lprim(Paddint,
-                                                   [Lvar id';
-                                                    Lvar offset])])]))
 
 let transl_val tbl create name =
   mkappl (oo_prim (if create then "new_variable" else "get_variable"),
@@ -168,6 +163,7 @@ let rec build_object_init cl_table obj params inh_init obj_init cl =
        let build params rem =
          let param = name_pattern "param" pat in
          Lfunction {kind = Curried; params = param::params;
+                    attr = default_function_attribute;
                     body = Matching.for_function
                              pat.pat_loc None (Lvar param) [pat, rem] partial}
        in
@@ -413,6 +409,7 @@ let rec transl_class_rebind obj_init cl vf =
       let build params rem =
         let param = name_pattern "param" pat in
         Lfunction {kind = Curried; params = param::params;
+                   attr = default_function_attribute;
                    body = Matching.for_function
                             pat.pat_loc None (Lvar param) [pat, rem] partial}
       in
@@ -450,7 +447,13 @@ let transl_class_rebind ids cl vf =
   try
     let obj_init = Ident.create "obj_init"
     and self = Ident.create "self" in
-    let obj_init0 = lapply (Lvar obj_init) [Lvar self] no_apply_info in
+    let obj_init0 =
+      lapply {ap_should_be_tailcall=false;
+              ap_loc=Location.none;
+              ap_func=Lvar obj_init;
+              ap_args=[Lvar self];
+              ap_inlined=Default_inline}
+    in
     let path, obj_init' = transl_class_rebind_0 self obj_init0 cl vf in
     if not (Translcore.check_recursive_lambda ids obj_init') then
       raise(Error(cl.cl_loc, Illegal_class_expr));
@@ -512,12 +515,12 @@ let rec builtin_meths self env env2 body =
   match body with
   | Llet(_, s', Lvar s, body) when List.mem s self ->
       builtin_meths (s'::self) env env2 body
-  | Lapply(f, [arg], _) when const_path f ->
+  | Lapply{ap_func = f; ap_args = [arg]} when const_path f ->
       let s, args = conv arg in ("app_"^s, f :: args)
-  | Lapply(f, [arg; p], _) when const_path f && const_path p ->
+  | Lapply{ap_func = f; ap_args = [arg; p]} when const_path f && const_path p ->
       let s, args = conv arg in
       ("app_"^s^"_const", f :: args @ [p])
-  | Lapply(f, [p; arg], _) when const_path f && const_path p ->
+  | Lapply{ap_func = f; ap_args = [p; arg]} when const_path f && const_path p ->
       let s, args = conv arg in
       ("app_const_"^s, f :: p :: args)
   | Lsend(Self, Lvar n, Lvar s, [arg], _) when List.mem s self ->
@@ -598,9 +601,11 @@ open M
    If ids=0 (immediate object), then only env_init is conserved.
 *)
 
+(*
 let prerr_ids msg ids =
   let names = List.map Ident.unique_toplevel_name ids in
   prerr_endline (String.concat " " (msg :: names))
+*)
 
 let transl_class ids cl_id pub_meths cl vflag =
   (* First check if it is not only a rebind *)
@@ -712,6 +717,7 @@ let transl_class ids cl_id pub_meths cl vflag =
   let concrete = (vflag = Concrete)
   and lclass lam =
     let cl_init = llets (Lfunction{kind = Curried;
+                                   attr = default_function_attribute;
                                    params = [cla]; body = cl_init}) in
     Llet(Strict, class_init, cl_init, lam (free_variables cl_init))
   and lbody fv =
@@ -729,10 +735,10 @@ let transl_class ids cl_id pub_meths cl vflag =
              Lvar class_init; Lvar env_init; lambda_unit]))))
   and lbody_virt lenvs =
     Lprim(Pmakeblock(0, Immutable),
-          [lambda_unit;
-           Lfunction{kind = Curried; params = [cla]; body = cl_init};
-           lambda_unit;
-           lenvs])
+          [lambda_unit; Lfunction{kind = Curried;
+                                  attr = default_function_attribute;
+                                  params = [cla]; body = cl_init};
+           lambda_unit; lenvs])
   in
   (* Still easy: a class defined at toplevel *)
   if top && concrete then lclass lbody else
@@ -775,6 +781,7 @@ let transl_class ids cl_id pub_meths cl vflag =
   let lclass lam =
     Llet(Strict, class_init,
          Lfunction{kind = Curried; params = [cla];
+                   attr = default_function_attribute;
                    body = def_ids cla cl_init}, lam)
   and lcache lam =
     if inh_keys = [] then Llet(Alias, cached, Lvar tables, lam) else
@@ -791,7 +798,7 @@ let transl_class ids cl_id pub_meths cl vflag =
             Lsequence(mkappl (oo_prim "init_class", [Lvar cla]),
                       lset cached 0 (Lvar env_init))))
   and lclass_virt () =
-    lset cached 0 (Lfunction{kind = Curried;
+    lset cached 0 (Lfunction{kind = Curried; attr = default_function_attribute;
                              params = [cla]; body = def_ids cla cl_init})
   in
   llets (

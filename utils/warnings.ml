@@ -66,9 +66,14 @@ type t =
   | Bad_env_variable of string * string     (* 46 *)
   | Attribute_payload of string * string    (* 47 *)
   | Eliminated_optional_arguments of string list (* 48 *)
-  | No_cmi_file of string                   (* 49 *)
+  | No_cmi_file of string * string option   (* 49 *)
   | Bad_docstring of bool                   (* 50 *)
   | Expect_tailcall                         (* 51 *)
+  | Fragile_literal_pattern                 (* 52 *)
+  | Misplaced_attribute of string           (* 53 *)
+  | Duplicated_attribute of string          (* 54 *)
+  | Inlining_impossible of string           (* 55 *)
+  | Unreachable_case                        (* 56 *)
 ;;
 
 (* If you remove a warning, leave a hole in the numbering.  NEVER change
@@ -129,9 +134,15 @@ let number = function
   | No_cmi_file _ -> 49
   | Bad_docstring _ -> 50
   | Expect_tailcall -> 51
+  | Fragile_literal_pattern -> 52
+  | Misplaced_attribute _ -> 53
+  | Duplicated_attribute _ -> 54
+  | Inlining_impossible _ -> 55
+  | Unreachable_case -> 56
 ;;
 
-let last_warning_number = 51
+let last_warning_number = 56
+;;
 (* Must be the max number returned by the [number] function. *)
 
 let letter = function
@@ -390,13 +401,31 @@ let message = function
       Printf.sprintf "implicit elimination of optional argument%s %s"
         (if List.length sl = 1 then "" else "s")
         (String.concat ", " sl)
-  | No_cmi_file s ->
-      "no cmi file was found in path for module " ^ s
+  | No_cmi_file(name, None) ->
+      "no cmi file was found in path for module " ^ name
+  | No_cmi_file(name, Some msg) ->
+      Printf.sprintf
+        "no valid cmi file was found in path for module %s. %s"
+        name msg
   | Bad_docstring unattached ->
       if unattached then "unattached documentation comment (ignored)"
       else "ambiguous documentation comment"
   | Expect_tailcall ->
       Printf.sprintf "expected tailcall"
+  | Fragile_literal_pattern ->
+      Printf.sprintf
+        "the argument of this constructor should not be matched against a\n\
+         constant pattern; the actual value of the argument could change\n\
+         in the future"
+  | Unreachable_case ->
+      "this match case is unreachable.\n\
+       Consider replacing it with a refutation case '<pat> -> .'"
+  | Misplaced_attribute attr_name ->
+      Printf.sprintf "the %S attribute cannot appear in this context" attr_name
+  | Duplicated_attribute attr_name ->
+      Printf.sprintf "the %S attribute is used more than once on this expression" attr_name
+  | Inlining_impossible reason ->
+      Printf.sprintf "Inlining impossible in this context: %s" reason
 ;;
 
 let nerrors = ref 0;;
@@ -480,9 +509,14 @@ let descriptions =
    46, "Error in environment variable.";
    47, "Illegal attribute payload.";
    48, "Implicit elimination of optional arguments.";
-   49, "Missing cmi file when looking up module alias.";
+   49, "Absent cmi file when looking up module alias.";
    50, "Unexpected documentation comment.";
-   51, "Warning on non-tail calls if @tailcall present";
+   51, "Warning on non-tail calls if @tailcall present.";
+   52, "Fragile constant pattern.";
+   53, "Attribute cannot appear in this context";
+   54, "Attribute used more than once on an expression";
+   55, "Inlining impossible";
+   56, "Unreachable case in a pattern-matching (based on type information)."
   ]
 ;;
 

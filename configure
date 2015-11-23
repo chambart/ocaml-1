@@ -295,10 +295,11 @@ TOOLCHAIN="cc"
 # - strict type-based aliasing analysis (too risky for the OCaml runtime)
 # - strict no-overflow conditions on signed integer arithmetic
 #   (the OCaml runtime assumes Java-style behavior of signed integer arith.)
-# Concerning optimization level, -O3 is somewhat risky, so take -O2
+# Concerning optimization level, -O3 is somewhat risky, so take -O2.
 # Concerning language version, gnu99 is ISO C99 plus GNU extensions
-# that are often used in standard headers.  GCC defaults to gnu89,
-# which is not C99.  Clang defaults to gnu99 or gnu11, which is fine.
+# that are often used in standard headers.  Older GCC versions
+# defaults to gnu89, which is not C99.  Clang defaults to gnu99 or
+# gnu11, which is fine.
 
 case "$ocamlversion" in
   *+dev*) gcc_warnings="-Wall -Werror";;
@@ -311,9 +312,12 @@ case "$ccfamily" in
   gcc-[012]-*)
     # Some versions known to miscompile OCaml, e,g, 2.7,2.1, some 2.96.
     # Plus: C99 support unknown.
-    err "This version of GCC is too old.  Please use GCC version 3 or above.";;
-  gcc-3-[0123])
-    # No -fwrapv option yet
+    err "This version of GCC is too old.  Please use GCC version 4.2 or above.";;
+  gcc-3-*|gcc-4-[01])
+    # No -fwrapv option before GCC 3.4.
+    # Known problems with -fwrapv fixed in 4.2 only.
+    wrn "This verion of GCC is rather old.  Reducing optimization level."
+    wrn "Consider using GCC version 4.2 or above."
     bytecccompopts="-std=gnu99 -O $gcc_warnings";;
   gcc-*)
     bytecccompopts="-std=gnu99 -O2 -fno-strict-aliasing -fwrapv $gcc_warnings";;
@@ -684,7 +688,7 @@ if test $with_sharedlibs = "yes"; then
         *gcc*)
           sharedcccompopts="-fPIC"
           if sh ./solaris-ld; then
-            mksharedlib="$bytecc -shared"
+            mksharedlib="ld -G"
             byteccrpath="-R"
             mksharedlibrpath="-R"
           else
@@ -759,6 +763,7 @@ if test $with_sharedlibs = "yes"; then
         natdynlink=true
       fi;;
     x86_64-*-darwin*)             natdynlink=true;;
+    s390x*-*-linux*)              natdynlink=true;;
     powerpc*-*-linux*)            natdynlink=true;;
     sparc*-*-linux*)              natdynlink=true;;
     i686-*-kfreebsd*)             natdynlink=true;;
@@ -819,6 +824,7 @@ case "$target" in
                                 system=elf;;
   powerpc-*-netbsd*)            arch=power; model=ppc; system=elf;;
   powerpc-*-openbsd*)           arch=power; model=ppc; system=bsd_elf;;
+  s390x*-*-linux*)              arch=s390x; model=z10; system=elf;;
   armv6*-*-linux-gnueabihf)     arch=arm; model=armv6; system=linux_eabihf;;
   arm*-*-linux-gnueabihf)       arch=arm; system=linux_eabihf;;
   armv7*-*-linux-gnueabi)       arch=arm; model=armv7; system=linux_eabi;;
@@ -895,6 +901,8 @@ case "$arch,$system" in
                     as="${TOOLPREF}as -mppc"
                     aspp="${TOOLPREF}gcc -m32 -c"
                   fi;;
+  s390x,elf)      as="${TOOLPREF}as -m 64 -march=$model"
+                  aspp="${TOOLPREF}gcc -c -Wa,-march=$model";;
   sparc,solaris)  as="${TOOLPREF}as"
                   case "$cc" in
                     *gcc*) aspp="${TOOLPREF}gcc -c";;
