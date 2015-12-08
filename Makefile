@@ -33,6 +33,7 @@ all:
 	$(MAKE) ocaml
 	$(MAKE) otherlibraries $(OCAMLBUILDBYTE) $(WITH_DEBUGGER) \
 	  $(WITH_OCAMLDOC)
+	if test -n "$(WITH_OCAMLDOC)"; then $(MAKE) manpages; else :; fi
 
 # Compile everything the first time
 world:
@@ -641,8 +642,11 @@ alldepend::
 
 # OCamldoc
 
-ocamldoc: ocamlc ocamlyacc ocamllex otherlibraries
-	cd ocamldoc && $(MAKE) all
+ocamldoc: ocamlc ocamlyacc ocamllex library otherlibrary_str otherlibrary_unix otherlibrary_dynlink
+	cd ocamldoc && $(MAKE) exe lib generators
+
+manpages: ocamldoc
+	cd ocamldoc && $(MAKE) manpages
 
 ocamldoc.opt: ocamlc.opt ocamlyacc ocamllex
 	cd ocamldoc && $(MAKE) opt.opt
@@ -661,10 +665,31 @@ alldepend::
 
 # The extra libraries
 
-otherlibraries: ocamltools
-	for i in $(OTHERLIBRARIES); do \
-	  (cd otherlibs/$$i; $(MAKE) all) || exit $$?; \
-	done
+otherlibrary_unix: library ocamltools
+	cd otherlibs/unix; $(MAKE) all
+
+otherlibrary_str: library ocamltools
+	cd otherlibs/str; $(MAKE) all
+
+otherlibrary_num: library ocamltools
+	cd otherlibs/num; $(MAKE) all
+
+otherlibrary_dynlink: library ocamltools
+	cd otherlibs/dynlink; $(MAKE) all
+
+otherlibrary_bigarray: library otherlibrary_unix
+	cd otherlibs/bigarray; $(MAKE) all
+
+otherlibrary_systhreads: library otherlibrary_unix
+	cd otherlibs/systhreads; $(MAKE) all
+
+otherlibrary_threads: library otherlibrary_unix
+	cd otherlibs/threads; $(MAKE) all
+
+otherlibrary_graph: library ocamltools
+	cd otherlibs/graph; $(MAKE) all
+
+otherlibraries: $(addprefix otherlibrary_,$(OTHERLIBRARIES))
 
 otherlibrariesopt:
 	for i in $(OTHERLIBRARIES); do \
