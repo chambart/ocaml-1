@@ -29,9 +29,8 @@ defaultentry:
 # Recompile the system using the bootstrap compiler
 all:
 	$(MAKE) runtime
-	$(MAKE) coreall
-	$(MAKE) ocaml
-	$(MAKE) otherlibraries $(OCAMLBUILDBYTE) $(WITH_DEBUGGER) \
+	$(MAKE) ocamlc ocamlyacc ocamllex ocamlyacc ocamltools library \
+	  ocaml otherlibraries $(OCAMLBUILDBYTE) $(WITH_DEBUGGER) \
 	  $(WITH_OCAMLDOC)
 	if test -n "$(WITH_OCAMLDOC)"; then $(MAKE) manpages; else :; fi
 
@@ -105,9 +104,7 @@ core:
 	$(MAKE) coreall
 
 # Recompile the core system using the bootstrap compiler
-coreall:
-	$(MAKE) ocamlc
-	$(MAKE) ocamllex ocamlyacc ocamltools library
+coreall: ocamlc ocamllex ocamlyacc ocamltools library
 
 # Save the current bootstrap compiler
 MAXSAVED=boot/Saved/Saved.prev/Saved.prev/Saved.prev/Saved.prev/Saved.prev
@@ -603,10 +600,10 @@ alldepend::
 
 # The lexer and parser generators
 
-ocamllex: ocamlyacc ocamlc
+ocamllex: ocamlyacc
 	cd lex; $(MAKE) all
 
-ocamllex.opt: ocamlopt
+ocamllex.opt: ocamlyacc ocamlopt
 	cd lex; $(MAKE) allopt
 
 partialclean::
