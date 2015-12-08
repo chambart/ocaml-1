@@ -85,14 +85,23 @@ bootstrap:
 
 LIBFILES=stdlib.cma std_init.cmo std_exit.cmo *.cmi camlheader
 
-# Start up the system from the distribution compiler
-coldstart:
+byterun/ocamlrun$(EXE):
 	cd byterun; $(MAKE) all
+
+boot/ocamlrun$(EXE): byterun/ocamlrun$(EXE)
 	cp byterun/ocamlrun$(EXE) boot/ocamlrun$(EXE)
-	cd yacc; $(MAKE) all
+
+yacc/ocamlyacc$(EXE): ocamlyacc
+
+boot/ocamlyacc$(EXE): yacc/ocamlyacc$(EXE)
 	cp yacc/ocamlyacc$(EXE) boot/ocamlyacc$(EXE)
+
+boot/stdlib.cma: boot/ocamlrun$(EXE)
 	cd stdlib; $(MAKE) COMPILER=../boot/ocamlc all
 	cd stdlib; cp $(LIBFILES) ../boot
+
+# Start up the system from the distribution compiler
+coldstart: boot/ocamlrun$(EXE) boot/ocamlyacc$(EXE) boot/stdlib.cma
 	if test -f boot/libcamlrun.a; then :; else \
 	  ln -s ../byterun/libcamlrun.a boot/libcamlrun.a; fi
 	if test -d stdlib/caml; then :; else \
@@ -152,10 +161,7 @@ cleanboot:
 	rm -rf boot/Saved/Saved.prev/*
 
 # Compile the native-code compiler
-opt-core:
-	$(MAKE) runtimeopt
-	$(MAKE) ocamlopt
-	$(MAKE) libraryopt
+opt-core: runtimeopt ocamlopt libraryopt
 
 opt:
 	$(MAKE) runtimeopt
@@ -387,7 +393,7 @@ beforedepend:: utils/config.ml
 
 # The parser
 
-parsing/parser.mli parsing/parser.ml: parsing/parser.mly
+parsing/parser.mli parsing/parser.ml: parsing/parser.mly boot/ocamlyacc
 	$(CAMLYACC) $(YACCFLAGS) parsing/parser.mly
 
 partialclean::
@@ -397,7 +403,7 @@ beforedepend:: parsing/parser.mli parsing/parser.ml
 
 # The lexer
 
-parsing/lexer.ml: parsing/lexer.mll
+parsing/lexer.ml: parsing/lexer.mll boot/ocamlrun$(EXE)
 	$(CAMLLEX) parsing/lexer.mll
 
 partialclean::
@@ -444,6 +450,10 @@ ocamlopt.opt: compilerlibs/ocamlcommon.cmxa compilerlibs/ocamloptcomp.cmxa \
 partialclean::
 	rm -f ocamlopt.opt
 
+ALLCMOS=$(COMMON) $(BYTECOMP) $(MIDDLE_END) $(ASMCOMP) $(BYTESTART) $(OPTSTART) \
+	$(TOPLEVEL) $(TOPLEVELSTART)
+$(ALLCMOS) $(ALLCMOS:.cmo=.cmi): boot/ocamlrun$(EXE) boot/stdlib.cma
+
 $(COMMON:.cmo=.cmx) $(BYTECOMP:.cmo=.cmx) $(MIDDLE_END:.cmo=.cmx) $(ASMCOMP:.cmo=.cmx): ocamlopt
 
 # The numeric opcodes
@@ -459,8 +469,7 @@ beforedepend:: bytecomp/opcodes.ml
 
 # The predefined exceptions and primitives
 
-byterun/primitives:
-	cd byterun; $(MAKE) primitives
+byterun/primitives: boot/ocamlrun$(EXE)
 
 bytecomp/runtimedef.ml: byterun/primitives byterun/caml/fail.h
 	(echo 'let builtin_exceptions = [|'; \
@@ -538,7 +547,7 @@ partialclean::
 
 beforedepend:: asmcomp/emit.ml
 
-tools/cvt_emit: tools/cvt_emit.mll
+tools/cvt_emit: tools/cvt_emit.mll boot/stdlib.cma
 	cd tools && $(MAKE) cvt_emit
 
 # The "expunge" utility
@@ -589,7 +598,7 @@ library: ocamlc
 library-cross:
 	cd stdlib; $(MAKE) CAMLRUN=../byterun/ocamlrun all
 
-libraryopt:
+libraryopt: library ocamlopt runtimeopt
 	cd stdlib; $(MAKE) allopt
 
 partialclean::
@@ -600,7 +609,7 @@ alldepend::
 
 # The lexer and parser generators
 
-ocamllex: ocamlyacc
+ocamllex: boot/ocamlyacc boot/ocamlrun$(EXE) boot/stdlib.cma
 	cd lex; $(MAKE) all
 
 ocamllex.opt: ocamlyacc ocamlopt
