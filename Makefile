@@ -108,9 +108,7 @@ coldstart: boot/ocamlrun$(EXE) boot/ocamlyacc$(EXE) boot/stdlib.cma
 	  ln -s ../byterun/caml stdlib/caml; fi
 
 # Build the core system: the minimum needed to make depend and bootstrap
-core:
-	$(MAKE) coldstart
-	$(MAKE) coreall
+core: coldstart coreall
 
 # Recompile the core system using the bootstrap compiler
 coreall: ocamlc ocamllex ocamlyacc ocamltools library
@@ -562,8 +560,7 @@ partialclean::
 
 # The runtime system for the bytecode compiler
 
-runtime:
-	cd byterun; $(MAKE) all
+runtime: boot/byterun$(EXE)
 	if test -f stdlib/libcamlrun.a; then :; else \
 	  ln -s ../byterun/libcamlrun.a stdlib/libcamlrun.a; fi
 
