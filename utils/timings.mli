@@ -31,8 +31,11 @@ type part =
 val reset : unit -> unit
 (** erase all recorded times *)
 
-val get : part -> float option
+val get_time : part -> float option
 (** returns the runtime in seconds of a completed part *)
+
+val get_allocations : part -> float option
+(** returns the number of allocations of a completed part *)
 
 val start : part -> unit
 (** Mark the beginning of a section *)
