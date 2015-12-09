@@ -461,7 +461,7 @@ let simplify_lets lam =
       Hashtbl.add subst v (simplif (Lvar w));
       simplif l2
   | Llet(Strict, v, Lprim(Pmakeblock(0, Mutable, shape), [linit]), lbody)
-    when optimize ->
+    when optimize && not !Clflags.native_code ->
       let slinit = simplif linit in
       let slbody = simplif lbody in
       begin try
