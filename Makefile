@@ -27,22 +27,16 @@ defaultentry:
 	@echo "should work.  But see the file INSTALL for more details."
 
 # Recompile the system using the bootstrap compiler
-all:
-	$(MAKE) runtime
-	$(MAKE) ocamlc ocamlyacc ocamllex ocamlyacc ocamltools library \
-	  ocaml otherlibraries $(OCAMLBUILDBYTE) $(WITH_DEBUGGER) \
-	  $(WITH_OCAMLDOC)
+all: $(runtime) ocamlc ocamlyacc ocamllex ocamlyacc ocamltools library \
+	ocaml otherlibraries $(OCAMLBUILDBYTE) $(WITH_DEBUGGER) \
+	$(WITH_OCAMLDOC)
 	if test -n "$(WITH_OCAMLDOC)"; then $(MAKE) manpages; else :; fi
 
 # Compile everything the first time
-world:
-	$(MAKE) coldstart
-	$(MAKE) all
+world: coldstart all
 
 # Compile also native code compiler and libraries, fast
-world.opt:
-	$(MAKE) coldstart
-	$(MAKE) opt.opt
+world.opt: coldstart opt.opt
 
 # Hard bootstrap how-to:
 # (only necessary in some cases, for example if you remove some primitive)
@@ -101,9 +95,7 @@ boot/stdlib.cma: boot/ocamlrun$(EXE)
 	cd stdlib; cp $(LIBFILES) ../boot
 
 # Start up the system from the distribution compiler
-coldstart: boot/ocamlrun$(EXE) boot/ocamlyacc$(EXE) boot/stdlib.cma
-	if test -f boot/libcamlrun.a; then :; else \
-	  ln -s ../byterun/libcamlrun.a boot/libcamlrun.a; fi
+coldstart: runtime boot/ocamlyacc$(EXE) boot/stdlib.cma
 	if test -d stdlib/caml; then :; else \
 	  ln -s ../byterun/caml stdlib/caml; fi
 
@@ -560,7 +552,7 @@ partialclean::
 
 # The runtime system for the bytecode compiler
 
-runtime: boot/byterun$(EXE)
+runtime: boot/ocamlrun$(EXE)
 	if test -f stdlib/libcamlrun.a; then :; else \
 	  ln -s ../byterun/libcamlrun.a stdlib/libcamlrun.a; fi
 
