@@ -232,7 +232,7 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
     let id, env_body = Env.add_fresh_ident env var in
     Ulet (id, to_clambda_named t env var defining_expr,
       to_clambda t env_body body)
-  | Let_mutable (mut_var, var, body) ->
+  | Let_mutable { var = mut_var; initial_value = var; body } ->
     let id, env_body = Env.add_fresh_mutable_ident env mut_var in
     let def = subst_var env var in
     Ulet (id, def, to_clambda t env_body body)

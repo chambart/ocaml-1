@@ -49,7 +49,7 @@ let variables_not_used_as_local_reference (tree:Flambda.t) =
       loop body
     | Var v ->
       set := Variable.Set.add v !set
-    | Let_mutable (_, v, body) ->
+    | Let_mutable { initial_value = v; body } ->
       set := Variable.Set.add v !set;
       loop body
     | If_then_else (cond, ifso, ifnot) ->
@@ -134,7 +134,10 @@ let eliminate_ref_of_expr flam =
               | None -> assert false
               | Some (field_var, _) ->
                 field+1,
-                ((Let_mutable (field_var, init, body)) : Flambda.t))
+                (Let_mutable { var = field_var;
+                               initial_value = init;
+                               body;
+                               contents_shape = None } : Flambda.t))
             (0,body) l in
         expr
       | Let _ | Let_mutable _

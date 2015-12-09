@@ -144,7 +144,7 @@ module NotConstants(P:Param) = struct
          trickier than eliminating that earlier. *)
       mark_var var curr;
       mark_loop ~toplevel curr body
-    | Let_mutable (_mut_var, var, body) ->
+    | Let_mutable { initial_value = var; body } ->
       mark_var var curr;
       mark_loop ~toplevel curr body
     | Let_rec(defs, body) ->

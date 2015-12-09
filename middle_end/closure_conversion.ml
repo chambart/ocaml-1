@@ -130,7 +130,12 @@ and close t env (lam : Lambda.lambda) : Flambda.t =
     let var = Variable.create_with_same_name_as_ident id in
     let defining_expr = close_let_bound_expression t var env defining_expr in
     let body = close t (Env.add_mutable_var env id mut_var) body in
-    Flambda.create_let var defining_expr (Let_mutable (mut_var, var, body))
+    Flambda.create_let var defining_expr
+      (Let_mutable
+         { var = mut_var;
+           initial_value = var;
+           body;
+           contents_shape = None })
   | Lfunction { kind; params; body; attr; } ->
     let name =
       (* Name anonymous functions by their source location, if known. *)
