@@ -31,11 +31,20 @@ type accumulated = {
   terminator : Flambda.expr;
 }
 
+let not_an_immutable_makeblock (named:Flambda.named) =
+  match named with
+  | Prim (Pmakeblock(_, Asttypes.Immutable), _, _) ->
+      false
+  | _ ->
+      true
+
 let rec accumulate ~substitution ~copied_lets ~extracted_lets
       (expr : Flambda.t) =
   match expr with
-  | Let { var; body = Var var'; _ } | Let_rec ([var, _], Var var')
-    when Variable.equal var var' ->
+  | Let { var; defining_expr = named; body = Var var'; _ }
+  | Let_rec ([var, named], Var var') when
+      Variable.equal var var' &&
+      not_an_immutable_makeblock named ->
     { copied_lets; extracted_lets;
       terminator = Flambda_utils.toplevel_substitution substitution expr;
     }
