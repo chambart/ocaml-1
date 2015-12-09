@@ -125,11 +125,15 @@ let eliminate_ref_of_expr flam =
     let aux (flam : Flambda.t) : Flambda.t =
       match flam with
       | Let { var;
-              defining_expr = Prim(Pmakeblock(0, Asttypes.Mutable, _shape), l, _);
+              defining_expr = Prim(Pmakeblock(0, Asttypes.Mutable, shape), l, _);
               body }
         when convertible_variable var ->
+        let shape = match shape with
+          | None -> List.map (fun _ -> None) l
+          | Some shape -> List.map (fun v -> Some v) shape
+        in
         let _, expr =
-          List.fold_left (fun (field,body) init ->
+          List.fold_left2 (fun (field,body) init shape ->
               match get_variable var field with
               | None -> assert false
               | Some (field_var, _) ->
@@ -137,8 +141,8 @@ let eliminate_ref_of_expr flam =
                 (Let_mutable { var = field_var;
                                initial_value = init;
                                body;
-                               contents_shape = None } : Flambda.t))
-            (0,body) l in
+                               contents_shape = shape } : Flambda.t))
+            (0,body) l shape in
         expr
       | Let _ | Let_mutable _
       | Assign _ | Var _ | Apply _
