@@ -147,3 +147,15 @@ let bigarray_type_kind_and_layout env typ =
                             Pbigarray_unknown_layout)
   | _ ->
       (Pbigarray_unknown, Pbigarray_unknown_layout)
+
+let block_element_shape env typ : Lambda.block_element =
+  match scrape env typ with
+  | Tconstr(p, args, abbrev) ->
+      if Path.same p Predef.path_int || Path.same p Predef.path_char then
+        Pint
+      else if Path.same p Predef.path_float then
+        Pfloat
+      else
+        Pany
+  | _ ->
+      Pany

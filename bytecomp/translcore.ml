@@ -369,6 +369,9 @@ let specialize_primitive loc p env ty ~has_constant_constructor =
        p1 :: _) ->
         let (k, l) = bigarray_type_kind_and_layout env p1 in
         Pbigarrayset(unsafe, n, k, l)
+    | (Pmakeblock (tag, mut, None), [p1]) ->
+        let shape = block_element_shape env p1 in
+        Pmakeblock (tag, mut, Some [shape])
     | _ -> p
 
 (* Eta-expand a primitive *)
@@ -782,11 +785,12 @@ and transl_exp0 e =
       Ltrywith(transl_exp body, id,
                Matching.for_trywith (Lvar id) (transl_cases_try pat_expr_list))
   | Texp_tuple el ->
-      let ll = transl_list el in
+      let ll_with_shape = List.map transl_with_shape el in
+      let ll, shapes = List.split ll_with_shape in
       begin try
         Lconst(Const_block(0, List.map extract_constant ll))
       with Not_constant ->
-        Lprim(Pmakeblock(0, Immutable, None), ll)
+        Lprim(Pmakeblock(0, Immutable, Some shapes), ll)
       end
   | Texp_construct(_, cstr, args) ->
       let ll = transl_list args in
@@ -1009,6 +1013,10 @@ and transl_exp0 e =
 
 and transl_list expr_list =
   List.map transl_exp expr_list
+
+and transl_with_shape e =
+  let shape = Typeopt.block_element_shape e.exp_env e.exp_type in
+  transl_exp e, shape
 
 and transl_guard guard rhs =
   let expr = event_before rhs (transl_exp rhs) in
