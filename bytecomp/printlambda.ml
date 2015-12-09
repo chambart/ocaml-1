@@ -99,6 +99,22 @@ let string_of_loc_kind = function
   | Loc_POS -> "loc_POS"
   | Loc_LOC -> "loc_LOC"
 
+let print_block_elt ppf = function
+  | Pint -> Format.fprintf ppf "int"
+  | Pfloat -> Format.fprintf ppf "float"
+  | Paddr -> Format.fprintf ppf "*"
+
+let print_block_shape ppf shape = match shape with
+  | None | Some [] -> ()
+  | Some [elt] ->
+      Format.fprintf ppf " ( %a )" print_block_elt elt
+  | Some (h :: t) ->
+      Format.fprintf ppf " ( %a" print_block_elt h;
+      List.iter (fun elt ->
+          Format.fprintf ppf ", %a" print_block_elt elt)
+        t;
+      Format.fprintf ppf " )"
+
 let primitive ppf = function
   | Pidentity -> fprintf ppf "id"
   | Pignore -> fprintf ppf "ignore"
@@ -107,8 +123,10 @@ let primitive ppf = function
   | Ploc kind -> fprintf ppf "%s" (string_of_loc_kind kind)
   | Pgetglobal id -> fprintf ppf "global %a" Ident.print id
   | Psetglobal id -> fprintf ppf "setglobal %a" Ident.print id
-  | Pmakeblock(tag, Immutable) -> fprintf ppf "makeblock %i" tag
-  | Pmakeblock(tag, Mutable) -> fprintf ppf "makemutable %i" tag
+  | Pmakeblock(tag, Immutable, shape) ->
+      fprintf ppf "makeblock %i%a" tag print_block_shape shape
+  | Pmakeblock(tag, Mutable, shape) ->
+      fprintf ppf "makemutable %i%a" tag print_block_shape shape
   | Pfield n -> fprintf ppf "field %i" n
   | Psetfield(n, ptr, init) ->
       let instr =

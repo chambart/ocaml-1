@@ -56,7 +56,7 @@ let transl_extension_constructor env path ext =
   in
   match ext.ext_kind with
     Text_decl(args, ret) ->
-      Lprim (Pmakeblock (Obj.object_tag, Immutable),
+      Lprim (Pmakeblock (Obj.object_tag, Immutable, None),
         [Lconst (Const_base (Const_string (name, None)));
          Lprim (prim_fresh_oo_id, [Lconst (Const_base (Const_int 0))])])
   | Text_rebind(path, lid) ->
@@ -82,7 +82,7 @@ let rec apply_coercion strict restr arg =
       name_lambda strict arg (fun id ->
         let get_field pos = Lprim(Pfield pos,[Lvar id]) in
         let lam =
-          Lprim(Pmakeblock(0, Immutable),
+          Lprim(Pmakeblock(0, Immutable, None),
                 List.map (apply_coercion_field get_field) pos_cc_list)
         in
         wrap_id_pos_list id_pos_list get_field lam)
@@ -397,7 +397,7 @@ and transl_structure fields cc rootpath = function
     [] ->
       begin match cc with
         Tcoerce_none ->
-          Lprim(Pmakeblock(0, Immutable),
+          Lprim(Pmakeblock(0, Immutable, None),
                 List.map (fun id -> Lvar id) (List.rev fields)),
             List.length fields
       | Tcoerce_structure(pos_cc_list, id_pos_list) ->
@@ -410,7 +410,7 @@ and transl_structure fields cc rootpath = function
           let get_field pos = Lvar v.(pos)
           and ids = List.fold_right IdentSet.add fields IdentSet.empty in
           let lam =
-            (Lprim(Pmakeblock(0, Immutable),
+            (Lprim(Pmakeblock(0, Immutable, None),
                 List.map
                   (fun (pos, cc) ->
                     match cc with
@@ -688,11 +688,12 @@ let transl_package_native component_names target_name coercion =
   in
   size,
   apply_coercion Strict coercion
-    (Lprim(Pmakeblock(0, Immutable), List.map get_component component_names))
+    (Lprim(Pmakeblock(0, Immutable, None),
+           List.map get_component component_names))
 
 let transl_package component_names target_name coercion =
   let components =
-    Lprim(Pmakeblock(0, Immutable), List.map get_component component_names) in
+    Lprim(Pmakeblock(0, Immutable, None), List.map get_component component_names) in
   Lprim(Psetglobal target_name, [apply_coercion Strict coercion components])
 
 (* Error report *)

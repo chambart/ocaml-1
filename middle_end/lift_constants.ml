@@ -54,7 +54,7 @@ let assign_symbols_and_collect_constant_definitions
         assign_symbol ();
         record_definition (AA.Allocated_const (Normal const))
       | Read_mutable _ -> () (* CR mshinwell: should be assert false? *)
-      | Prim (Pmakeblock (tag, _), fields, _) ->
+      | Prim (Pmakeblock (tag, _, _), fields, _) ->
         assign_symbol ();
         record_definition (AA.Block (Tag.create_exn tag, fields))
       | Read_symbol_field (symbol, field) ->

@@ -661,7 +661,7 @@ let rec expr_size env = function
       expr_size (Ident.add id (expr_size env exp) env) body
   | Uletrec(bindings, body) ->
       expr_size env body
-  | Uprim(Pmakeblock(tag, mut), args, _) ->
+  | Uprim(Pmakeblock(tag, mut, _shape), args, _) ->
       RHS_block (List.length args)
   | Uprim(Pmakearray((Paddrarray | Pintarray), _), args, _) ->
       RHS_block (List.length args)
@@ -1476,9 +1476,9 @@ let rec transl env e =
       begin match (simplif_primitive prim, args) with
         (Pgetglobal id, []) ->
           Cconst_symbol (Ident.name id)
-      | (Pmakeblock(tag, mut), []) ->
+      | (Pmakeblock(tag, mut, _shape), []) ->
           assert false
-      | (Pmakeblock(tag, mut), args) ->
+      | (Pmakeblock(tag, mut, _shape), args) ->
           make_alloc tag (List.map (transl env) args)
       | (Pccall prim, args) ->
           transl_ccall env prim args dbg

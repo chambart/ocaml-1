@@ -250,7 +250,7 @@ module NotConstants(P:Param) = struct
        when we are checking wether a variable can be statically allocated.
     *)
 
-    | Prim(Lambda.Pmakeblock(_tag, Asttypes.Immutable), args, _dbg) ->
+    | Prim(Lambda.Pmakeblock(_tag, Asttypes.Immutable, _shape), args, _dbg) ->
       mark_vars args curr
 
 (*  (* If global mutables are allowed: *)
