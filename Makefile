@@ -160,18 +160,8 @@ opt:
 	$(MAKE) otherlibrariesopt ocamltoolsopt $(OCAMLBUILDNATIVE)
 
 # Native-code versions of the tools
-opt.opt:
-	$(MAKE) checkstack
-	$(MAKE) runtime
-	$(MAKE) core
-	$(MAKE) ocaml
-	$(MAKE) opt-core
-	$(MAKE) ocamlc.opt
-	$(MAKE) otherlibraries $(WITH_DEBUGGER) $(WITH_OCAMLDOC) \
-	        $(OCAMLBUILDBYTE)
-	$(MAKE) ocamlopt.opt
-	$(MAKE) otherlibrariesopt
-	$(MAKE) ocamllex.opt ocamltoolsopt ocamltoolsopt.opt $(OCAMLDOC_OPT) \
+opt.opt: checkstack runtime core ocaml opt-core ocamlc.opt otherlibraries $(WITH_DEBUGGER) $(WITH_OCAMLDOC) \
+	        $(OCAMLBUILDBYTE) ocamlopt.opt otherlibrariesopt ocamllex.opt ocamltoolsopt ocamltoolsopt.opt $(OCAMLDOC_OPT) \
 	        $(OCAMLBUILDNATIVE)
 
 base.opt:
@@ -601,7 +591,7 @@ alldepend::
 ocamllex: boot/ocamlyacc boot/ocamlrun$(EXE) boot/stdlib.cma
 	cd lex; $(MAKE) all
 
-ocamllex.opt: ocamlyacc ocamlopt
+ocamllex.opt: ocamlyacc ocamlopt libraryopt
 	cd lex; $(MAKE) allopt
 
 partialclean::
@@ -643,7 +633,8 @@ ocamldoc: ocamlc ocamlyacc ocamllex library otherlibrary_str otherlibrary_unix o
 manpages: ocamldoc
 	cd ocamldoc && $(MAKE) manpages
 
-ocamldoc.opt: ocamlc.opt ocamlyacc ocamllex
+ocamldoc.opt: ocamlc.opt ocamlyacc ocamllex ocamldoc \
+	otherlibraryopt_str otherlibraryopt_unix otherlibraryopt_dynlink
 	cd ocamldoc && $(MAKE) opt.opt
 
 # Documentation
@@ -684,12 +675,33 @@ otherlibrary_threads: library otherlibrary_unix
 otherlibrary_graph: library ocamltools
 	cd otherlibs/graph; $(MAKE) all
 
+otherlibraryopt_unix: libraryopt otherlibrary_unix
+	cd otherlibs/unix; $(MAKE) allopt
+
+otherlibraryopt_str: libraryopt otherlibrary_str
+	cd otherlibs/str; $(MAKE) allopt
+
+otherlibraryopt_num: libraryopt otherlibrary_num
+	cd otherlibs/num; $(MAKE) allopt
+
+otherlibraryopt_dynlink: libraryopt otherlibrary_dynlink
+	cd otherlibs/dynlink; $(MAKE) allopt
+
+otherlibraryopt_bigarray: libraryopt otherlibraryopt_unix otherlibrary_bigarray
+	cd otherlibs/bigarray; $(MAKE) allopt
+
+otherlibraryopt_systhreads: libraryopt otherlibraryopt_unix otherlibrary_systhreads
+	cd otherlibs/systhreads; $(MAKE) allopt
+
+otherlibraryopt_threads: libraryopt otherlibraryopt_unix otherlibrary_threads
+	cd otherlibs/threads; $(MAKE) allopt
+
+otherlibraryopt_graph: libraryopt otherlibrary_graph
+	cd otherlibs/graph; $(MAKE) allopt
+
 otherlibraries: $(addprefix otherlibrary_,$(OTHERLIBRARIES))
 
-otherlibrariesopt:
-	for i in $(OTHERLIBRARIES); do \
-	  (cd otherlibs/$$i; $(MAKE) allopt) || exit $$?; \
-	done
+otherlibrariesopt: $(addprefix otherlibraryopt_,$(OTHERLIBRARIES))
 
 partialclean::
 	for i in $(OTHERLIBRARIES); do \
