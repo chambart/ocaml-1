@@ -102,7 +102,7 @@ let string_of_loc_kind = function
 let print_block_elt ppf = function
   | Pint -> Format.fprintf ppf "int"
   | Pfloat -> Format.fprintf ppf "float"
-  | Paddr -> Format.fprintf ppf "*"
+  | Pany -> Format.fprintf ppf "*"
 
 let print_block_shape ppf shape = match shape with
   | None | Some [] -> ()

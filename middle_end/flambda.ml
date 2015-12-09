@@ -227,7 +227,7 @@ let rec lam ppf (flam : t) =
       | None -> ()
       | Some Pint -> Format.fprintf ppf "int"
       | Some Pfloat -> Format.fprintf ppf "float"
-      | Some Paddr -> Format.fprintf ppf "*"
+      | Some Pany -> Format.fprintf ppf "*"
     in
     fprintf ppf "@[<2>(let_mutable%a@ @[<2>%a@ %a@]@ %a)@]"
       print_shape contents_shape

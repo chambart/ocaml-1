@@ -149,7 +149,7 @@ and array_kind =
     Pgenarray | Paddrarray | Pintarray | Pfloatarray
 
 and block_element =
-    Pint | Pfloat | Paddr
+    Pint | Pfloat | Pany
 
 and block_shape = block_element list option
 
