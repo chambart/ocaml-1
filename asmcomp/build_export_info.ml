@@ -170,7 +170,7 @@ let descr_of_constant (c : Flambda.const) : Export_info.descr =
 
 let descr_of_allocated_constant (c : Allocated_const.t) : Export_info.descr =
   match c with
-  | Float f -> Value_float f
+  | Float f -> Value_float (Some f)
   | Int32 i -> Value_boxed_int (Int32, i)
   | Int64 i -> Value_boxed_int (Int64, i)
   | Nativeint i -> Value_boxed_int (Nativeint, i)

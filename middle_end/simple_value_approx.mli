@@ -125,7 +125,7 @@ and descr = private
   | Value_int of int
   | Value_char of char
   | Value_constptr of int
-  | Value_float of float
+  | Value_float of float option
   | Value_boxed_int : 'a boxed_int * 'a -> descr
   | Value_set_of_closures of value_set_of_closures
   | Value_closure of value_closure
@@ -181,6 +181,7 @@ val value_unknown : unknown_because_of -> t
 val value_int : int -> t
 val value_char : char -> t
 val value_float : float -> t
+val value_any_float : t
 val value_mutable_float_array : size:int -> t
 val value_immutable_float_array : float option array -> t
 val value_string : int -> string option -> t

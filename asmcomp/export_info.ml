@@ -35,7 +35,7 @@ type descr =
   | Value_int of int
   | Value_char of char
   | Value_constptr of int
-  | Value_float of float
+  | Value_float of float option
   | Value_float_array of value_float_array
   | Value_boxed_int : 'a Simple_value_approx.boxed_int * 'a -> descr
   | Value_string of value_string
@@ -272,7 +272,8 @@ let print_approx ppf (t : t) =
         in
         Format.fprintf ppf "string %i %S" size s
       end
-    | Value_float f -> Format.pp_print_float ppf f
+    | Value_float (Some f) -> Format.pp_print_float ppf f
+    | Value_float None -> Format.pp_print_string ppf "float"
     | Value_float_array float_array ->
       Format.fprintf ppf "float_array%s %i"
         (match float_array.contents with
