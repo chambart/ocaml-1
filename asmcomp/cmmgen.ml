@@ -2247,9 +2247,9 @@ and transl_let env mut kind id exp body =
     match mut, kind with
     | Mutable, Pfloat ->
         Boxed Boxed_float
-    | Mutable, Pboxedint bi ->
+    | Mutable, Pboxed_integer bi ->
         Boxed (Boxed_integer bi)
-    | Immutable, (Pfloat | Pboxedint _) ->
+    | Immutable, (Pfloat | Pboxed_integer _) ->
         (* It would be safe to always unbox in this case, but
            we do it only if this indeed allows us to get rid of
            some allocations in the bound expression. *)

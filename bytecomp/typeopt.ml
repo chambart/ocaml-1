@@ -155,6 +155,12 @@ let block_element_shape env typ : Lambda.value_kind =
         Pint
       else if Path.same p Predef.path_float then
         Pfloat
+      else if Path.same p Predef.path_nativeint then
+        Pboxed_integer Pnativeint
+      else if Path.same p Predef.path_int32 then
+        Pboxed_integer Pint32
+      else if Path.same p Predef.path_int64 then
+        Pboxed_integer Pint64
       else
         Pany
   | _ ->

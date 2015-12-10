@@ -102,9 +102,9 @@ let string_of_loc_kind = function
 let value_kind ppf = function
   | Pint -> Format.fprintf ppf "int"
   | Pfloat -> Format.fprintf ppf "float"
-  | Pboxedint Pnativeint -> Format.fprintf ppf "nativeint"
-  | Pboxedint Pint32 -> Format.fprintf ppf "int32"
-  | Pboxedint Pint64 -> Format.fprintf ppf "int64"
+  | Pboxed_integer Pnativeint -> Format.fprintf ppf "nativeint"
+  | Pboxed_integer Pint32 -> Format.fprintf ppf "int32"
+  | Pboxed_integer Pint64 -> Format.fprintf ppf "int64"
   | Pany -> Format.fprintf ppf "*"
 
 let block_shape ppf shape = match shape with

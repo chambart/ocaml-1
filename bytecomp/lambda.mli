@@ -149,7 +149,7 @@ and array_kind =
     Pgenarray | Paddrarray | Pintarray | Pfloatarray
 
 and value_kind =
-    Pint | Pfloat | Pany | Pboxedint of boxed_integer
+    Pint | Pfloat | Pany | Pboxed_integer of boxed_integer
 
 and block_shape = value_kind list option
 
