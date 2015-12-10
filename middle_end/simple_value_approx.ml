@@ -158,6 +158,42 @@ let augment_with_symbol_field t symbol field =
   | Some _ -> t
 let replace_description t descr = { t with descr }
 
+let augment_with_kind t (kind:Lambda.value_kind) =
+  match kind with
+  | Pany -> t
+  | Pfloat ->
+    begin match t.descr with
+    | Value_float _ ->
+      t
+    | Value_unknown _ | Value_unresolved _ ->
+      { t with descr = Value_float None }
+    | Value_block _
+    | Value_int _
+    | Value_char _
+    | Value_constptr _
+    | Value_boxed_int _
+    | Value_set_of_closures _
+    | Value_closure _
+    | Value_string _
+    | Value_float_array _
+    | Value_bottom ->
+      (* Unreachable *)
+      { t with descr = Value_bottom }
+    | Value_extern _ | Value_symbol _ ->
+      (* We don't know yet *)
+      t
+    end
+  | _ -> t
+
+let augment_kind_with_approx t (kind:Lambda.value_kind) : Lambda.value_kind =
+  match t.descr with
+  | Value_float _ -> Pfloat
+  | Value_int _ -> Pint
+  | Value_boxed_int (Int32, _) -> Pboxed_integer Pint32
+  | Value_boxed_int (Int64, _) -> Pboxed_integer Pint64
+  | Value_boxed_int (Nativeint, _) -> Pboxed_integer Pnativeint
+  | _ -> kind
+
 let value_unknown reason = approx (Value_unknown reason)
 let value_int i = approx (Value_int i)
 let value_char i = approx (Value_char i)

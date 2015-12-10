@@ -259,7 +259,13 @@ and descr_of_named (env : Env.t) (named : Flambda.named)
     end
   | Prim (Pgetglobal id, _, _) ->
     Value_symbol (Compilenv.symbol_for_global' id)
-  | Prim _ -> Value_unknown
+  | Prim (prim, _, _) ->
+    begin match Semantics_of_primitives.return_type_of_primitive prim with
+    | Float ->
+      Value_id (Env.new_descr env (Value_float None))
+    | Other ->
+      Value_unknown
+    end
   | Set_of_closures set ->
     let descr : Export_info.descr =
       Value_set_of_closures (describe_set_of_closures env set)
