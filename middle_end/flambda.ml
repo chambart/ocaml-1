@@ -225,8 +225,8 @@ let rec lam ppf (flam : t) =
     let print_shape ppf (shape : Lambda.block_element option) =
       match shape with
       | None -> ()
-      | Some Pint -> Format.fprintf ppf "int"
-      | Some Pfloat -> Format.fprintf ppf "float"
+      | Some Pint -> Format.fprintf ppf " int"
+      | Some Pfloat -> Format.fprintf ppf " float"
       | Some Pany -> Format.fprintf ppf "*"
     in
     fprintf ppf "@[<2>(let_mutable%a@ @[<2>%a@ %a@]@ %a)@]"
