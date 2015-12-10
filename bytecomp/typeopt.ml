@@ -159,3 +159,10 @@ let block_element_shape env typ : Lambda.block_element =
         Pany
   | _ ->
       Pany
+
+let record_field_shape env ~record_type label : Lambda.block_element =
+  let (_, ty_arg, ty_res) =
+    Ctype.instance_label false label
+  in
+  Ctype.unify env ty_res record_type;
+  block_element_shape env ty_arg

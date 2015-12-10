@@ -829,7 +829,7 @@ and transl_exp0 e =
       end
   | Texp_record ((_, lbl1, _) :: _ as lbl_expr_list, opt_init_expr) ->
       transl_record e.exp_env lbl1.lbl_all lbl1.lbl_repres lbl_expr_list
-        opt_init_expr
+        opt_init_expr e
   | Texp_record ([], _) ->
       fatal_error "Translcore.transl_exp: bad Texp_record"
   | Texp_field(arg, _, lbl) ->
@@ -1186,7 +1186,7 @@ and transl_setinstvar self var expr =
   in
   Lprim(Parraysetu prim, [self; transl_normal_path var; transl_exp expr])
 
-and transl_record env all_labels repres lbl_expr_list opt_init_expr =
+and transl_record env all_labels repres lbl_expr_list opt_init_expr expr =
   let size = Array.length all_labels in
   (* Determine if there are "enough" new fields *)
   if 3 + 2 * List.length lbl_expr_list >= size
@@ -1204,7 +1204,10 @@ and transl_record env all_labels repres lbl_expr_list opt_init_expr =
               Record_regular | Record_inlined _ -> Pfield i
             | Record_extension -> Pfield (i + 1)
             | Record_float -> Pfloatfield i in
-          lv.(i) <- Lprim(access, [Lvar init_id]), Pany (* TODO recover the type *)
+          let field_shape =
+            record_field_shape env ~record_type:expr.exp_type all_labels.(i)
+          in
+          lv.(i) <- Lprim(access, [Lvar init_id]), field_shape
         done
     end;
     List.iter

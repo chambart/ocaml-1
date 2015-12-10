@@ -28,3 +28,6 @@ val bigarray_type_kind_and_layout :
       Env.t -> Types.type_expr -> Lambda.bigarray_kind * Lambda.bigarray_layout
 
 val block_element_shape : Env.t -> Types.type_expr -> Lambda.block_element
+val record_field_shape :
+      Env.t -> record_type:Types.type_expr -> Types.label_description
+  -> Lambda.block_element
