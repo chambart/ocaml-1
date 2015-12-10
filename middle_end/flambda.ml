@@ -101,7 +101,7 @@ and let_expr = {
 and let_mutable = {
   var : Mutable_variable.t;
   initial_value : Variable.t;
-  contents_shape : Lambda.block_element option;
+  contents_shape : Lambda.block_element;
   body : t;
 }
 
@@ -222,12 +222,11 @@ let rec lam ppf (flam : t) =
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" lam expr
   | Let_mutable { var = mut_var; initial_value = var; body; contents_shape } ->
-    let print_shape ppf (shape : Lambda.block_element option) =
+    let print_shape ppf (shape : Lambda.block_element) =
       match shape with
-      | None -> ()
-      | Some Pint -> Format.fprintf ppf " int"
-      | Some Pfloat -> Format.fprintf ppf " float"
-      | Some Pany -> Format.fprintf ppf "*"
+      | Pint -> Format.fprintf ppf " int"
+      | Pfloat -> Format.fprintf ppf " float"
+      | Pany -> Format.fprintf ppf ""
     in
     fprintf ppf "@[<2>(let_mutable%a@ @[<2>%a@ %a@]@ %a)@]"
       print_shape contents_shape

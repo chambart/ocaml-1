@@ -129,8 +129,8 @@ let eliminate_ref_of_expr flam =
               body }
         when convertible_variable var ->
         let shape = match shape with
-          | None -> List.map (fun _ -> None) l
-          | Some shape -> List.map (fun v -> Some v) shape
+          | None -> List.map (fun _ -> Lambda.Pany) l
+          | Some shape -> shape
         in
         let _, expr =
           List.fold_left2 (fun (field,body) init shape ->

@@ -72,7 +72,7 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
     | Uoffset (expr, offset) ->
       loop expr;
       ignore_int offset
-    | Ulet (ident, def, body) ->
+    | Ulet (ident, _, _, def, body) ->
       ignore_ident ident;
       loop def;
       loop body
@@ -239,9 +239,9 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
   | Uoffset (clam, n) ->
     let clam, moveable = un_anf_and_moveable ident_info env clam in
     Uoffset (clam, n), moveable
-  | Ulet (id, def, Uvar id') when Ident.same id id' ->
+  | Ulet (id, _, _, def, Uvar id') when Ident.same id id' ->
     un_anf_and_moveable ident_info env def
-  | Ulet (id, def, body) ->
+  | Ulet (id, mut, kind, def, body) ->
     let def, def_moveable = un_anf_and_moveable ident_info env def in
     let is_linear = Ident.Set.mem id ident_info.linear in
     let is_used = Ident.Set.mem id ident_info.used in
@@ -257,7 +257,7 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
     | Moveable, false, true  (* Moveable but not used linearly. *)
     | Fixed, _, _ ->
       let body, body_moveable = un_anf_and_moveable ident_info env body in
-      Ulet (id, def, body), both_moveable def_moveable body_moveable
+      Ulet (id, mut, kind, def, body), both_moveable def_moveable body_moveable
     end
   | Uletrec (defs, body) ->
     let defs =

@@ -44,7 +44,7 @@ let ignore_var_within_closure (_ : Var_within_closure.t) = ()
 let ignore_compilation_unit (_ : Compilation_unit.t) = ()
 let ignore_tag (_ : Tag.t) = ()
 let ignore_inline_attribute (_ : Lambda.inline_attribute) = ()
-let ignore_block_element_option (_ : Lambda.block_element option) = ()
+let ignore_block_element (_ : Lambda.block_element) = ()
 
 exception Binding_occurrence_not_from_current_compilation_unit of Variable.t
 exception Mutable_binding_occurrence_not_from_current_compilation_unit of
@@ -149,7 +149,7 @@ let variable_and_symbol_invariants (program : Flambda.program) =
       loop (add_binding_occurrence env var) body
     | Let_mutable { var = mut_var; initial_value = var;
                     body; contents_shape } ->
-      ignore_block_element_option contents_shape;
+      ignore_block_element contents_shape;
       check_variable_is_bound env var;
       loop (add_mutable_binding_occurrence env mut_var) body
     | Let_rec (defs, body) ->

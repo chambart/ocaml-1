@@ -657,7 +657,7 @@ let rec expr_size env = function
       begin try Ident.find_same id env with Not_found -> RHS_nonrec end
   | Uclosure(fundecls, clos_vars) ->
       RHS_block (fundecls_size fundecls + List.length clos_vars)
-  | Ulet(id, exp, body) ->
+  | Ulet(id, _, _, exp, body) ->
       expr_size (Ident.add id (expr_size env exp) env) body
   | Uletrec(bindings, body) ->
       expr_size env body
@@ -1363,7 +1363,7 @@ let rec is_unboxed_number env e =
         | Praise _ -> No_result
         | _ -> No_unboxing
       end
-  | Ulet (_, _, e) | Uletrec (_, e) | Usequence (_, e) ->
+  | Ulet (_, _, _, _, e) | Uletrec (_, e) | Usequence (_, e) ->
       is_unboxed_number env e
   | Uswitch (_, switch) ->
       let k = Array.fold_left join No_result switch.us_actions_consts in
@@ -1466,7 +1466,7 @@ let rec transl env e =
               (List.map (transl env) args) dbg
         | _ ->
             bind "met" (lookup_tag obj (transl env met)) (call_met obj args))
-  | Ulet(id, exp, body) ->
+  | Ulet(id, _, _, exp, body) ->
       transl_let env id exp body
   | Uletrec(bindings, body) ->
       transl_letrec env bindings (transl env body)
