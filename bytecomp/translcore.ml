@@ -468,7 +468,7 @@ let check_recursive_lambda idlist lam =
         let idlist' = add_letrec bindings idlist in
         List.for_all (fun (id, arg) -> check idlist' arg) bindings &&
         check idlist' body
-    | Lprim(Pmakeblock(tag, mut, None), args) ->
+    | Lprim(Pmakeblock(tag, mut, _), args) ->
         List.for_all (check idlist) args
     | Lprim (Pmakearray (Pfloatarray, _), _) -> false
     | Lprim (Pmakearray _, args) ->
