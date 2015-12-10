@@ -99,19 +99,22 @@ let string_of_loc_kind = function
   | Loc_POS -> "loc_POS"
   | Loc_LOC -> "loc_LOC"
 
-let print_block_elt ppf = function
+let value_kind ppf = function
   | Pint -> Format.fprintf ppf "int"
   | Pfloat -> Format.fprintf ppf "float"
+  | Pboxedint Pnativeint -> Format.fprintf ppf "nativeint"
+  | Pboxedint Pint32 -> Format.fprintf ppf "int32"
+  | Pboxedint Pint64 -> Format.fprintf ppf "int64"
   | Pany -> Format.fprintf ppf "*"
 
-let print_block_shape ppf shape = match shape with
+let block_shape ppf shape = match shape with
   | None | Some [] -> ()
   | Some [elt] ->
-      Format.fprintf ppf " ( %a )" print_block_elt elt
+      Format.fprintf ppf " ( %a )" value_kind elt
   | Some (h :: t) ->
-      Format.fprintf ppf " ( %a" print_block_elt h;
+      Format.fprintf ppf " ( %a" value_kind h;
       List.iter (fun elt ->
-          Format.fprintf ppf ", %a" print_block_elt elt)
+          Format.fprintf ppf ", %a" value_kind elt)
         t;
       Format.fprintf ppf " )"
 
@@ -124,9 +127,9 @@ let primitive ppf = function
   | Pgetglobal id -> fprintf ppf "global %a" Ident.print id
   | Psetglobal id -> fprintf ppf "setglobal %a" Ident.print id
   | Pmakeblock(tag, Immutable, shape) ->
-      fprintf ppf "makeblock %i%a" tag print_block_shape shape
+      fprintf ppf "makeblock %i%a" tag block_shape shape
   | Pmakeblock(tag, Mutable, shape) ->
-      fprintf ppf "makemutable %i%a" tag print_block_shape shape
+      fprintf ppf "makemutable %i%a" tag block_shape shape
   | Pfield n -> fprintf ppf "field %i" n
   | Psetfield(n, ptr, init) ->
       let instr =

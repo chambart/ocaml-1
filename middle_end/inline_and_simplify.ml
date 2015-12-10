@@ -986,7 +986,7 @@ and simplify_direct env r (tree : Flambda.t) : Flambda.t * R.t =
       ~for_defining_expr
       ~for_last_body
       ~filter_defining_expr
-  | Let_mutable { var = mut_var; initial_value = var; body; contents_shape } ->
+  | Let_mutable { var = mut_var; initial_value = var; body; contents_kind } ->
     (* CR mshinwell: add the dead let elimination, as above. *)
     simplify_free_variable env var ~f:(fun env var ->
       let mut_var, sb =
@@ -1000,7 +1000,7 @@ and simplify_direct env r (tree : Flambda.t) : Flambda.t * R.t =
         { var = mut_var;
           initial_value = var;
           body;
-          contents_shape },
+          contents_kind },
       r)
   | Let_rec (defs, body) ->
     let defs, sb = Freshening.add_variables (E.freshening env) defs in

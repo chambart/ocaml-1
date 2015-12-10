@@ -148,10 +148,10 @@ and comparison =
 and array_kind =
     Pgenarray | Paddrarray | Pintarray | Pfloatarray
 
-and block_element =
-    Pint | Pfloat | Pany
+and value_kind =
+    Pint | Pfloat | Pany | Pboxedint of boxed_integer
 
-and block_shape = block_element list option
+and block_shape = value_kind list option
 
 and boxed_integer = Primitive.boxed_integer =
     Pnativeint | Pint32 | Pint64

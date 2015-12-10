@@ -18,3 +18,4 @@ val structured_constant: formatter -> structured_constant -> unit
 val lambda: formatter -> lambda -> unit
 val primitive: formatter -> primitive -> unit
 val string_of_primitive : primitive -> string
+val value_kind : formatter -> value_kind -> unit

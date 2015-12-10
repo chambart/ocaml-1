@@ -178,7 +178,7 @@ and let_expr = private {
 and let_mutable = {
   var : Mutable_variable.t;
   initial_value : Variable.t;
-  contents_shape : Lambda.block_element;
+  contents_kind : Lambda.value_kind;
   body : t;
 }
 

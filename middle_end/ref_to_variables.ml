@@ -133,7 +133,7 @@ let eliminate_ref_of_expr flam =
           | Some shape -> shape
         in
         let _, expr =
-          List.fold_left2 (fun (field,body) init shape ->
+          List.fold_left2 (fun (field,body) init kind ->
               match get_variable var field with
               | None -> assert false
               | Some (field_var, _) ->
@@ -141,7 +141,7 @@ let eliminate_ref_of_expr flam =
                 (Let_mutable { var = field_var;
                                initial_value = init;
                                body;
-                               contents_shape = shape } : Flambda.t))
+                               contents_kind = kind } : Flambda.t))
             (0,body) l shape in
         expr
       | Let _ | Let_mutable _

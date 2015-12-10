@@ -148,7 +148,7 @@ let bigarray_type_kind_and_layout env typ =
   | _ ->
       (Pbigarray_unknown, Pbigarray_unknown_layout)
 
-let block_element_shape env typ : Lambda.block_element =
+let block_element_shape env typ : Lambda.value_kind =
   match scrape env typ with
   | Tconstr(p, args, abbrev) ->
       if Path.same p Predef.path_int || Path.same p Predef.path_char then
@@ -160,7 +160,7 @@ let block_element_shape env typ : Lambda.block_element =
   | _ ->
       Pany
 
-let record_field_shape env ~record_type label : Lambda.block_element =
+let record_field_shape env ~record_type label : Lambda.value_kind =
   let (_, ty_arg, ty_res) =
     Ctype.instance_label false label
   in

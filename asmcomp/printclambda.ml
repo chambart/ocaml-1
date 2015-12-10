@@ -19,12 +19,9 @@ let mutability = function
   | Mutable -> "[mut]"
   | Immutable -> ""
 
-let block_element =
-  let open Lambda in
-  function
-  | Pany -> ""
-  | Pfloat -> ":float"
-  | Pint -> ":int"
+let value_kind ppf = function
+  | Lambda.Pany -> ()
+  | kind -> Format.fprintf ppf ":%a" Printlambda.value_kind kind
 
 let rec structured_constant ppf = function
   | Uconst_float x -> fprintf ppf "%F" x
@@ -89,12 +86,12 @@ and lam ppf = function
   | Ulet(id, mut, kind, arg, body) ->
       let rec letbody ul = match ul with
         | Ulet(id, str, kind, arg, body) ->
-            fprintf ppf "@ @[<2>%a%s%s@ %a@]"
-              Ident.print id (mutability mut) (block_element kind) lam arg;
+            fprintf ppf "@ @[<2>%a%s%a@ %a@]"
+              Ident.print id (mutability mut) value_kind kind lam arg;
             letbody body
         | _ -> ul in
-      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a%s%s@ %a@]"
-        Ident.print id (mutability mut) (block_element kind) lam arg;
+      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a%s%a@ %a@]"
+        Ident.print id (mutability mut) value_kind kind lam arg;
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" lam expr
   | Uletrec(id_arg_list, body) ->

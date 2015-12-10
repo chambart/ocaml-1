@@ -233,10 +233,10 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
     Ulet (id, Immutable, Pany,
       to_clambda_named t env var defining_expr,
       to_clambda t env_body body)
-  | Let_mutable { var = mut_var; initial_value = var; body; contents_shape } ->
+  | Let_mutable { var = mut_var; initial_value = var; body; contents_kind } ->
     let id, env_body = Env.add_fresh_mutable_ident env mut_var in
     let def = subst_var env var in
-    Ulet (id, Mutable, contents_shape, def, to_clambda t env_body body)
+    Ulet (id, Mutable, contents_kind, def, to_clambda t env_body body)
   | Let_rec (defs, body) ->
     let env, defs =
       List.fold_right (fun (var, def) (env, defs) ->

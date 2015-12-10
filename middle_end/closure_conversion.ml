@@ -135,7 +135,7 @@ and close t env (lam : Lambda.lambda) : Flambda.t =
          { var = mut_var;
            initial_value = var;
            body;
-           contents_shape = Pany })
+           contents_kind = Pany })
   | Lfunction { kind; params; body; attr; } ->
     let name =
       (* Name anonymous functions by their source location, if known. *)
