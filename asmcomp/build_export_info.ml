@@ -170,7 +170,7 @@ let descr_of_constant (c : Flambda.const) : Export_info.descr =
 
 let descr_of_allocated_constant (c : Allocated_const.t) : Export_info.descr =
   match c with
-  | Float f -> Value_float f
+  | Float f -> Value_float (Some f)
   | Int32 i -> Value_boxed_int (Int32, i)
   | Int64 i -> Value_boxed_int (Int64, i)
   | Nativeint i -> Value_boxed_int (Nativeint, i)
@@ -202,7 +202,7 @@ let rec approx_of_expr (env : Env.t) (flam : Flambda.t) : Export_info.approx =
     let approx = descr_of_named env defining_expr in
     let env = Env.add_approx env var approx in
     approx_of_expr env body
-  | Let_mutable (_mut_var, _var, body) ->
+  | Let_mutable { body; _ } ->
     approx_of_expr env body
   | Let_rec (defs, body) ->
     let env =
@@ -246,7 +246,7 @@ and descr_of_named (env : Env.t) (named : Flambda.named)
     Value_id (Env.new_descr env (descr_of_constant const))
   | Allocated_const const ->
     Value_id (Env.new_descr env (descr_of_allocated_constant const))
-  | Prim (Pmakeblock (tag, Immutable), args, _dbg) ->
+  | Prim (Pmakeblock (tag, Immutable, _shape), args, _dbg) ->
     let approxs = List.map (Env.find_approx env) args in
     let descr : Export_info.descr =
       Value_block (Tag.create_exn tag, Array.of_list approxs)
@@ -259,7 +259,13 @@ and descr_of_named (env : Env.t) (named : Flambda.named)
     end
   | Prim (Pgetglobal id, _, _) ->
     Value_symbol (Compilenv.symbol_for_global' id)
-  | Prim _ -> Value_unknown
+  | Prim (prim, _, _) ->
+    begin match Semantics_of_primitives.return_type_of_primitive prim with
+    | Float ->
+      Value_id (Env.new_descr env (Value_float None))
+    | Other ->
+      Value_unknown
+    end
   | Set_of_closures set ->
     let descr : Export_info.descr =
       Value_set_of_closures (describe_set_of_closures env set)

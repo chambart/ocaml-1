@@ -913,13 +913,35 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
           in
           simplify_named_using_approx_and_env env r tree approx
         end
-      | (Psetfield _ | Parraysetu _ | Parraysets _), block::_ ->
-        let block_approx = E.find_exn env block in
-        if A.is_definitely_immutable block_approx then begin
-          Location.prerr_warning (Debuginfo.to_location dbg)
-            Warnings.Assignment_on_non_mutable_value
-        end;
+      | (Psetfield _ | Parraysetu _ | Parraysets _), block::_ when
+          A.is_definitely_immutable (E.find_exn env block) ->
+        Location.prerr_warning (Debuginfo.to_location dbg)
+          Warnings.Assignment_on_non_mutable_value;
         tree, ret r (A.value_unknown Other)
+      | ( Parraysetu kind | Parraysets kind ), [block; _field; value] ->
+        let block_approx = E.find_exn env block in
+        let value_approx = E.find_exn env value in
+        let kind = match A.descr block_approx, A.descr value_approx with
+          | (Value_float_array _, _)
+          | (_, Value_float _) ->
+            begin match kind with
+            | Pfloatarray | Pgenarray -> ()
+            | Paddrarray | Pintarray ->
+              (* CR pchambart: Do a proper warning here *)
+              Misc.fatal_errorf "Assignment of a float to a specialised non-float array: %a"
+                Flambda.print_named tree
+            end;
+            Lambda.Pfloatarray
+            (* CR pchambart: we should add a benefit for this *)
+          | _ ->
+            kind
+        in
+        let prim : Lambda.primitive = match prim with
+          | Parraysetu _ -> Parraysetu kind
+          | Parraysets _ -> Parraysets kind
+          | _ -> assert false
+        in
+        Prim (prim, args, dbg), ret r (A.value_unknown Other)
       | (Psequand | Psequor), _ ->
         Misc.fatal_error "Psequand and Psequor must be expanded (see handling \
             in closure_conversion.ml)"
@@ -986,7 +1008,7 @@ and simplify_direct env r (tree : Flambda.t) : Flambda.t * R.t =
       ~for_defining_expr
       ~for_last_body
       ~filter_defining_expr
-  | Let_mutable (mut_var, var, body) ->
+  | Let_mutable { var = mut_var; initial_value = var; body; contents_kind } ->
     (* CR mshinwell: add the dead let elimination, as above. *)
     simplify_free_variable env var ~f:(fun env var ->
       let mut_var, sb =
@@ -996,7 +1018,12 @@ and simplify_direct env r (tree : Flambda.t) : Flambda.t * R.t =
       let body, r =
         simplify (E.add_mutable env mut_var (A.value_unknown Other)) r body
       in
-      Flambda.Let_mutable (mut_var, var, body), r)
+      Flambda.Let_mutable
+        { var = mut_var;
+          initial_value = var;
+          body;
+          contents_kind },
+      r)
   | Let_rec (defs, body) ->
     let defs, sb = Freshening.add_variables (E.freshening env) defs in
     let env = E.set_freshening env sb in

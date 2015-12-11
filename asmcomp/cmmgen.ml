@@ -657,11 +657,11 @@ let rec expr_size env = function
       begin try Ident.find_same id env with Not_found -> RHS_nonrec end
   | Uclosure(fundecls, clos_vars) ->
       RHS_block (fundecls_size fundecls + List.length clos_vars)
-  | Ulet(id, exp, body) ->
+  | Ulet(id, _, _, exp, body) ->
       expr_size (Ident.add id (expr_size env exp) env) body
   | Uletrec(bindings, body) ->
       expr_size env body
-  | Uprim(Pmakeblock(tag, mut), args, _) ->
+  | Uprim(Pmakeblock(tag, mut, _shape), args, _) ->
       RHS_block (List.length args)
   | Uprim(Pmakearray((Paddrarray | Pintarray), _), args, _) ->
       RHS_block (List.length args)
@@ -1297,14 +1297,23 @@ let unboxed_number_kind_of_unbox = function
   | Unboxed_integer bi -> Boxed (Boxed_integer bi)
   | Untagged_int -> No_unboxing
 
-let rec is_unboxed_number env e =
+let rec is_unboxed_number ~strict env e =
   (* Given unboxed_number_kind from two branches of the code, returns the
-     resulting unboxed_number_kind *)
+     resulting unboxed_number_kind.
+     If [strict=false], one knows that the type of the expression
+     is an unboxable number, and we decide to return an unboxed value
+     if this indeed eliminates at least one allocation.
+     If [strict=true], we need to ensure that all possible branches
+     return an unboxable number (of the same kind).  This could not
+     be the case in presence of GADTs.
+ *)
   let join k1 e =
-    match k1, is_unboxed_number env e with
+    match k1, is_unboxed_number ~strict env e with
     | Boxed b1, Boxed b2 when b1 = b2 -> Boxed b1
     | No_result, k | k, No_result ->
         k (* if a branch never returns, it is safe to unbox it *)
+    | No_unboxing, k | k, No_unboxing when not strict ->
+        k
     | _, _ -> No_unboxing
   in
   match e with
@@ -1363,8 +1372,8 @@ let rec is_unboxed_number env e =
         | Praise _ -> No_result
         | _ -> No_unboxing
       end
-  | Ulet (_, _, e) | Uletrec (_, e) | Usequence (_, e) ->
-      is_unboxed_number env e
+  | Ulet (_, _, _, _, e) | Uletrec (_, e) | Usequence (_, e) ->
+      is_unboxed_number ~strict env e
   | Uswitch (_, switch) ->
       let k = Array.fold_left join No_result switch.us_actions_consts in
       Array.fold_left join k switch.us_actions_blocks
@@ -1376,7 +1385,7 @@ let rec is_unboxed_number env e =
       end
   | Ustaticfail _ -> No_result
   | Uifthenelse (_, e1, e2) | Ucatch (_, _, e1, e2) | Utrywith (e1, _, e2) ->
-      join (is_unboxed_number env e1) e2
+      join (is_unboxed_number ~strict env e1) e2
   | _ -> No_unboxing
 
 (* Translate an expression *)
@@ -1466,8 +1475,8 @@ let rec transl env e =
               (List.map (transl env) args) dbg
         | _ ->
             bind "met" (lookup_tag obj (transl env met)) (call_met obj args))
-  | Ulet(id, exp, body) ->
-      transl_let env id exp body
+  | Ulet(id, mut, kind, exp, body) ->
+      transl_let env mut kind id exp body
   | Uletrec(bindings, body) ->
       transl_letrec env bindings (transl env body)
 
@@ -1476,9 +1485,9 @@ let rec transl env e =
       begin match (simplif_primitive prim, args) with
         (Pgetglobal id, []) ->
           Cconst_symbol (Ident.name id)
-      | (Pmakeblock(tag, mut), []) ->
+      | (Pmakeblock(tag, mut, _shape), []) ->
           assert false
-      | (Pmakeblock(tag, mut), args) ->
+      | (Pmakeblock(tag, mut, _shape), args) ->
           make_alloc tag (List.map (transl env) args)
       | (Pccall prim, args) ->
           transl_ccall env prim args dbg
@@ -2227,9 +2236,36 @@ and transl_unbox_number env bn arg =
   | Boxed_float -> transl_unbox_float env arg
   | Boxed_integer bi -> transl_unbox_int env bi arg
 
-and transl_let env id exp body =
-  match is_unboxed_number env exp with
-  |  No_unboxing ->
+
+and transl_let env mut kind id exp body =
+  let unboxing =
+    (* If [id] is a mutable variable (introduced to eliminate a local
+       reference) and it contains a type of unboxable numbers, then
+       force unboxing.  Indeed, if not boxed, each assignment to the variable
+       might require some boxing, but such local references are often
+       used in loops and we really want to avoid repeated boxing. *)
+    match mut, kind with
+    | Mutable, Pfloat ->
+        Boxed Boxed_float
+    | Mutable, Pboxed_integer bi ->
+        Boxed (Boxed_integer bi)
+    | Immutable, (Pfloat | Pboxed_integer _) ->
+        (* It would be safe to always unbox in this case, but
+           we do it only if this indeed allows us to get rid of
+           some allocations in the bound expression. *)
+        is_unboxed_number ~strict:false env exp
+    | _, Pint ->
+        No_unboxing
+    | _, Pany ->
+        (* Here we don't know statically that the bound expression
+           evaluates to an unboxable number type.  We need to be stricter
+           and ensure that all possible branches in the expression
+           return a boxed value (of the same kind).  Indeed, with GADTs,
+           different branches could return different types. *)
+        is_unboxed_number ~strict:true env exp
+  in
+  match unboxing with
+  | No_unboxing ->
       Clet(id, transl env exp, transl env body)
   | No_result ->
       (* the let-bound expression never returns a value, we can ignore

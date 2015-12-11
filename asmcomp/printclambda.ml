@@ -15,6 +15,14 @@ open Format
 open Asttypes
 open Clambda
 
+let mutability = function
+  | Mutable -> "[mut]"
+  | Immutable -> ""
+
+let value_kind ppf = function
+  | Lambda.Pany -> ()
+  | kind -> Format.fprintf ppf ":%a" Printlambda.value_kind kind
+
 let rec structured_constant ppf = function
   | Uconst_float x -> fprintf ppf "%F" x
   | Uconst_int32 x -> fprintf ppf "%ldl" x
@@ -75,13 +83,15 @@ and lam ppf = function
         List.iter (fprintf ppf "@ %a" lam) in
       fprintf ppf "@[<2>(closure@ %a %a)@]" funs clos lams fv
   | Uoffset(l,i) -> fprintf ppf "@[<2>(offset %a %d)@]" lam l i
-  | Ulet(id, arg, body) ->
+  | Ulet(id, mut, kind, arg, body) ->
       let rec letbody ul = match ul with
-        | Ulet(id, arg, body) ->
-            fprintf ppf "@ @[<2>%a@ %a@]" Ident.print id lam arg;
+        | Ulet(id, str, kind, arg, body) ->
+            fprintf ppf "@ @[<2>%a%s%a@ %a@]"
+              Ident.print id (mutability mut) value_kind kind lam arg;
             letbody body
         | _ -> ul in
-      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a@ %a@]" Ident.print id lam arg;
+      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a%s%a@ %a@]"
+        Ident.print id (mutability mut) value_kind kind lam arg;
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" lam expr
   | Uletrec(id_arg_list, body) ->

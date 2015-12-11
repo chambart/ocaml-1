@@ -129,8 +129,8 @@ let primitives_table = create_hashtable 57 [
   "%field0", Pfield 0;
   "%field1", Pfield 1;
   "%setfield0", Psetfield(0, Pointer, Assignment);
-  "%makeblock", Pmakeblock(0, Immutable);
-  "%makemutable", Pmakeblock(0, Mutable);
+  "%makeblock", Pmakeblock(0, Immutable, None);
+  "%makemutable", Pmakeblock(0, Mutable, None);
   "%raise", Praise Raise_regular;
   "%reraise", Praise Raise_reraise;
   "%raise_notrace", Praise Raise_notrace;
@@ -369,6 +369,9 @@ let specialize_primitive loc p env ty ~has_constant_constructor =
        p1 :: _) ->
         let (k, l) = bigarray_type_kind_and_layout env p1 in
         Pbigarrayset(unsafe, n, k, l)
+    | (Pmakeblock (tag, mut, None), [p1]) ->
+        let shape = block_element_shape env p1 in
+        Pmakeblock (tag, mut, Some [shape])
     | _ -> p
 
 (* Eta-expand a primitive *)
@@ -404,7 +407,8 @@ let transl_primitive loc p env ty path =
         let param = Ident.create "prim" in
         Lfunction{kind = Curried; params = [param];
                   attr = default_function_attribute;
-                  body = Lprim(Pmakeblock(0, Immutable), [lam; Lvar param])}
+                  body = Lprim(Pmakeblock(0, Immutable, None),
+                               [lam; Lvar param])}
       | _ -> assert false
     end
   | _ ->
@@ -464,7 +468,7 @@ let check_recursive_lambda idlist lam =
         let idlist' = add_letrec bindings idlist in
         List.for_all (fun (id, arg) -> check idlist' arg) bindings &&
         check idlist' body
-    | Lprim(Pmakeblock(tag, mut), args) ->
+    | Lprim(Pmakeblock(tag, mut, _), args) ->
         List.for_all (check idlist) args
     | Lprim (Pmakearray (Pfloatarray, _), _) -> false
     | Lprim (Pmakearray _, args) ->
@@ -631,7 +635,7 @@ let assert_failed exp =
   let (fname, line, char) =
     Location.get_pos_info exp.exp_loc.Location.loc_start in
   Lprim(Praise Raise_regular, [event_after exp
-    (Lprim(Pmakeblock(0, Immutable),
+    (Lprim(Pmakeblock(0, Immutable, None),
           [transl_normal_path Predef.path_assert_failure;
            Lconst(Const_block(0,
               [Const_base(Const_string (fname, None));
@@ -753,7 +757,7 @@ and transl_exp0 e =
           lam_of_loc kind e.exp_loc
         | (Ploc kind, [arg1]) ->
           let lam = lam_of_loc kind arg1.exp_loc in
-          Lprim(Pmakeblock(0, Immutable), lam :: argl)
+          Lprim(Pmakeblock(0, Immutable, None), lam :: argl)
         | (Ploc _, _) -> assert false
         | (_, _) ->
             begin match (prim, argl) with
@@ -781,14 +785,14 @@ and transl_exp0 e =
       Ltrywith(transl_exp body, id,
                Matching.for_trywith (Lvar id) (transl_cases_try pat_expr_list))
   | Texp_tuple el ->
-      let ll = transl_list el in
+      let ll, shapes = transl_list_with_shape el in
       begin try
         Lconst(Const_block(0, List.map extract_constant ll))
       with Not_constant ->
-        Lprim(Pmakeblock(0, Immutable), ll)
+        Lprim(Pmakeblock(0, Immutable, Some shapes), ll)
       end
   | Texp_construct(_, cstr, args) ->
-      let ll = transl_list args in
+      let ll, shapes = transl_list_with_shape args in
       if cstr.cstr_inlined <> None then begin match ll with
         | [x] -> x
         | _ -> assert false
@@ -799,13 +803,13 @@ and transl_exp0 e =
           begin try
             Lconst(Const_block(n, List.map extract_constant ll))
           with Not_constant ->
-            Lprim(Pmakeblock(n, Immutable), ll)
+            Lprim(Pmakeblock(n, Immutable, Some shapes), ll)
           end
       | Cstr_extension(path, is_const) ->
           if is_const then
             transl_path e.exp_env path
           else
-            Lprim(Pmakeblock(0, Immutable),
+            Lprim(Pmakeblock(0, Immutable, Some (Pany :: shapes)),
                   transl_path e.exp_env path :: ll)
       end
   | Texp_extension_constructor (_, path) ->
@@ -820,12 +824,12 @@ and transl_exp0 e =
             Lconst(Const_block(0, [Const_base(Const_int tag);
                                    extract_constant lam]))
           with Not_constant ->
-            Lprim(Pmakeblock(0, Immutable),
+            Lprim(Pmakeblock(0, Immutable, None),
                   [Lconst(Const_base(Const_int tag)); lam])
       end
   | Texp_record ((_, lbl1, _) :: _ as lbl_expr_list, opt_init_expr) ->
       transl_record e.exp_env lbl1.lbl_all lbl1.lbl_repres lbl_expr_list
-        opt_init_expr
+        opt_init_expr e
   | Texp_record ([], _) ->
       fatal_error "Translcore.transl_exp: bad Texp_record"
   | Texp_field(arg, _, lbl) ->
@@ -955,14 +959,14 @@ and transl_exp0 e =
       | Texp_construct (_, {cstr_arity = 0}, _)
         -> transl_exp e
       | Texp_constant(Const_float _) ->
-          Lprim(Pmakeblock(Obj.forward_tag, Immutable), [transl_exp e])
+          Lprim(Pmakeblock(Obj.forward_tag, Immutable, None), [transl_exp e])
       | Texp_ident(_, _, _) -> (* according to the type *)
           begin match e.exp_type.desc with
           (* the following may represent a float/forward/lazy: need a
              forward_tag *)
           | Tvar _ | Tlink _ | Tsubst _ | Tunivar _
           | Tpoly(_,_) | Tfield(_,_,_,_) ->
-              Lprim(Pmakeblock(Obj.forward_tag, Immutable), [transl_exp e])
+              Lprim(Pmakeblock(Obj.forward_tag, Immutable, None), [transl_exp e])
           (* the following cannot be represented as float/forward/lazy:
              optimize *)
           | Tarrow(_,_,_,_) | Ttuple _ | Tpackage _ | Tobject(_,_) | Tnil
@@ -984,14 +988,14 @@ and transl_exp0 e =
                 || has_base_type e Predef.path_int64
               then transl_exp e
               else
-                Lprim(Pmakeblock(Obj.forward_tag, Immutable), [transl_exp e])
+                Lprim(Pmakeblock(Obj.forward_tag, Immutable, None), [transl_exp e])
           end
       (* other cases compile to a lazy block holding a function *)
       | _ ->
          let fn = Lfunction {kind = Curried; params = [Ident.create "param"];
                              attr = default_function_attribute;
                              body = transl_exp e} in
-          Lprim(Pmakeblock(Config.lazy_tag, Mutable), [fn])
+          Lprim(Pmakeblock(Config.lazy_tag, Mutable, None), [fn])
       end
   | Texp_object (cs, meths) ->
       let cty = cs.cstr_type in
@@ -1008,6 +1012,13 @@ and transl_exp0 e =
 
 and transl_list expr_list =
   List.map transl_exp expr_list
+
+and transl_list_with_shape expr_list =
+  let transl_with_shape e =
+    let shape = Typeopt.block_element_shape e.exp_env e.exp_type in
+    transl_exp e, shape
+  in
+  List.split (List.map transl_with_shape expr_list)
 
 and transl_guard guard rhs =
   let expr = event_before rhs (transl_exp rhs) in
@@ -1175,14 +1186,14 @@ and transl_setinstvar self var expr =
   in
   Lprim(Parraysetu prim, [self; transl_normal_path var; transl_exp expr])
 
-and transl_record env all_labels repres lbl_expr_list opt_init_expr =
+and transl_record env all_labels repres lbl_expr_list opt_init_expr expr =
   let size = Array.length all_labels in
   (* Determine if there are "enough" new fields *)
   if 3 + 2 * List.length lbl_expr_list >= size
   then begin
     (* Allocate new record with given fields (and remaining fields
        taken from init_expr if any *)
-    let lv = Array.make (Array.length all_labels) staticfail in
+    let lv = Array.make (Array.length all_labels) (staticfail, Pany) in
     let init_id = Ident.create "init" in
     begin match opt_init_expr with
       None -> ()
@@ -1193,13 +1204,18 @@ and transl_record env all_labels repres lbl_expr_list opt_init_expr =
               Record_regular | Record_inlined _ -> Pfield i
             | Record_extension -> Pfield (i + 1)
             | Record_float -> Pfloatfield i in
-          lv.(i) <- Lprim(access, [Lvar init_id])
+          let field_shape =
+            record_field_shape env ~record_type:expr.exp_type all_labels.(i)
+          in
+          lv.(i) <- Lprim(access, [Lvar init_id]), field_shape
         done
     end;
     List.iter
-      (fun (_, lbl, expr) -> lv.(lbl.lbl_pos) <- transl_exp expr)
+      (fun (_, lbl, expr) ->
+         let shape = block_element_shape expr.exp_env expr.exp_type in
+         lv.(lbl.lbl_pos) <- transl_exp expr, shape)
       lbl_expr_list;
-    let ll = Array.to_list lv in
+    let ll, shapes = List.split (Array.to_list lv) in
     let mut =
       if List.exists (fun lbl -> lbl.lbl_mut = Mutable)
         (Array.to_list all_labels)
@@ -1221,8 +1237,8 @@ and transl_record env all_labels repres lbl_expr_list opt_init_expr =
             raise Not_constant
       with Not_constant ->
         match repres with
-          Record_regular -> Lprim(Pmakeblock(0, mut), ll)
-        | Record_inlined tag -> Lprim(Pmakeblock(tag, mut), ll)
+          Record_regular -> Lprim(Pmakeblock(0, mut, Some shapes), ll)
+        | Record_inlined tag -> Lprim(Pmakeblock(tag, mut, Some shapes), ll)
         | Record_float -> Lprim(Pmakearray (Pfloatarray, mut), ll)
         | Record_extension ->
             let path =
@@ -1231,7 +1247,7 @@ and transl_record env all_labels repres lbl_expr_list opt_init_expr =
               | _ -> assert false
             in
             let slot = transl_path env path in
-            Lprim(Pmakeblock(0, mut), slot :: ll)
+            Lprim(Pmakeblock(0, mut, Some (Pany :: shapes)), slot :: ll)
     in
     begin match opt_init_expr with
       None -> lam

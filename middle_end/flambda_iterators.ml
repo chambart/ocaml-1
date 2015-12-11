@@ -18,7 +18,7 @@ let apply_on_subexpressions f f_named (flam : Flambda.t) =
   | Let { defining_expr; body; _ } ->
     f_named defining_expr;
     f body
-  | Let_mutable (_mut_var, _var, body) ->
+  | Let_mutable { body; _ } ->
     f body
   | Let_rec (defs, body) ->
     List.iter (fun (_,l) -> f_named l) defs;
@@ -49,8 +49,8 @@ let map_subexpressions f f_named (tree:Flambda.t) : Flambda.t =
   | Let_rec (defs, body) ->
     let defs = List.map (fun (id, lam) -> id, f_named id lam) defs in
     Let_rec (defs, f body)
-  | Let_mutable (mut_var, var, body) ->
-    Let_mutable (mut_var, var, f body)
+  | Let_mutable mutable_let ->
+    Let_mutable { mutable_let with body = f mutable_let.body }
   | Switch (arg, sw) ->
     let sw =
       { sw with
@@ -216,9 +216,8 @@ let map_general ~toplevel f f_named tree =
         | Var _ | Apply _ | Assign _ | Send _ | Proved_unreachable
         | Static_raise _ -> tree
         | Let _ -> assert false
-        | Let_mutable (mut_var, var, body) ->
-          let body = aux body in
-          Let_mutable (mut_var, var, body)
+        | Let_mutable mutable_let ->
+          Let_mutable { mutable_let with body = aux mutable_let.body }
         | Let_rec (defs, body) ->
           let defs = List.map (fun (id, lam) -> id, aux_named id lam) defs in
           let body = aux body in

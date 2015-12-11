@@ -79,10 +79,12 @@ let rec same (l1 : Flambda.t) (l2 : Flambda.t) =
     Variable.equal var1 var2 && same_named defining_expr1 defining_expr2
       && same body1 body2
   | Let _, _ | _, Let _ -> false
-  | Let_mutable (mv1, v1, b1), Let_mutable (mv2, v2, b2) ->
+  | Let_mutable { var = mv1; initial_value = v1; body = b1; contents_kind = k1 },
+    Let_mutable { var = mv2; initial_value = v2; body = b2; contents_kind = k2 } ->
     Mutable_variable.equal mv1 mv2
       && Variable.equal v1 v2
       && same b1 b2
+      && k1 = k2
   | Let_mutable _, _ | _, Let_mutable _ -> false
   | Let_rec (bl1, a1), Let_rec (bl2, a2) ->
     Misc.samelist samebinding bl1 bl2 && same a1 a2
@@ -211,8 +213,9 @@ let toplevel_substitution sb tree =
   let aux (flam : Flambda.t) : Flambda.t =
     match flam with
     | Var var -> Var (sb var)
-    | Let_mutable (mut_var, var, body) ->
-      Let_mutable (mut_var, sb var, body)
+    | Let_mutable let_mutable ->
+      Let_mutable
+        { let_mutable with initial_value = sb let_mutable.initial_value }
     | Assign { being_assigned; new_value; } ->
       Assign { being_assigned; new_value = sb new_value; }
     | Apply { func; args; kind; dbg; inline; } ->
@@ -581,10 +584,12 @@ let substitute_read_symbol_field_for_variables
         Variable.Map.fold (fun to_substitute fresh expr ->
             bind to_substitute fresh expr)
           bindings expr
-    | Let_mutable (mut_var, var, body) when Variable.Map.mem var substitution ->
-      let fresh = Variable.rename var in
-      bind var fresh (Let_mutable (mut_var, fresh, body))
-    | Let_mutable (_mut_var, _var, _body) ->
+    | Let_mutable let_mutable when
+        Variable.Map.mem let_mutable.initial_value substitution ->
+      let fresh = Variable.rename let_mutable.initial_value in
+      bind let_mutable.initial_value fresh
+        (Let_mutable { let_mutable with initial_value = fresh })
+    | Let_mutable _ ->
       expr
     | Let_rec (defs, body) ->
       let free_variables_of_defs =

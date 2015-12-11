@@ -26,3 +26,8 @@ val array_kind : Typedtree.expression -> Lambda.array_kind
 val array_pattern_kind : Typedtree.pattern -> Lambda.array_kind
 val bigarray_type_kind_and_layout :
       Env.t -> Types.type_expr -> Lambda.bigarray_kind * Lambda.bigarray_layout
+
+val block_element_shape : Env.t -> Types.type_expr -> Lambda.value_kind
+val record_field_shape :
+      Env.t -> record_type:Types.type_expr -> Types.label_description
+  -> Lambda.value_kind
