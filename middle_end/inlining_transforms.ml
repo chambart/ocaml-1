@@ -84,7 +84,8 @@ let set_inline_attribute_on_all_apply body inline =
 let inline_by_copying_function_body ~env ~r ~function_decls ~lhs_of_application
       ~(inline_requested : Lambda.inline_attribute)
       ~closure_id_being_applied
-      ~(function_decl : Flambda.function_declaration) ~args ~simplify =
+      ~(function_decl : Flambda.function_declaration) ~args ~simplify
+      ~dry_run =
   let r = R.map_benefit r B.remove_call in
   let env =
     (* Don't allow the inlining level to inhibit inlining of stubs (e.g.
@@ -96,9 +97,10 @@ let inline_by_copying_function_body ~env ~r ~function_decls ~lhs_of_application
      in the environment such that it will rewrite the body to use these new
      names. *)
   let freshened_params, freshening =
-    Freshening.add_variables' (E.freshening env) function_decl.params
+    if dry_run then function_decl.params, E.freshening env
+    else Freshening.add_variables' (E.freshening env) function_decl.params
   in
-  let env = E.set_freshening env freshening in
+  let env = if dry_run then env else E.set_freshening env freshening in
   let body =
     if function_decl.stub && inline_requested <> Lambda.Default_inline then
       (* When the function inlined function is a stub, the annotation
@@ -144,7 +146,7 @@ let inline_by_copying_function_body ~env ~r ~function_decls ~lhs_of_application
     E.note_entering_closure env ~closure_id:closure_id_being_applied
       ~where:Inline_by_copying_function_body
   in
-  simplify (E.activate_freshening env) r expr
+  simplify (if dry_run then env else E.activate_freshening env) r expr
 
 let inline_by_copying_function_declaration ~env ~r
     ~(function_decls : Flambda.function_declarations)
