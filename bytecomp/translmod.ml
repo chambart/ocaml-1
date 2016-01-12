@@ -810,7 +810,7 @@ let transl_store_structure glob map prims str =
       let (pos, cc) = Ident.find_same id map in
       let init_val = apply_coercion Alias cc (Lvar id) in
       Lprim(Psetfield(pos, Pointer, Initialization),
-            [Lprim(Pgetglobal glob, []); init_val])
+        [Lprim(Pgetglobal glob, []); init_val])
     with Not_found ->
       fatal_error("Translmod.store_ident: " ^ Ident.unique_name id)
 

@@ -88,6 +88,9 @@ let int_const n =
   else Cconst_natint
           (Nativeint.add (Nativeint.shift_left (Nativeint.of_int n) 1) 1n)
 
+let cint_const n =
+  Cint(Nativeint.add (Nativeint.shift_left (Nativeint.of_int n) 1) 1n)
+
 let add_no_overflow n x c =
   let d = n + x in
   if d = 0 then c else Cop(Caddi, [c; Cconst_int d])  
@@ -2496,7 +2499,7 @@ let rec emit_structured_constant (symb : (string * bool)) cst cont =
 and emit_constant cst cont =
   match cst with
   | Uconst_int n | Uconst_ptr n ->
-      Cint(Nativeint.add (Nativeint.shift_left (Nativeint.of_int n) 1) 1n)
+      cint_const n
       :: cont
   | Uconst_ref (label, _) ->
       Csymbol_address label :: cont
@@ -2546,33 +2549,34 @@ let emit_constant_closure ((_, global_symb) as symb) fundecls clos_vars cont =
         List.fold_right emit_constant clos_vars cont
   | f1 :: remainder ->
       let rec emit_others pos = function
-          [] ->
-            List.fold_right emit_constant clos_vars cont
+      | [] ->
+          List.fold_right emit_constant clos_vars cont
       | f2 :: rem ->
           if f2.arity = 1 || f2.arity = 0 then
             Cint(infix_header pos) ::
             (closure_symbol f2) @
             Csymbol_address f2.label ::
-            Cint(Nativeint.of_int (f2.arity lsl 1 + 1)) ::
+            cint_const f2.arity ::
             emit_others (pos + 3) rem
           else
             Cint(infix_header pos) ::
             (closure_symbol f2) @
             Csymbol_address(curry_function f2.arity) ::
-            Cint(Nativeint.of_int (f2.arity lsl 1 + 1)) ::
+            cint_const f2.arity ::
             Csymbol_address f2.label ::
-            emit_others (pos + 4) rem in
+            emit_others (pos + 4) rem
+      in
       Cint(black_closure_header (fundecls_size fundecls
                                  + List.length clos_vars)) ::
       cdefine_symbol symb @
       (closure_symbol f1) @
       if f1.arity = 1 || f1.arity = 0 then
         Csymbol_address f1.label ::
-        Cint(Nativeint.of_int (f1.arity lsl 1 + 1)) ::
+        cint_const f1.arity ::
         emit_others 3 remainder
       else
         Csymbol_address(curry_function f1.arity) ::
-        Cint(Nativeint.of_int (f1.arity lsl 1 + 1)) ::
+        cint_const f1.arity ::
         Csymbol_address f1.label ::
         emit_others 4 remainder
 
