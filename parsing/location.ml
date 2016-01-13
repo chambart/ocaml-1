@@ -431,8 +431,6 @@ let () =
 
 external reraise : exn -> 'a = "%reraise"
 
-external reraise : exn -> 'a = "%reraise"
-
 let rec report_exception_rec n ppf exn =
   try match error_of_exn exn with
   | Some err ->
