@@ -670,10 +670,7 @@ let split_default_wrapper ?(create_wrapper_body = fun lam -> lam)
    simplification + emission of tailcall annotations, if needed. *)
 
 let simplify_lambda lam =
-  let res =
-    simplify_exits lam
-    |> simplify_lets
-  in
+  let res = simplify_lets (simplify_exits lam) in
   if !Clflags.annotations || Warnings.is_active Warnings.Expect_tailcall
     then emit_tail_infos true res;
   res
