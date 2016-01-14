@@ -93,8 +93,15 @@ type value_approximation =
 
 type preallocated_block = {
   symbol : string;
+  exported : bool;
   tag : int;
   size : int;
+}
+
+type preallocated_constant = {
+  symbol : string;
+  exported : bool;
+  definition : ustructured_constant;
 }
 
 (* Comparison functions for constants.  We must not use Pervasives.compare

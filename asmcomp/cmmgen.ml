@@ -2456,12 +2456,12 @@ let rec transl_all_functions already_translated cont =
   with Queue.Empty ->
     cont, already_translated
 
-(* Emit structured constants *)
-
 let cdefine_symbol (symb, global) =
   if global
   then [Cglobal_symbol symb; Cdefine_symbol symb]
   else [Cdefine_symbol symb]
+
+(* Emit structured constants *)
 
 let rec emit_structured_constant (symb : (string * bool)) cst cont =
   let emit_block white_header symb cont =
@@ -2492,7 +2492,8 @@ let rec emit_structured_constant (symb : (string * bool)) cst cont =
       emit_block (floatarray_header (List.length fields)) symb
         (Misc.map_end (fun f -> Cdouble f) fields cont)
   | Uconst_closure(fundecls, lbl, fv) ->
-      constant_closures := ((lbl, true), fundecls, fv) :: !constant_closures;
+      assert(lbl = fst symb);
+      constant_closures := (symb, fundecls, fv) :: !constant_closures;
       List.iter (fun f -> Queue.add f functions) fundecls;
       cont
 
@@ -2582,12 +2583,12 @@ let emit_constant_closure ((_, global_symb) as symb) fundecls clos_vars cont =
 
 (* Emit all structured constants *)
 
-let emit_constants cont constants =
+let emit_constants cont (constants:Clambda.preallocated_constant list) =
   let c = ref cont in
   List.iter
-    (fun (lbls, cst) ->
-      let cst = emit_structured_constant lbls cst [] in
-      c := Cdata(cst):: !c)
+    (fun { symbol = lbl; exported = global; definition = cst } ->
+       let cst = emit_structured_constant (lbl, global) cst [] in
+         c:= Cdata(cst):: !c)
     constants;
   List.iter
     (fun (symb, fundecls, clos_vars) ->
@@ -2597,10 +2598,7 @@ let emit_constants cont constants =
   !c
 
 let emit_all_constants cont =
-  let constants =
-    List.map (fun (symb, global, const) -> (symb, global), const)
-      (Compilenv.structured_constants ())
-  in
+  let constants = Compilenv.structured_constants () in
   Compilenv.clear_structured_constants ();
   emit_constants cont constants
 
@@ -2616,16 +2614,6 @@ let transl_all_functions_and_emit_all_constants cont =
   in
   aux StringSet.empty cont
 
-(* Build the table of GC roots for toplevel modules *)
-
-let emit_module_roots_table ~symbols cont =
-  let table_symbol = Compilenv.make_symbol (Some "gc_roots") in
-  Cdata(Cglobal_symbol table_symbol ::
-        Cdefine_symbol table_symbol ::
-        List.map (fun s -> Csymbol_address s) symbols @
-        [Cint 0n])
-  :: cont
-
 (* Build the NULL terminated array of gc roots *)
 
 let emit_gc_roots_table ~symbols cont =
@@ -2637,9 +2625,9 @@ let emit_gc_roots_table ~symbols cont =
   :: cont
 
 (* Build preallocated blocks (used for Flambda [Initialize_symbol]
-   constructs) *)
+   constructs, and Clambda global module) *)
 
-let preallocate_block { Clambda.symbol; tag; size } =
+let preallocate_block cont { Clambda.symbol; exported; tag; size } =
   let space =
     (* These words will be registered as roots and as such must contain
        valid values, in case we are in no-naked-pointers mode.  Likewise
@@ -2649,38 +2637,35 @@ let preallocate_block { Clambda.symbol; tag; size } =
       (Array.init size (fun _index ->
         Cint (Nativeint.of_int 1 (* Val_unit *))))
   in
-  (* TODO: don't mark every symbol as global, only those reachable
-     from exported info should *)
-  Cdata ([Cint(black_block_header tag size);
-         Cglobal_symbol symbol;
-         Cdefine_symbol symbol] @ space)
+  let data =
+    Cint(black_block_header tag size) ::
+    if exported then
+      Cglobal_symbol symbol ::
+      Cdefine_symbol symbol :: space
+    else
+      Cdefine_symbol symbol :: space
+  in
+  Cdata data :: cont
+
+let emit_preallocated_blocks preallocated_blocks cont =
+  let symbols =
+    List.map (fun ({ Clambda.symbol }:Clambda.preallocated_block) -> symbol)
+      preallocated_blocks
+  in
+  let c1 = emit_gc_roots_table ~symbols cont in
+  List.fold_left preallocate_block c1 preallocated_blocks
 
 (* Translate a compilation unit *)
 
-let compunit_and_constants (ulam, preallocated_blocks, constants) =
+let compunit (ulam, preallocated_blocks, constants) =
   let init_code = transl empty_env ulam in
   let c1 = [Cfunction {fun_name = Compilenv.make_symbol (Some "entry");
                        fun_args = [];
                        fun_body = init_code; fun_fast = false;
                        fun_dbg  = Debuginfo.none }] in
-  let structured_constants =
-    List.map (fun ((s, exported), c) ->
-        (Linkage_name.to_string (Symbol.label s),exported), c)
-      constants
-  in
-  let c1' = emit_constants c1 structured_constants in
-  let preallocate_block_symbols =
-    List.map (fun { Clambda.symbol } -> symbol)
-      preallocated_blocks
-  in
-  let c3 = transl_all_functions_and_emit_all_constants c1' in
-  let c4 =
-    emit_gc_roots_table ~symbols:preallocate_block_symbols c3
-  in
-  let blocks =
-    List.map preallocate_block preallocated_blocks
-  in
-  blocks @ c4
+  let c2 = emit_constants c1 constants in
+  let c3 = transl_all_functions_and_emit_all_constants c2 in
+  emit_preallocated_blocks preallocated_blocks c3
 
 (*
 CAMLprim value caml_cache_public_method (value meths, value tag, value *cache)
@@ -3025,7 +3010,7 @@ let reference_symbols namelist =
   Cdata(List.map mksym namelist)
 
 let global_data name v =
-  Cdata(emit_structured_constant (name,true)
+  Cdata(emit_structured_constant (name, true)
           (Uconst_string (Marshal.to_string v [])) [])
 
 let globals_map v = global_data "caml_globals_map" v
@@ -3065,9 +3050,8 @@ let predef_exception i name =
   let symname = "caml_exn_" ^ name in
   let cst = Uconst_string name in
   let label = Compilenv.new_const_symbol () in
-  let cont = emit_structured_constant (label, true) cst [] in
-  Cdata(Cglobal_symbol symname ::
-        emit_structured_constant (symname, true)
+  let cont = emit_structured_constant (label, false) cst [] in
+  Cdata(emit_structured_constant (symname, true)
           (Uconst_block(Obj.object_tag,
                        [
                          Uconst_ref(label, Some cst);

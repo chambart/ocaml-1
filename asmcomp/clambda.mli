@@ -98,6 +98,13 @@ val compare_constants:
 
 type preallocated_block = {
   symbol : string;
+  exported : bool;
   tag : int;
   size : int;
+}
+
+type preallocated_constant = {
+  symbol : string;
+  exported : bool;
+  definition : ustructured_constant;
 }

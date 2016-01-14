@@ -12,10 +12,10 @@
 
 (* Translation from closed lambda to C-- *)
 
-val compunit_and_constants:
+val compunit:
     Clambda.ulambda
     * Clambda.preallocated_block list
-    * ((Symbol.t * bool (* exported *)) * Clambda.ustructured_constant) list
+    * Clambda.preallocated_constant list
   -> Cmm.phrase list
 
 val apply_function: int -> Cmm.phrase

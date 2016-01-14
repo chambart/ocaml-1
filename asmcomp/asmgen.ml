@@ -59,15 +59,20 @@ let flambda_raw_clambda_dump_if ppf
   if !dump_cmm then Format.fprintf ppf "@.cmm:@.";
   input
 
-let raw_clambda_dump_if ppf (ulambda, _, structured_constants) =
+type clambda_and_constants =
+  Clambda.ulambda *
+  Clambda.preallocated_block list *
+  Clambda.preallocated_constant list
+
+let raw_clambda_dump_if ppf ((ulambda, _, structured_constants):clambda_and_constants) =
   if !dump_rawclambda then
     begin
       Format.fprintf ppf "@.clambda (before Un_anf):@.";
       Printclambda.clambda ppf ulambda;
-      List.iter (fun ((symbol, _), cst) ->
-          Format.fprintf ppf "%a:@ %a@."
-            Symbol.print symbol
-            Printclambda.structured_constant cst)
+      List.iter (fun {Clambda.symbol; definition} ->
+          Format.fprintf ppf "%s:@ %a@."
+            symbol
+            Printclambda.structured_constant definition)
         structured_constants
     end;
   if !dump_cmm then Format.fprintf ppf "@.cmm:@."
@@ -163,17 +168,11 @@ let set_export_info (ulambda, prealloc, structured_constants, export) =
   Compilenv.set_export_info export;
   (ulambda, prealloc, structured_constants)
 
-type clambda_and_constants =
-  Clambda.ulambda *
-  Clambda.preallocated_block list *
-  ((Symbol.t * bool (* exported *)) *
-   Clambda.ustructured_constant) list
-
 let end_gen_implementation ?toplevel ~source_provenance ppf
     (clambda:clambda_and_constants) =
   Emit.begin_assembly ();
   clambda
-  ++ Timings.(time (Cmm source_provenance)) Cmmgen.compunit_and_constants
+  ++ Timings.(time (Cmm source_provenance)) Cmmgen.compunit
   ++ Timings.(time (Compile_phrases source_provenance))
        (List.iter (compile_phrase ppf))
   ++ (fun () -> ());
@@ -207,7 +206,10 @@ let flambda_gen_implementation ?toplevel ~source_provenance ~backend ppf
       ++ set_export_info) ()
   in
   let constants =
-    List.map (fun (symbol, const) -> (symbol, true), const)
+    List.map (fun (symbol, definition) ->
+        { Clambda.symbol = Linkage_name.to_string (Symbol.label symbol);
+          exported = true;
+          definition })
       (Symbol.Map.bindings constants)
   in
   end_gen_implementation ?toplevel ~source_provenance ppf
@@ -219,21 +221,12 @@ let lambda_gen_implementation ?toplevel ~source_provenance ppf
   let preallocated_block =
     Clambda.{
       symbol = Linkage_name.to_string (Compilenv.current_unit_linkage_name ());
+      exported = true;
       tag = 0;
       size = lambda.main_module_block_size;
     }
   in
-  let compilation_unit = Compilenv.current_unit () in
-  let constants =
-    let constants = Compilenv.structured_constants () in
-    Compilenv.clear_structured_constants ();
-    List.map (fun (name, exported, const) ->
-        (Symbol.unsafe_create compilation_unit
-           (Linkage_name.create name),
-         exported),
-        const)
-      constants
-  in
+  let constants = Compilenv.structured_constants () in
   let clambda_and_constants =
     clambda, [preallocated_block], constants
   in

@@ -416,11 +416,14 @@ let clear_structured_constants () =
   structured_constants := structured_constants_empty
 
 let structured_constants () =
-  let structured_constants = !structured_constants in
   List.map
-    (fun (lbl, cst) ->
-       lbl, Hashtbl.mem exported_constants lbl, cst)
-    structured_constants.strcst_all
+    (fun (symbol, definition) ->
+       {
+         Clambda.symbol;
+         exported = Hashtbl.mem exported_constants symbol;
+         definition;
+       })
+    (!structured_constants).strcst_all
 
 let new_const_symbol' ?name () =
   Symbol.unsafe_create (current_unit ())
