@@ -161,10 +161,10 @@ while : ; do
         no_naked_pointers=true;;
     -no-cfi|--no-cfi)
         with_cfi=false;;
-    -flambda)
-        flambda=true;;
     -no-native-compiler)
         native_compiler=false;;
+    -flambda)
+        flambda=true;;
     *) if echo "$1" | grep -q -e '^--\?[a-zA-Z0-9-]\+='; then
          err "configure expects arguments of the form '-prefix /foo/bar'," \
              "not '-prefix=/foo/bar' (note the '=')."
