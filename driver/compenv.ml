@@ -286,7 +286,6 @@ let read_one_param ppf position name v =
       if !native_code then
         set "inlining-report" [ inlining_stats ] v
 
-  | "timings" -> set "timings" [ print_timings ] v
   | "flambda-verbose" ->
       set "flambda-verbose" [ dump_flambda_verbose ] v
   | "flambda-invariants" ->
@@ -365,6 +364,8 @@ let read_one_param ppf position name v =
 
   | "can-discard" ->
     can_discard := v ::!can_discard
+
+  | "timings" -> set "timings" [ print_timings ] v
 
   | _ ->
     if not (List.mem name !can_discard) then begin
