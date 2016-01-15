@@ -648,7 +648,7 @@ let rec comp_expr env exp sz cont =
       end
   | Lprim (Pduparray (kind, mutability), [Lprim (Pmakearray (kind', _), args)]) ->
       assert (kind = kind');
-      comp_expr (env (Lprim (Pmakearray (kind, mutability), args)))
+      comp_expr env (Lprim (Pmakearray (kind, mutability), args)) sz cont
   | Lprim (Pduparray _, [arg]) ->
       let prim_obj_dup =
         Primitive.simple ~name:"caml_obj_dup" ~arity:1 ~alloc:true
