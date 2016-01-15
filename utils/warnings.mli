@@ -68,11 +68,10 @@ type t =
   | Misplaced_attribute of string           (* 53 *)
   | Duplicated_attribute of string          (* 54 *)
   | Inlining_impossible of string           (* 55 *)
-  | Assignment_on_non_mutable_value         (* 56 *)
-  | Missing_symbol_information of string * string (* 57 *)
-  | Unreachable_case                        (* 58 *)
-  | Ambiguous_pattern of string list        (* 59 *)
-  | No_cmx_file of string                   (* 60 *)
+  | Unreachable_case                        (* 56 *)
+  | Ambiguous_pattern of string list        (* 57 *)
+  | No_cmx_file of string                   (* 58 *)
+  | Assignment_to_non_mutable_value         (* 59 *)
 ;;
 
 val parse_options : bool -> string -> unit;;

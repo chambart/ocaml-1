@@ -73,11 +73,10 @@ type t =
   | Misplaced_attribute of string           (* 53 *)
   | Duplicated_attribute of string          (* 54 *)
   | Inlining_impossible of string           (* 55 *)
-  | Assignment_on_non_mutable_value         (* 56 *)
-  | Missing_symbol_information of string * string (* 57 *)
-  | Unreachable_case                        (* 58 *)
-  | Ambiguous_pattern of string list        (* 59 *)
-  | No_cmx_file of string                   (* 60 *)
+  | Unreachable_case                        (* 56 *)
+  | Ambiguous_pattern of string list        (* 57 *)
+  | No_cmx_file of string                   (* 58 *)
+  | Assignment_to_non_mutable_value         (* 59 *)
 ;;
 
 (* If you remove a warning, leave a hole in the numbering.  NEVER change
@@ -142,14 +141,13 @@ let number = function
   | Misplaced_attribute _ -> 53
   | Duplicated_attribute _ -> 54
   | Inlining_impossible _ -> 55
-  | Assignment_on_non_mutable_value -> 56
-  | Missing_symbol_information _ -> 57
-  | Unreachable_case -> 58
-  | Ambiguous_pattern _ -> 59
-  | No_cmx_file _ -> 60
+  | Unreachable_case -> 56
+  | Ambiguous_pattern _ -> 57
+  | No_cmx_file _ -> 58
+  | Assignment_to_non_mutable_value -> 59
 ;;
 
-let last_warning_number = 60
+let last_warning_number = 59
 ;;
 
 (* Must be the max number returned by the [number] function. *)
@@ -265,7 +263,7 @@ let parse_options errflag s =
 
 (* If you change these, don't forget to change them in man/ocamlc.m *)
 let defaults_w = "+a-4-6-7-9-27-29-32..39-41..42-44-45-48-50";;
-let defaults_warn_error = "-a";;
+let defaults_warn_error = "-a+31";;
 
 let () = parse_options false defaults_w;;
 let () = parse_options true defaults_warn_error;;
@@ -436,14 +434,6 @@ let message = function
       Printf.sprintf "the %S attribute is used more than once on this expression" attr_name
   | Inlining_impossible reason ->
       Printf.sprintf "Inlining impossible in this context: %s" reason
-  | Assignment_on_non_mutable_value ->
-      "Assignment on non-mutable value.\n\
-       Have you been naughty with [Obj]?  If not this may be a bug in the compiler."
-  | Missing_symbol_information (symbol, unit) ->
-      Printf.sprintf
-        "No information found for the symbol %s, potentially inhibiting optimisation.\n\
-         A .cmx or .cmxa file is probably missing.  Check the -I arguments given to the compiler."
-        symbol
   | Ambiguous_pattern vars ->
       let msg =
         let vars = List.sort String.compare vars in
@@ -458,6 +448,7 @@ let message = function
       Printf.sprintf
         "no cmx file was found in path for module %s, \
          and its interface was not compiled with -opaque" name
+  | Assignment_to_non_mutable_value -> "Assignment to non-mutable value"
 ;;
 
 let nerrors = ref 0;;
@@ -551,11 +542,10 @@ let descriptions =
    53, "Attribute cannot appear in this context";
    54, "Attribute used more than once on an expression";
    55, "Inlining impossible";
-   56, "Assignment on non-mutable value";
-   57, "Missing symbol information (is a .cmx file missing?)";
-   58, "Unreachable case in a pattern-matching (based on type information).";
-   59, "Ambiguous binding by pattern.";
-   60, "Missing cmx file";
+   56, "Unreachable case in a pattern-matching (based on type information).";
+   57, "Ambiguous binding by pattern.";
+   58, "Missing cmx file";
+   59, "Assignment to non-mutable value";
   ]
 ;;
 
