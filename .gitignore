@@ -17,7 +17,6 @@
 .DS_Store
 *.out
 *.out.dSYM
-*.inlining
 
 # local to root directory
 
@@ -295,5 +294,3 @@
 /yacc/ocamlyacc
 /yacc/version.h
 /yacc/.gdb_history
-
-/.operf
