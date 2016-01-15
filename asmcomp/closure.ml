@@ -113,7 +113,7 @@ let prim_size prim args =
       | Immediate -> 1
     end
   | Pfloatfield f -> 1
-  | Psetfloatfield _ -> 1
+  | Psetfloatfield (f, _) -> 1
   | Pduprecord _ -> 10 + List.length args
   | Pccall p -> (if p.prim_alloc then 10 else 4) + List.length args
   | Praise _ -> 4
@@ -1280,7 +1280,7 @@ let collect_exported_structured_constants a =
         structured_constant c
     | Uconst_ref (s, None) -> assert false (* Cannot be generated *)
     | Uconst_int _ | Uconst_ptr _ -> ()
-  and structured_constant : Clambda.ustructured_constant -> _ = function
+  and structured_constant = function
     | Uconst_block (_, ul) -> List.iter const ul
     | Uconst_float _ | Uconst_int32 _
     | Uconst_int64 _ | Uconst_nativeint _
