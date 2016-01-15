@@ -30,8 +30,13 @@ INCLUDES=\
 
 OTHEROBJS=\
   $(UNIXDIR)/unix.cma \
+<<<<<<< HEAD
   ../utils/config.cmo ../utils/tbl.cmo \
   ../utils/misc.cmo ../utils/identifiable.cmo ../utils/numbers.cmo \
+=======
+  ../utils/config.cmo ../utils/tbl.cmo ../utils/misc.cmo \
+  ../utils/identifiable.cmo ../utils/numbers.cmo \
+>>>>>>> flambda_prereq-clflags
   ../utils/arg_helper.cmo ../utils/clflags.cmo \
   ../utils/consistbl.cmo ../utils/warnings.cmo \
   ../utils/terminfo.cmo \

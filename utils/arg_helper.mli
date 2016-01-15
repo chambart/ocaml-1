@@ -2,11 +2,15 @@
 (*                                                                        *)
 (*                                OCaml                                   *)
 (*                                                                        *)
-(*                  Mark Shinwell, Jane Street Europe                     *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2015 Institut National de Recherche en Informatique et     *)
-(*   en Automatique.  All rights reserved.  This file is distributed      *)
-(*   under the terms of the Q Public License version 1.0.                 *)
+(*   Copyright 2015--2016 OCamlPro SAS                                    *)
+(*   Copyright 2015--2016 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file ../LICENSE.       *)
 (*                                                                        *)
 (**************************************************************************)
 
@@ -29,7 +33,7 @@ module Make (S : sig
   module Value : sig
     type t
 
-    (** The textual representation of a value must not contain '=' or ','. *)
+    (** The textual representation of a value must not contain ','. *)
     val of_string : string -> t
   end
 end) : sig
@@ -41,6 +45,12 @@ end) : sig
   val default : S.Value.t -> parsed
 
   val parse : string -> help_text:string -> update:parsed ref -> unit
+
+  type parse_result =
+    | Ok
+    | Parse_failed of exn
+
+  val parse_no_error : string -> update:parsed ref -> parse_result
 
   val get : key:S.Key.t -> parsed -> S.Value.t
 end

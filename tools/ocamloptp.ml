@@ -62,7 +62,7 @@ module Options = Main_args.Make_optcomp_options (struct
   let _i = option "-i"
   let _I s = option_with_arg "-I" s
   let _impl s = with_impl := true; option_with_arg "-impl" s
-  let _inline n = option_with_arg "-inline" n
+  let _inline s = option_with_arg "-inline" s
   let _inline_toplevel n = option_with_arg "-inline-toplevel" n
   let _inlining_stats = option "-inlining-report"
   let _dump_pass = option_with_arg "-dump-pass"
