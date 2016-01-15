@@ -100,7 +100,6 @@ partialclean:
 clean: partialclean
 	rm -f libvmthreads.a dllvmthreads.so *.o
 	rm -f pervasives.mli marshal.mli unix.mli
-	rm -f *.out
 
 INSTALL_LIBDIR=$(DESTDIR)$(LIBDIR)
 INSTALL_STUBLIBDIR=$(DESTDIR)$(STUBLIBDIR)
