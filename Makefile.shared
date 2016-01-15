@@ -105,8 +105,17 @@ ASMCOMP=\
   asmcomp/arch.cmo \
   asmcomp/cmm.cmo asmcomp/printcmm.cmo \
   asmcomp/reg.cmo asmcomp/mach.cmo asmcomp/proc.cmo \
-  asmcomp/clambda.cmo asmcomp/printclambda.cmo asmcomp/compilenv.cmo \
-  asmcomp/closure.cmo asmcomp/strmatch.cmo asmcomp/cmmgen.cmo \
+  asmcomp/clambda.cmo asmcomp/printclambda.cmo \
+  asmcomp/export_info.cmo \
+  asmcomp/export_info_for_pack.cmo \
+  asmcomp/compilenv.cmo \
+  asmcomp/closure.cmo \
+  asmcomp/build_export_info.cmo \
+  asmcomp/closure_offsets.cmo \
+  asmcomp/flambda_to_clambda.cmo \
+  asmcomp/import_approx.cmo \
+  asmcomp/un_anf.cmo \
+  asmcomp/strmatch.cmo asmcomp/cmmgen.cmo \
   asmcomp/printmach.cmo asmcomp/selectgen.cmo asmcomp/selection.cmo \
   asmcomp/comballoc.cmo \
   asmcomp/CSEgen.cmo asmcomp/CSE.cmo \
