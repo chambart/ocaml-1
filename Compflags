@@ -1,0 +1,44 @@
+#!/bin/sh
+#########################################################################
+#                                                                       #
+#                                OCaml                                  #
+#                                                                       #
+#            Xavier Leroy, projet Cristal, INRIA Rocquencourt           #
+#                    Mark Shinwell, Jane Street Europe                  #
+#                                                                       #
+#   Copyright 2004 Institut National de Recherche en Informatique       #
+#     et en Automatique                                                 #
+#   Copyright 2015--2016 Jane Street Group LLC                          #
+#                                                                       #
+#   All rights reserved.  This file is distributed under the terms of   #
+#   the GNU Lesser General Public License version 2.1, with the         #
+#   special exception on linking described in the file LICENSE.         #
+#                                                                       #
+#########################################################################
+
+case $1 in
+    middle_end/flambda_invariants.* \
+  | asmcomp/un_anf.*)
+    # Same as below, but we also enable warning 9, to try to help catch
+    # cases where we fail to examine some subterm.  (See comments at the top
+    # of flambda_invariants.ml too.)
+    echo '-w +a-4+27-30-40-41-42 -principal -safe-string -strict-formats'
+    ;;
+
+    asmcomp/asmgen.* \
+  | asmcomp/closure_offsets.* \
+  | asmcomp/compilenv.* \
+  | asmcomp/export_info.* \
+  | asmcomp/export_info_for_pack.* \
+  | asmcomp/flambda_to_clambda.* \
+  | asmcomp/import_approx.* \
+  | asmcomp/build_export_info.* \
+  | utils/clflags.* \
+  | middle_end/* \
+  | middle_end/base_types/*)
+    # Strict compilation options for Flambda passes and related files.
+    # Constructor/record field disambiguation is kept in check by
+    # using -principal (which is also morally correct).
+    echo '-w +a-4-9+27-30-40-41-42 -principal -safe-string -strict-formats'
+    ;;
+esac

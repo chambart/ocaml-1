@@ -314,8 +314,8 @@ ocamlc: compilerlibs/ocamlcommon.cma compilerlibs/ocamlbytecomp.cma $(BYTESTART)
 
 # The native-code compiler
 
-compilerlibs/ocamloptcomp.cma: $(ASMCOMP)
-	$(CAMLC) -a -o $@ $(ASMCOMP)
+compilerlibs/ocamloptcomp.cma: $(MIDDLE_END) $(ASMCOMP)
+	$(CAMLC) -a -o $@ $(MIDDLE_END) $(ASMCOMP)
 partialclean::
 	rm -f compilerlibs/ocamloptcomp.cma
 
@@ -467,8 +467,8 @@ partialclean::
 
 # The native-code compiler compiled with itself
 
-compilerlibs/ocamloptcomp.cmxa: $(ASMCOMP:.cmo=.cmx)
-	$(CAMLOPT) -a -o $@ $(ASMCOMP:.cmo=.cmx)
+compilerlibs/ocamloptcomp.cmxa: $(MIDDLE_END:.cmo=.cmx) $(ASMCOMP:.cmo=.cmx)
+	$(CAMLOPT) -a -o $@ $(MIDDLE_END:.cmo=.cmx) $(ASMCOMP:.cmo=.cmx)
 partialclean::
 	rm -f compilerlibs/ocamloptcomp.cmxa compilerlibs/ocamloptcomp.a
 
@@ -481,7 +481,7 @@ ocamlopt.opt: compilerlibs/ocamlcommon.cmxa compilerlibs/ocamloptcomp.cmxa \
 partialclean::
 	rm -f ocamlopt.opt
 
-$(COMMON:.cmo=.cmx) $(BYTECOMP:.cmo=.cmx) $(ASMCOMP:.cmo=.cmx): ocamlopt
+$(COMMON:.cmo=.cmx) $(BYTECOMP:.cmo=.cmx) $(MIDDLE_END:.cmo=.cmx) $(ASMCOMP:.cmo=.cmx): ocamlopt
 
 # The numeric opcodes
 
@@ -772,13 +772,13 @@ clean::
 .SUFFIXES: .ml .mli .cmo .cmi .cmx
 
 .ml.cmo:
-	$(CAMLC) $(COMPFLAGS) -c $<
+	$(CAMLC) $(COMPFLAGS) `./Compflags $@` -c $<
 
 .mli.cmi:
-	$(CAMLC) $(COMPFLAGS) -c $<
+	$(CAMLC) $(COMPFLAGS) `./Compflags $@` -c $<
 
 .ml.cmx:
-	$(CAMLOPT) $(COMPFLAGS) -c $<
+	$(CAMLOPT) $(COMPFLAGS) `./Compflags $@` -c $<
 
 partialclean::
 	for d in utils parsing typing bytecomp asmcomp driver toplevel tools; \
@@ -786,7 +786,8 @@ partialclean::
 	rm -f *~
 
 depend: beforedepend
-	(for d in utils parsing typing bytecomp asmcomp driver toplevel; \
+	(for d in utils parsing typing bytecomp asmcomp middle_end \
+	 middle_end/base_types driver toplevel; \
 	 do $(CAMLDEP) $(DEPFLAGS) $$d/*.mli $$d/*.ml; \
 	 done) > .depend
 
