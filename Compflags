@@ -22,7 +22,7 @@ case $1 in
     # Same as below, but we also enable warning 9, to try to help catch
     # cases where we fail to examine some subterm.  (See comments at the top
     # of flambda_invariants.ml too.)
-    echo '-w +a-4+27-30-40-41-42 -principal -safe-string -strict-formats'
+    echo '-w +a-4+27-30-40-41-42 -safe-string -strict-formats'
     ;;
 
     asmcomp/asmgen.* \
@@ -38,7 +38,8 @@ case $1 in
   | middle_end/base_types/*)
     # Strict compilation options for Flambda passes and related files.
     # Constructor/record field disambiguation is kept in check by
-    # using -principal (which is also morally correct).
-    echo '-w +a-4-9+27-30-40-41-42 -principal -safe-string -strict-formats'
+    # using -principal (which is also morally correct), now in the
+    # main Makefile.shared for everything.
+    echo '-w +a-4-9+27-30-40-41-42 -safe-string -strict-formats'
     ;;
 esac
