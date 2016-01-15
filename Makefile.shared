@@ -197,4 +197,3 @@ TOPLEVELSTART=toplevel/topstart.cmo
 OPTTOPLEVELSTART=toplevel/opttopstart.cmo
 
 PERVASIVES=$(STDLIB_MODULES) outcometree topdirs toploop
-
