@@ -1512,7 +1512,12 @@ let rec transl env e =
              1. When using Closure, all the time.
              2. When using Flambda, if a float array longer than
              [Translcore.use_dup_for_constant_arrays_bigger_than] turns out
-             to be non-constant. *)
+             to be non-constant.
+             If for some reason Flambda fails to lift a constant array we
+             could in theory also end up here.
+             Note that [kind] above is unconstrained, but with the current
+             state of [Translcore], we will in fact only get here with
+             [Pfloatarray]s. *)
           assert (kind = kind');
           transl_make_array env kind args
       | (Pduparray _, [arg]) ->
@@ -2453,7 +2458,7 @@ let cdefine_symbol (symb, global) =
 
 (* Emit structured constants *)
 
-let rec emit_structured_constant (symb : (string * is_global)) cst cont =
+let rec emit_structured_constant symb cst cont =
   let emit_block white_header symb cont =
     (* Headers for structured constants must be marked black in case we
        are in no-naked-pointers mode.  See [caml_darken]. *)
@@ -2540,8 +2545,8 @@ let emit_constant_closure ((_, global_symb) as symb) fundecls clos_vars cont =
         List.fold_right emit_constant clos_vars cont
   | f1 :: remainder ->
       let rec emit_others pos = function
-      | [] ->
-          List.fold_right emit_constant clos_vars cont
+          [] ->
+            List.fold_right emit_constant clos_vars cont
       | f2 :: rem ->
           if f2.arity = 1 || f2.arity = 0 then
             Cint(infix_header pos) ::
@@ -2555,8 +2560,7 @@ let emit_constant_closure ((_, global_symb) as symb) fundecls clos_vars cont =
             Csymbol_address(curry_function f2.arity) ::
             cint_const f2.arity ::
             Csymbol_address f2.label ::
-            emit_others (pos + 4) rem
-      in
+            emit_others (pos + 4) rem in
       Cint(black_closure_header (fundecls_size fundecls
                                  + List.length clos_vars)) ::
       cdefine_symbol symb @
