@@ -252,8 +252,10 @@ installopt:
 	cd asmrun; $(MAKE) install
 	cp ocamlopt $(INSTALL_BINDIR)/ocamlopt$(EXE)
 	cd stdlib; $(MAKE) installopt
-	cp middle_end/*.cmi middle_end/*.cmt middle_end/*.cmti $(INSTALL_COMPLIBDIR)
-	cp middle_end/base_types/*.cmi middle_end/base_types/*.cmt middle_end/base_types/*.cmti $(INSTALL_COMPLIBDIR)
+	cp middle_end/*.cmi middle_end/*.cmt middle_end/*.cmti \
+		$(INSTALL_COMPLIBDIR)
+	cp middle_end/base_types/*.cmi middle_end/base_types/*.cmt \
+		middle_end/base_types/*.cmti $(INSTALL_COMPLIBDIR)
 	cp asmcomp/*.cmi asmcomp/*.cmt asmcomp/*.cmti $(INSTALL_COMPLIBDIR)
 	cp compilerlibs/ocamloptcomp.cma $(OPTSTART) $(INSTALL_COMPLIBDIR)
 	if test -n "$(WITH_OCAMLDOC)"; then (cd ocamldoc; $(MAKE) installopt); \
@@ -789,7 +791,8 @@ partialclean::
 	rm -f *~
 
 depend: beforedepend
-	(for d in utils parsing typing bytecomp asmcomp middle_end middle_end/base_types driver toplevel; \
+	(for d in utils parsing typing bytecomp asmcomp middle_end \
+	 middle_end/base_types driver toplevel; \
 	 do $(CAMLDEP) $(DEPFLAGS) $$d/*.mli $$d/*.ml; \
 	 done) > .depend
 
