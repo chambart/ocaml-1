@@ -345,6 +345,11 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
     | Prim (Pmakearray (Pfloatarray, Mutable), args, _) ->
       if toplevel then mark_vars args curr
       else mark_curr curr
+    | Prim (Pduparray (Pfloatarray, Immutable), [arg], _) ->
+      mark_var arg curr
+    | Prim (Pduparray (Pfloatarray, Mutable), [arg], _) ->
+      if toplevel then mark_var arg curr
+      else mark_curr curr
     | Prim (Pduparray _, _, _) ->
       (* See Lift_constants *)
       mark_curr curr
