@@ -226,9 +226,8 @@ let lambda_gen_implementation ?toplevel ~source_provenance ppf
       size = lambda.main_module_block_size;
     }
   in
-  let constants = Compilenv.structured_constants () in
   let clambda_and_constants =
-    clambda, [preallocated_block], constants
+    clambda, [preallocated_block], []
   in
   raw_clambda_dump_if ppf clambda_and_constants;
   end_gen_implementation ?toplevel ~source_provenance ppf clambda_and_constants
