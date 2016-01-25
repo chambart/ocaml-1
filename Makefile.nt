@@ -699,6 +699,9 @@ partialclean::
 	rm -f typing/*.cm* typing/*.$(O) typing/*.$(S)
 	rm -f bytecomp/*.cm* bytecomp/*.$(O) bytecomp/*.$(S)
 	rm -f asmcomp/*.cm* asmcomp/*.$(O) asmcomp/*.$(S)
+	rm -f middle_end/*.cm* middle_end/*.$(O) middle_end/*.$(S)
+	rm -f middle_end/base_types/*.cm* middle_end/base_types/*.$(O) \
+	      middle_end/base_types/*.$(S)
 	rm -f driver/*.cm* driver/*.$(O) driver/*.$(S)
 	rm -f toplevel/*.cm* toplevel/*.$(O) toplevel/*.$(S)
 	rm -f tools/*.cm* tools/*.$(O) tools/*.$(S)

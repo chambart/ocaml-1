@@ -45,13 +45,13 @@ val current_unit_linkage_name: unit -> Linkage_name.t
 val current_unit_id: unit -> Ident.t
         (* Return the id of the unit being compiled *)
 
-val current_unit: unit -> Compilation_unit.t
-
-val current_unit_symbol: unit -> Symbol.t
-
 val current_build: unit -> Timings.source_provenance
         (* Return the kind of build source being compiled. If it is a
            file compilation it also provides the filename. *)
+
+val current_unit: unit -> Compilation_unit.t
+
+val current_unit_symbol: unit -> Symbol.t
 
 val make_symbol: ?unitname:string -> string option -> string
         (* [make_symbol ~unitname:u None] returns the asm symbol that
@@ -71,7 +71,6 @@ val unit_for_global: Ident.t -> Compilation_unit.t
 val symbol_for_global: Ident.t -> string
         (* Return the asm symbol that refers to the given global identifier *)
 val symbol_for_global': Ident.t -> Symbol.t
-
 
 val global_approx: Ident.t -> Clambda.value_approximation
         (* Return the approximation for the given global identifier *)

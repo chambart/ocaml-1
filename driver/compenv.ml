@@ -215,17 +215,17 @@ let read_one_param ppf position name v =
 
   (* inlining *)
   | "inline" ->
-    let module F = Float_arg_helper in
-    begin match F.parse_no_error v inline_threshold with
-    | F.Ok -> ()
-    | F.Parse_failed exn ->
-        let error =
-          Printf.sprintf "bad syntax for \"inline\": %s"
-            (Printexc.to_string exn)
-        in
-        Location.print_warning Location.none ppf
-          (Warnings.Bad_env_variable ("OCAMLPARAM", error))
-    end
+      let module F = Float_arg_helper in
+      begin match F.parse_no_error v inline_threshold with
+      | F.Ok -> ()
+      | F.Parse_failed exn ->
+          let error =
+            Printf.sprintf "bad syntax for \"inline\": %s"
+              (Printexc.to_string exn)
+          in
+          Location.print_warning Location.none ppf
+            (Warnings.Bad_env_variable ("OCAMLPARAM", error))
+      end
 
   | "inline-toplevel" ->
     Int_arg_helper.parse v
@@ -460,7 +460,9 @@ let matching_filename filename { pattern } =
     filename = pattern
 
 let apply_config_file ppf position =
-  let config_file = Filename.concat Config.standard_library "compiler_configuration" in
+  let config_file =
+    Filename.concat Config.standard_library "ocaml_compiler_internal_params"
+  in
   let config =
     if Sys.file_exists config_file then
       load_config ppf config_file

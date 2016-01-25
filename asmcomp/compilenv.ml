@@ -105,11 +105,14 @@ let symbolname_for_pack pack name =
 
 let unit_id_from_name name = Ident.create_persistent name
 
+let concat_symbol unitname id =
+  unitname ^ "__" ^ id
+
 let make_symbol ?(unitname = current_unit.ui_symbol) idopt =
   let prefix = "caml" ^ unitname in
   match idopt with
   | None -> prefix
-  | Some id -> prefix ^ "__" ^ id
+  | Some id -> concat_symbol prefix id
 
 let current_unit_linkage_name () =
   Linkage_name.create (make_symbol ~unitname:current_unit.ui_symbol None)
@@ -136,7 +139,7 @@ let reset ?packname ~source_provenance:file name =
   Hashtbl.clear export_infos_table;
   let compilation_unit =
     Compilation_unit.create
-      !current_unit_id
+      (Ident.create_persistent name)
       (current_unit_linkage_name ())
   in
   Compilation_unit.set_current compilation_unit
@@ -433,9 +436,6 @@ let structured_constants () =
 let new_const_symbol' ?name () =
   Symbol.unsafe_create (current_unit ())
     (Linkage_name.create (new_const_symbol ?name ()))
-
-let concat_symbol unitname id =
-  unitname ^ "__" ^ id
 
 let closure_symbol fv =
   let compilation_unit = Closure_id.get_compilation_unit fv in
