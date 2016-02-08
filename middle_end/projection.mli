@@ -25,7 +25,9 @@ type project_closure = {
 }
 
 (** The selection of one closure given another closure in the same set of
-    closures.  See more detailed documentation below on [set_of_closures]. *)
+    closures.  See more detailed documentation below on [set_of_closures].
+    The [move_to] closure must be part of the free variables of
+    [start_from]. *)
 type move_within_set_of_closures = {
   closure : Variable.t;  (** must yield a closure *)
   start_from : Closure_id.t;
