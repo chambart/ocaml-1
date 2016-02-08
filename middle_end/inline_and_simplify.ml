@@ -595,7 +595,7 @@ and simplify_set_of_closures original_env r
         specialised_args)
   in
   let env =
-    E.enter_set_of_closures_declaration function_decls.set_of_closures_id env
+    E.enter_set_of_closures_declaration function_decls.set_of_closures_origin env
   in
   (* we use the previous closure for evaluating the functions *)
   let internal_value_set_of_closures =
@@ -840,6 +840,7 @@ and simplify_over_application env r ~args ~args_approxs ~function_decls
       (Apply { func = func_var; args = remaining_args; kind = Indirect; dbg;
         inline = inline_requested; })
   in
+  let expr = Lift_code.lift_lets_expr expr ~toplevel:true in
   expr, ret r (A.value_unknown Other)
 (* CR mshinwell for lwhite: This causes camlp4 to fail to build with -O3.
    Can you see what's going on?  This pass gets stuck in an infinite loop.
@@ -882,20 +883,17 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
         simplify_named env r (Flambda.Expr expr)
       | None ->
         let set_of_closures =
-          if E.never_inline env then
-            set_of_closures
-          else
-            let set_of_closures =
-              Remove_unused_arguments.separate_unused_arguments_in_set_of_closures
-                set_of_closures
-                ~backend:(E.backend env)
-            in
-            if !Clflags.unbox_closures then
-              Unbox_closures.introduce_specialised_args_for_free_vars
-                set_of_closures
-                ~backend:(E.backend env)
-            else
+          let set_of_closures =
+            Remove_unused_arguments.separate_unused_arguments_in_set_of_closures
               set_of_closures
+              ~backend:(E.backend env)
+          in
+          if !Clflags.unbox_closures then
+            Unbox_closures.introduce_specialised_args_for_free_vars
+              set_of_closures
+              ~backend:(E.backend env)
+          else
+            set_of_closures
         in
         let set_of_closures, r =
           simplify_set_of_closures env r set_of_closures
@@ -1447,18 +1445,12 @@ let add_predef_exns_to_environment ~env ~backend =
     Predef.all_predef_exns
 
 let run ~never_inline ~backend ~prefixname ~round program =
-  let r =
-    let r = R.create () in
-    if never_inline then
-      R.set_inlining_threshold r (Some Inlining_cost.Threshold.Never_inline)
-    else
-      r
-  in
+  let r = R.create () in
   let stats = !Clflags.inlining_stats in
   if never_inline then Clflags.inlining_stats := false;
   let initial_env =
     add_predef_exns_to_environment
-      ~env:(E.create ~never_inline:false ~backend ~round)
+      ~env:(E.create ~never_inline ~backend ~round)
       ~backend
   in
   let result, r = simplify_program initial_env r program in

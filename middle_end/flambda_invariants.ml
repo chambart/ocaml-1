@@ -42,6 +42,7 @@ let ignore_primitive ( _ : Lambda.primitive) = ()
 let ignore_const (_ : Flambda.const) = ()
 let ignore_allocated_const (_ : Allocated_const.t) = ()
 let ignore_set_of_closures_id (_ : Set_of_closures_id.t) = ()
+let ignore_set_of_closures_origin (_ : Set_of_closures_origin.t) = ()
 let ignore_closure_id (_ : Closure_id.t) = ()
 let ignore_var_within_closure (_ : Var_within_closure.t) = ()
 let ignore_tag (_ : Tag.t) = ()
@@ -250,8 +251,11 @@ let variable_and_symbol_invariants (program : Flambda.program) =
   and loop_set_of_closures env
       ({ Flambda.function_decls; free_vars; specialised_args; }
        as set_of_closures) =
-      let { Flambda.set_of_closures_id; funs; } = function_decls in
+      let { Flambda.set_of_closures_id; set_of_closures_origin; funs; } =
+        function_decls
+      in
       ignore_set_of_closures_id set_of_closures_id;
+      ignore_set_of_closures_origin set_of_closures_origin;
       let functions_in_closure = Variable.Map.keys funs in
       let variables_in_closure =
         Variable.Map.fold (fun var var_in_closure variables_in_closure ->
