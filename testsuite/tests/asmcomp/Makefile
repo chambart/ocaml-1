@@ -48,7 +48,7 @@ lexcmm.ml: lexcmm.mll
 	@$(OCAMLLEX) -q lexcmm.mll
 
 MLCASES=rebinding optargs staticalloc unboxing unboxing_record bind_tuples \
-	local_exception is_static
+	local_exception is_static bottom_branch
 ARGS_is_static=is_in_static_data.o
 
 CASES=fib tak quicksort quicksort2 soli \
