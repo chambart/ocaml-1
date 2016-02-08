@@ -14,10 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Turn free variables of closures into specialised arguments.
-    The aim is to cause the closure to become closed. *)
+(** Replace free variables in closures known to be equal to specialised
+    arguments of such closures with those specialised arguments. *)
 
-val rewrite_set_of_closures
-   : env:Inline_and_simplify_aux.Env.t
-  -> set_of_closures:Flambda.set_of_closures
-  -> Flambda.expr option
+val run : Flambda.set_of_closures -> Flambda.set_of_closures option

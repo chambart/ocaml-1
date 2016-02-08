@@ -14,10 +14,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Turn free variables of closures into specialised arguments.
-    The aim is to cause the closure to become closed. *)
+val register : pass_name:string -> unit
 
-val rewrite_set_of_closures
-   : env:Inline_and_simplify_aux.Env.t
-  -> set_of_closures:Flambda.set_of_closures
-  -> Flambda.expr option
+val with_dump
+   : pass_name:string
+  -> f:(unit -> 'b option)
+  -> input:'a
+  -> print_input:(Format.formatter -> 'a -> unit)
+  -> print_output:(Format.formatter -> 'b -> unit)
+  -> 'b option

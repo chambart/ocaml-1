@@ -14,8 +14,13 @@
 (*                                                                        *)
 (**************************************************************************)
 
-val run :
-  env:Inline_and_simplify_aux.Env.t ->
-  set_of_closures:Flambda.set_of_closures ->
-  Flambda.t option
+(** When approximations of free variables of closures indicate that they
+    are closures or blocks, rewrite projections from such blocks to new
+    variables (which become free in the closures), with the defining
+    expressions of the projections lifted out of the corresponding sets
+    of closures. *)
 
+val run
+   : env:Inline_and_simplify_aux.Env.t
+  -> set_of_closures:Flambda.set_of_closures
+  -> Flambda.expr option
