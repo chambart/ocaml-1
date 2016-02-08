@@ -1281,6 +1281,13 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
           try List.assoc i sw.consts
           with Not_found -> get_failaction ()
         in
+        let lam, env = match E.branch_taken env arg ~block:false i with
+          | None ->
+            Format.printf "remove const branch %i %a@." i Variable.print arg;
+            Flambda.Proved_unreachable, env
+          | Some env ->
+            lam, env
+        in
         let lam, r = simplify env r lam in
         lam, R.map_benefit r B.remove_branch
       | Value_block (tag, _) ->
@@ -1289,19 +1296,33 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
           try List.assoc tag sw.blocks
           with Not_found -> get_failaction ()
         in
+        let lam, env = match E.branch_taken env arg ~block:true tag with
+          | None ->
+            Format.printf "remove block branch %i %a@." tag Variable.print arg;
+            Flambda.Proved_unreachable, env
+          | Some env ->
+            lam, env
+        in
         let lam, r = simplify env r lam in
         lam, R.map_benefit r B.remove_branch
       | _ ->
         let env = E.inside_branch env in
-        let f (i, v) (acc, r) =
+        let f block (i, v) (acc, r, set) =
           let approx = R.approx r in
-          let lam, r = simplify env r v in
-          ((i, lam)::acc, R.set_approx r (A.meet (R.approx r) approx))
+          match E.branch_taken env arg ~block i with
+          | None ->
+            let set = Numbers.Int.Set.remove i set in
+            Format.printf "remove some branch %b %i %a@." block i Variable.print arg;
+            acc, R.map_benefit r B.remove_branch, set
+          | Some env ->
+            let lam, r = simplify env r v in
+            ((i, lam)::acc, R.set_approx r (A.meet (R.approx r) approx), set)
         in
         let r = R.set_approx r A.value_bottom in
-        let consts, r = List.fold_right f sw.consts ([], r) in
-        let blocks, r = List.fold_right f sw.blocks ([], r) in
+        let consts, r, numconsts = List.fold_right (f false) sw.consts ([], r, sw.numconsts) in
+        let blocks, r, numblocks = List.fold_right (f true) sw.blocks ([], r, sw.numblocks) in
         let failaction, r =
+          (* TODO, filter failaction *)
           match sw.failaction with
           | None -> None, r
           | Some l ->
@@ -1309,8 +1330,13 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
             let l, r = simplify env r l in
             Some l, R.set_approx r (A.meet (R.approx r) approx)
         in
-        let sw = { sw with failaction; consts; blocks; } in
-        Switch (arg, sw), r
+        (* match consts, blocks, failaction with *)
+        (* | [], [_, b], None | [_, b], [], None -> b, r *)
+        (* | _ -> *)
+          let sw : Flambda.switch =
+            { failaction; consts; blocks; numconsts; numblocks; }
+          in
+          Switch (arg, sw), r
       end)
   | String_switch (arg, sw, def) ->
     simplify_free_variable env arg ~f:(fun env arg _arg_approx ->

@@ -16,6 +16,10 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+type branch_set =
+  | Any
+  | Set of Numbers.Int.Set.t * Numbers.Int.Set.t
+
 module Env = struct
   type scope = Current | Outer
 
@@ -42,6 +46,7 @@ module Env = struct
     closure_depth : int;
     inlining_stats_closure_stack : Inlining_stats.Closure_stack.t;
     inlined_debuginfo : Debuginfo.t;
+    branch : (Numbers.Int.Set.t * Numbers.Int.Set.t) Variable.Map.t;
   }
 
   let create ~never_inline ~backend ~round =
@@ -65,7 +70,34 @@ module Env = struct
       inlining_stats_closure_stack =
         Inlining_stats.Closure_stack.create ();
       inlined_debuginfo = Debuginfo.none;
+      branch = Variable.Map.empty;
     }
+
+  let get_branch env var =
+    match Variable.Map.find var env.branch with
+    | exception Not_found -> Any
+    | s1, s2 -> Set (s1, s2)
+
+  let branch_taken env var ~block b =
+    let taken =match get_branch env var with
+      | Set (block_set, int_set) ->
+          if block then
+            Numbers.Int.Set.mem b block_set
+          else
+            Numbers.Int.Set.mem b int_set
+      | Any -> true
+    in
+    if taken then
+      let set = Numbers.Int.Set.singleton b in
+      let sets =
+        if block then
+          (set, Numbers.Int.Set.empty)
+        else
+          (Numbers.Int.Set.empty, set)
+      in
+      Some { env with branch = Variable.Map.add var sets env.branch }
+    else
+      None
 
   let backend t = t.backend
   let round t = t.round

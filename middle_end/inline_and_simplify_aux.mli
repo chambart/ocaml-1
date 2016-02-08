@@ -23,6 +23,8 @@ module Env : sig
   (** Environments follow the lexical scopes of the program. *)
   type t
 
+  val branch_taken : t -> Variable.t -> block:bool -> int -> t option
+
   (** Create a new environment.  If [never_inline] is true then the returned
       environment will prevent [Inline_and_simplify] from inlining.  The
       [backend] parameter is used for passing information about the compiler
