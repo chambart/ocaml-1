@@ -544,6 +544,10 @@ let mk_dflambda f =
   "-dflambda", Arg.Unit f, " Print Flambda terms"
 ;;
 
+let mk_drawflambda f =
+  "-dflambda", Arg.Unit f, " Print Flambda terms after closure conversion"
+;;
+
 let mk_dflambda_invariants f =
   "-dflambda-invariants", Arg.Unit f, " Check Flambda invariants around each pass"
 ;;
@@ -764,6 +768,7 @@ module type Optcommon_options = sig
 
   val _clambda_checks : unit -> unit
   val _dflambda : unit -> unit
+  val _drawflambda : unit -> unit
   val _dflambda_invariants : unit -> unit
   val _dflambda_let : int -> unit
   val _dflambda_verbose : unit -> unit
@@ -1050,6 +1055,7 @@ struct
     mk_drawclambda F._drawclambda;
     mk_dclambda F._dclambda;
     mk_dflambda F._dflambda;
+    mk_drawflambda F._drawflambda;
     mk_dflambda_invariants F._dflambda_invariants;
     mk_dflambda_let F._dflambda_let;
     mk_dflambda_verbose F._dflambda_verbose;
@@ -1133,6 +1139,7 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_drawlambda F._drawlambda;
     mk_drawclambda F._drawclambda;
     mk_dclambda F._dclambda;
+    mk_drawflambda F._drawflambda;
     mk_dflambda F._dflambda;
     mk_dcmm F._dcmm;
     mk_dsel F._dsel;
