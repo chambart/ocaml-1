@@ -128,7 +128,7 @@ module Options = Main_args.Make_opttop_options (struct
   let _dflambda_verbose () =
     set dump_flambda ();
     set dump_flambda_verbose ()
-  let _dflambda_invariants = set flambda_invariant_checks
+  let _dflambda_no_invariants = clear flambda_invariant_checks
   let _labels = clear classic
   let _no_alias_deps = set transparent_modules
   let _no_app_funct = clear applicative_functors

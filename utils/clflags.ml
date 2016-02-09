@@ -329,7 +329,7 @@ let set_dumped_pass s enabled =
     dumped_passes_list := dumped_passes
   end
 
-let flambda_invariant_checks = ref false
+let flambda_invariant_checks = ref true
 
 let parse_color_setting = function
   | "auto" -> Some Misc.Color.Auto
