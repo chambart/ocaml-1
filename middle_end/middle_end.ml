@@ -30,6 +30,7 @@ let _dump_function_sizes flam ~backend =
 
 let middle_end ppf ~source_provenance ~prefixname ~backend
     ~size
+    ~filename
     ~module_ident
     ~module_initializer =
   let pass_number = ref 0 in
@@ -72,7 +73,8 @@ let middle_end ppf ~source_provenance ~prefixname ~backend
       in
       Timings.accumulate_time timing_pass (fun () ->
           module_initializer
-          |> Closure_conversion.lambda_to_flambda ~backend ~module_ident ~size)
+          |> Closure_conversion.lambda_to_flambda
+              ~backend ~module_ident ~size ~filename)
         ()
     in
     dump_and_check "After closure conversion" flam;
