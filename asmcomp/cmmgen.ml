@@ -2430,6 +2430,55 @@ and transl_letrec env bindings cont =
         fill_blocks rem
   in init_blocks bsz
 
+(* Insert instrumentation for afl-fuzz *)
+
+let afl_area_ptr = Cconst_symbol "caml_afl_area_ptr"
+let afl_prev_loc = Cconst_symbol "caml_afl_prev_loc"
+let afl_map_size = 1 lsl 16
+
+let rec with_afl_logging b =
+  if !Clflags.afl_inst_ratio < 100 && Random.int 100 >= !Clflags.afl_inst_ratio then instrument b else
+  let instrumentation =
+    let cur_location = Random.int afl_map_size in
+    let cur_pos = Ident.create "pos" in
+    let afl_area = Ident.create "shared_mem" in
+    Clet(afl_area, Cop(Cload Word_int, [afl_area_ptr]),
+    Clet(cur_pos,  Cop(Cxor, [Cop(Cload Word_int, [afl_prev_loc]); Cconst_int cur_location]),
+    Csequence(
+      Cop(Cstore(Byte_unsigned, Assignment),
+          [Cop(Cadda, [Cvar afl_area; Cvar cur_pos]);
+           Cop(Cadda, [Cop (Cload Byte_unsigned,
+                            [Cop(Cadda, [Cvar afl_area; Cvar cur_pos])]);
+                       Cconst_int 1])]),
+      Cop(Cstore(Word_int, Assignment),
+          [afl_prev_loc; Cconst_int (cur_location lsr 1)])))) in
+  Csequence(instrumentation, instrument b)
+
+and instrument = function
+  (* these cases add afl logging, since they may be targets of conditional branches *)
+  | Cifthenelse (cond, t, f) -> Cifthenelse (instrument cond, with_afl_logging t, with_afl_logging f)
+  | Ccatch (nfail, ids, e1, e2) ->
+     Ccatch (nfail, ids, instrument e1, with_afl_logging e2)
+  | Cloop e -> Cloop (with_afl_logging e)
+  | Ctrywith (e, ex, handler) -> Ctrywith (instrument e, ex, with_afl_logging handler)
+  | Cswitch (e, cases, handlers) -> Cswitch (instrument e, cases, Array.map with_afl_logging handlers)
+
+  (* these cases add no logging, but instrument subexpressions *)
+  | Clet (v, e, body) -> Clet (v, instrument e, instrument body)
+  | Cassign (v, e) -> Cassign (v, instrument e)
+  | Ctuple es -> Ctuple (List.map instrument es)
+  | Cop (op, es) -> Cop (op, List.map instrument es)
+  | Csequence (e1, e2) -> Csequence (instrument e1, instrument e2)
+  | Cexit (ex, args) -> Cexit (ex, List.map instrument args)
+
+  (* these are base cases and have no logging *)
+  | Cconst_int _ | Cconst_natint _ | Cconst_float _
+  | Cconst_symbol _ | Cconst_pointer _ | Cconst_natpointer _
+  | Cconst_blockheader _ | Cvar _ as c -> c
+
+let maybe_instrument c =
+  if !Clflags.afl_instrument then instrument c else c
+
 (* Translate a function definition *)
 
 let transl_function f =
@@ -2441,7 +2490,7 @@ let transl_function f =
   in
   Cfunction {fun_name = f.label;
              fun_args = List.map (fun id -> (id, typ_val)) f.params;
-             fun_body = transl empty_env body;
+             fun_body = maybe_instrument (transl empty_env body);
              fun_fast = !Clflags.optimize_for_speed;
              fun_dbg  = f.dbg; }
 
@@ -2668,7 +2717,7 @@ let emit_preallocated_blocks preallocated_blocks cont =
 (* Translate a compilation unit *)
 
 let compunit (ulam, preallocated_blocks, constants) =
-  let init_code = transl empty_env ulam in
+  let init_code = maybe_instrument (transl empty_env ulam) in
   let c1 = [Cfunction {fun_name = Compilenv.make_symbol (Some "entry");
                        fun_args = [];
                        fun_body = init_code; fun_fast = false;

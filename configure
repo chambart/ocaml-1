@@ -53,6 +53,7 @@ native_compiler=true
 TOOLPREF=""
 with_cfi=true
 flambda=false
+afl_instrument=false
 max_testsuite_dir_retries=0
 
 # Try to turn internationalization off, can cause config.guess to malfunction!
@@ -167,6 +168,8 @@ while : ; do
         native_compiler=false;;
     -flambda)
         flambda=true;;
+    -afl-instrument)
+        afl_instrument=true;;
     *) if echo "$1" | grep -q -e '^--\?[a-zA-Z0-9-]\+='; then
          err "configure expects arguments of the form '-prefix /foo/bar'," \
              "not '-prefix=/foo/bar' (note the '=')."
@@ -1817,6 +1820,7 @@ if [ "$ostype" = Cygwin ]; then
   echo "DIFF=diff -q --strip-trailing-cr" >>Makefile
 fi
 echo "FLAMBDA=$flambda" >> Makefile
+echo "AFL_INSTRUMENT=$afl_instrument" >> Makefile
 echo "MAX_TESTSUITE_DIR_RETRIES=$max_testsuite_dir_retries" >> Makefile
 
 
@@ -1890,6 +1894,11 @@ else
   inf "        using flambda middle-end . yes"
   else
   inf "        using flambda middle-end . no"
+  fi
+  if test "$afl_instrument" = "true"; then
+  inf "        afl-fuzz always enabled .. yes"
+  else
+  inf "        afl-fuzz always enabled .. no"
   fi
 fi
 

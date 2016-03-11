@@ -31,7 +31,7 @@ COBJS=startup_aux.o startup.o \
   gc_ctrl.o terminfo.o md5.o obj.o lexing.o printexc.o callback.o weak.o \
   compact.o finalise.o custom.o $(UNIX_OR_WIN32).o backtrace_prim.o \
   backtrace.o \
-  natdynlink.o debugger.o meta.o dynlink.o clambda_checks.o
+  natdynlink.o debugger.o meta.o dynlink.o clambda_checks.o afl.o
 
 ASMOBJS=$(ARCH).o
 
