@@ -31,6 +31,10 @@ Build system:
 Bug fixes:
 - PR#7112: Aliased arguments ignored for equality of module types
 
+Compilers:
+- PR#7023, GPR#336: Better unboxing strategy
+  (Alain Frisch, Pierre Chambart)
+
 
 OCaml 4.03.0:
 -------------
