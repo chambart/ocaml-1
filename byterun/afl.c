@@ -2,7 +2,10 @@
 
 #ifdef _WIN32
 
-void caml_maybe_setup_afl () {}
+CAMLprim value caml_setup_afl (value unit)
+{
+  return Val_unit;
+}
 
 #else
 
@@ -12,6 +15,13 @@ void caml_maybe_setup_afl () {}
 #include <sys/wait.h>
 #include <stdio.h>
 #include "caml/misc.h"
+#include "caml/mlvalues.h"
+
+static int afl_initialised = 0;
+
+/* afl uses abnormal termination (SIGABRT) to check whether
+   to count a testcase as "crashing" */
+extern int caml_abort_on_uncaught_exn;
 
 /* Values used by the instrumentation logic (see cmmgen.ml) */
 static unsigned char afl_area_initial[1 << 16];
@@ -36,13 +46,19 @@ static uint32_t afl_read()
   return msg;
 }
 
-void caml_maybe_setup_afl()
+CAMLprim value caml_setup_afl(value unit)
 {
+  if (afl_initialised) return Val_unit;
+  afl_initialised = 1;
+
   char* shm_id_str = getenv("__AFL_SHM_ID");
   if (shm_id_str == NULL) {
     /* Not running under afl-fuzz, continue as normal */
-    return;
+    return Val_unit;
   }
+
+  /* if afl-fuzz is attached, we want it to know about uncaught exceptions */
+  caml_abort_on_uncaught_exn = 1;
 
   char* shm_id_end;
   long int shm_id = strtol(shm_id_str, &shm_id_end, 10);
@@ -50,7 +66,8 @@ void caml_maybe_setup_afl()
     caml_fatal_error("afl-fuzz: bad shm id");
 
   caml_afl_area_ptr = shmat((int)shm_id, NULL, 0);
-  if (caml_afl_area_ptr == (void*)-1) caml_fatal_error("afl-fuzz: could not attach shm area");
+  if (caml_afl_area_ptr == (void*)-1)
+    caml_fatal_error("afl-fuzz: could not attach shm area");
 
   /* poke the bitmap so that afl-fuzz knows we exist, even if the
      application has sparse instrumentation */
@@ -67,7 +84,7 @@ void caml_maybe_setup_afl()
       /* Run the program */
       close(FORKSRV_FD_READ);
       close(FORKSRV_FD_WRITE);
-      return;
+      return Val_unit;
     }
 
     /* As long as the child keeps raising SIGSTOP, we re-use the same process */
@@ -76,7 +93,8 @@ void caml_maybe_setup_afl()
 
       int status;
       /* WUNTRACED means wait until termination or SIGSTOP */
-      if (waitpid(child_pid, &status, WUNTRACED) < 0) caml_fatal_error("afl-fuzz: waitpid failed");
+      if (waitpid(child_pid, &status, WUNTRACED) < 0)
+        caml_fatal_error("afl-fuzz: waitpid failed");
       afl_write((uint32_t)status);
 
       uint32_t was_killed = afl_read();
@@ -85,7 +103,8 @@ void caml_maybe_setup_afl()
         if (was_killed) {
           /* we saw the child stop, but since then afl-fuzz killed it.
              we should wait for it before forking another child */
-          if (waitpid(child_pid, &status, 0) < 0) caml_fatal_error("afl-fuzz: waitpid failed");
+          if (waitpid(child_pid, &status, 0) < 0)
+            caml_fatal_error("afl-fuzz: waitpid failed");
         } else {
           kill(child_pid, SIGCONT);
         }

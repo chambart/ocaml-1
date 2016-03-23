@@ -199,12 +199,14 @@ signals.c: ../byterun/signals.c
 	ln -s ../byterun/signals.c signals.c
 debugger.c: ../byterun/debugger.c
 	ln -s ../byterun/debugger.c debugger.c
+afl.c: ../byterun/afl.c
+	ln -s ../byterun/afl.c afl.c
 
 LINKEDFILES=misc.c freelist.c major_gc.c minor_gc.c memory.c alloc.c array.c \
   compare.c ints.c floats.c str.c io.c extern.c intern.c hash.c sys.c \
   parsing.c gc_ctrl.c terminfo.c md5.c obj.c lexing.c printexc.c callback.c \
   weak.c compact.c finalise.c meta.c custom.c main.c globroots.c \
-  $(UNIX_OR_WIN32).c dynlink.c signals.c debugger.c
+  $(UNIX_OR_WIN32).c dynlink.c signals.c debugger.c afl.c
 
 clean::
 	rm -f $(LINKEDFILES)

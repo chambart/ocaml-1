@@ -87,7 +87,6 @@ void (*caml_termination_hook)(void *) = NULL;
 extern value caml_start_program (void);
 extern void caml_init_ieee_floats (void);
 extern void caml_init_signals (void);
-extern void caml_maybe_setup_afl (void);
 
 #ifdef _MSC_VER
 
@@ -104,7 +103,6 @@ void caml_main(char **argv)
   value res;
   char tos;
 
-  caml_maybe_setup_afl();
   caml_init_frame_descriptors();
   caml_init_ieee_floats();
 #ifdef _MSC_VER
