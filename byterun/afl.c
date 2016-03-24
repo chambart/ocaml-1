@@ -2,6 +2,8 @@
 
 #ifdef _WIN32
 
+#include "caml/mlvalues.h"
+
 CAMLprim value caml_setup_afl (value unit)
 {
   return Val_unit;
