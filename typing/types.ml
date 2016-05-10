@@ -315,4 +315,5 @@ type label_description =
     lbl_private: private_flag;          (* Read-only field? *)
     lbl_loc: Location.t;
     lbl_attributes: Parsetree.attributes;
+    lbl_type_path: Path.t;
    }

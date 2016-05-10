@@ -864,7 +864,8 @@ and transl_exp0 e =
   | Texp_field(arg, _, lbl) ->
       let access =
         match lbl.lbl_repres with
-          Record_regular | Record_inlined _ -> Pfield (lbl.lbl_pos, None)
+          Record_regular | Record_inlined _ ->
+            Pfield (lbl.lbl_pos, Some lbl.lbl_type_path)
         | Record_float -> Pfloatfield lbl.lbl_pos
         | Record_extension -> pfield (lbl.lbl_pos + 1)
       in

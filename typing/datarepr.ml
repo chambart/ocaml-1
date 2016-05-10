@@ -168,9 +168,12 @@ let dummy_label =
     lbl_private = Public;
     lbl_loc = Location.none;
     lbl_attributes = [];
+    lbl_type_path =
+      (* Avoid increasing ident counter *)
+      Path.Pident(Ident.create_persistent "dummy");
   }
 
-let label_descrs ty_res lbls repres priv =
+let label_descrs ty_path ty_res lbls repres priv =
   let all_labels = Array.make (List.length lbls) dummy_label in
   let rec describe_labels num = function
       [] -> []
@@ -186,6 +189,7 @@ let label_descrs ty_res lbls repres priv =
             lbl_private = priv;
             lbl_loc = l.ld_loc;
             lbl_attributes = l.ld_attributes;
+            lbl_type_path = ty_path;
           } in
         all_labels.(num) <- lbl;
         (l.ld_id, lbl) :: describe_labels (num+1) rest in
@@ -216,6 +220,6 @@ let constructors_of_type ty_path decl =
 let labels_of_type ty_path decl =
   match decl.type_kind with
   | Type_record(labels, rep) ->
-      label_descrs (newgenconstr ty_path decl.type_params)
+      label_descrs ty_path (newgenconstr ty_path decl.type_params)
         labels rep decl.type_private
   | Type_variant _ | Type_abstract | Type_open -> []
