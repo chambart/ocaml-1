@@ -138,7 +138,8 @@ let primitive ppf = function
       fprintf ppf "makeblock %i%a" tag block_shape shape
   | Pmakeblock(tag, Mutable, shape) ->
       fprintf ppf "makemutable %i%a" tag block_shape shape
-  | Pfield n -> fprintf ppf "field %i" n
+  | Pfield (n, None) -> fprintf ppf "field %i" n
+  | Pfield (n, Some path) -> fprintf ppf "field(%s) %i" (Path.name path) n
   | Psetfield(n, ptr, init) ->
       let instr =
         match ptr with

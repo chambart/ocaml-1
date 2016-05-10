@@ -52,7 +52,7 @@ type primitive =
   | Psetglobal of Ident.t
   (* Operations on heap blocks *)
   | Pmakeblock of int * mutable_flag * block_shape
-  | Pfield of int
+  | Pfield of int * Path.t option
   | Psetfield of int * immediate_or_pointer * initialization_or_assignment
   | Pfloatfield of int
   | Psetfloatfield of int * initialization_or_assignment
@@ -264,6 +264,8 @@ and lambda_event_kind =
 type program =
   { code : lambda;
     main_module_block_size : int; }
+
+let pfield i = Pfield(i, None)
 
 let const_unit = Const_pointer 0
 
@@ -505,7 +507,7 @@ let rec transl_normal_path = function
     Pident id ->
       if Ident.global id then Lprim(Pgetglobal id, []) else Lvar id
   | Pdot(p, _s, pos) ->
-      Lprim(Pfield pos, [transl_normal_path p])
+      Lprim(pfield pos, [transl_normal_path p])
   | Papply _ ->
       fatal_error "Lambda.transl_path"
 

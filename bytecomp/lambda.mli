@@ -55,7 +55,7 @@ type primitive =
   | Psetglobal of Ident.t
   (* Operations on heap blocks *)
   | Pmakeblock of int * mutable_flag * block_shape
-  | Pfield of int
+  | Pfield of int * Path.t option
   | Psetfield of int * immediate_or_pointer * initialization_or_assignment
   | Pfloatfield of int
   | Psetfloatfield of int * initialization_or_assignment
@@ -332,3 +332,5 @@ val raise_kind: raise_kind -> string
 val lam_of_loc : loc_kind -> Location.t -> lambda
 
 val reset: unit -> unit
+
+val pfield: int -> primitive

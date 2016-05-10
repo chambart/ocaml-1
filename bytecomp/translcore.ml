@@ -149,8 +149,8 @@ let comparisons_table = create_hashtable 11 [
 let primitives_table = create_hashtable 57 [
   "%identity", Pidentity;
   "%ignore", Pignore;
-  "%field0", Pfield 0;
-  "%field1", Pfield 1;
+  "%field0", pfield 0;
+  "%field1", pfield 1;
   "%setfield0", Psetfield(0, Pointer, Assignment);
   "%makeblock", Pmakeblock(0, Immutable, None);
   "%makemutable", Pmakeblock(0, Mutable, None);
@@ -864,9 +864,9 @@ and transl_exp0 e =
   | Texp_field(arg, _, lbl) ->
       let access =
         match lbl.lbl_repres with
-          Record_regular | Record_inlined _ -> Pfield lbl.lbl_pos
+          Record_regular | Record_inlined _ -> Pfield (lbl.lbl_pos, None)
         | Record_float -> Pfloatfield lbl.lbl_pos
-        | Record_extension -> Pfield (lbl.lbl_pos + 1)
+        | Record_extension -> pfield (lbl.lbl_pos + 1)
       in
       Lprim(access, [transl_exp arg])
   | Texp_setfield(arg, _, lbl, newval) ->
@@ -953,7 +953,7 @@ and transl_exp0 e =
   | Texp_new (cl, {Location.loc=loc}, _) ->
       Lapply{ap_should_be_tailcall=false;
              ap_loc=loc;
-             ap_func=Lprim(Pfield 0, [transl_path ~loc e.exp_env cl]);
+             ap_func=Lprim(pfield 0, [transl_path ~loc e.exp_env cl]);
              ap_args=[lambda_unit];
              ap_inlined=Default_inline;
              ap_specialised=Default_specialise}
@@ -1264,8 +1264,8 @@ and transl_record env all_labels repres lbl_expr_list opt_init_expr =
         for i = 0 to Array.length all_labels - 1 do
           let access =
             match all_labels.(i).lbl_repres with
-              Record_regular | Record_inlined _ -> Pfield i
-            | Record_extension -> Pfield (i + 1)
+              Record_regular | Record_inlined _ -> pfield i
+            | Record_extension -> pfield (i + 1)
             | Record_float -> Pfloatfield i in
           let field_kind =
             (* TODO recover the kind from the type of the original record *)

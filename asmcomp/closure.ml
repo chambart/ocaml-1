@@ -42,7 +42,7 @@ let rec split_list n l =
 let rec build_closure_env env_param pos = function
     [] -> Tbl.empty
   | id :: rem ->
-      Tbl.add id (Uprim(Pfield pos, [Uvar env_param], Debuginfo.none))
+      Tbl.add id (Uprim(pfield pos, [Uvar env_param], Debuginfo.none))
               (build_closure_env env_param (pos+1) rem)
 
 (* Auxiliary for accessing globals.  We change the name of the global
@@ -436,10 +436,10 @@ let simplif_prim_pure fpc p (args, approxs) dbg =
         (Uprim(p, args, dbg), Value_tuple (Array.of_list approxs))
       end
   (* Field access *)
-  | Pfield n, _, [ Value_const(Uconst_ref(_, Some (Uconst_block(_, l)))) ]
+  | Pfield (n, _), _, [ Value_const(Uconst_ref(_, Some (Uconst_block(_, l)))) ]
     when n < List.length l ->
       make_const (List.nth l n)
-  | Pfield n, [ Uprim(Pmakeblock _, ul, _) ], [approx]
+  | Pfield (n, _), [ Uprim(Pmakeblock _, ul, _) ], [approx]
     when n < List.length ul ->
       (List.nth ul n, field_approx n approx)
   (* Strings *)
@@ -727,7 +727,7 @@ let check_constant_result lam ulam approx =
           let glb =
             Uprim(Pgetglobal (Ident.create_persistent id), [], Debuginfo.none)
           in
-          Uprim(Pfield i, [glb], Debuginfo.none), approx
+          Uprim(pfield i, [glb], Debuginfo.none), approx
       end
   | _ -> (ulam, approx)
 
@@ -950,9 +950,9 @@ let rec close fenv cenv = function
       check_constant_result lam
                             (getglobal id)
                             (Compilenv.global_approx id)
-  | Lprim(Pfield n, [lam]) ->
+  | Lprim(Pfield (n, _), [lam]) ->
       let (ulam, approx) = close fenv cenv lam in
-      check_constant_result lam (Uprim(Pfield n, [ulam], Debuginfo.none))
+      check_constant_result lam (Uprim(pfield n, [ulam], Debuginfo.none))
                             (field_approx n approx)
   | Lprim(Psetfield(n, is_ptr, init), [Lprim(Pgetglobal id, []); lam]) ->
       let (ulam, approx) = close fenv cenv lam in

@@ -311,7 +311,7 @@ let comp_primitive p args =
   | Psetglobal id -> Ksetglobal id
   | Pintcomp cmp -> Kintcomp cmp
   | Pmakeblock(tag, _mut, _) -> Kmakeblock(List.length args, tag)
-  | Pfield n -> Kgetfield n
+  | Pfield (n, _) -> Kgetfield n
   | Psetfield(n, _ptr, _init) -> Ksetfield n
   | Pfloatfield n -> Kgetfloatfield n
   | Psetfloatfield (n, _init) -> Ksetfloatfield n

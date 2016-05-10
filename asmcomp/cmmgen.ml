@@ -1744,7 +1744,7 @@ and transl_prim_1 env p arg dbg =
   | Pignore ->
       return_unit(remove_unit (transl env arg))
   (* Heap operations *)
-  | Pfield n ->
+  | Pfield (n, _) ->
       get_field (transl env arg) n
   | Pfloatfield n ->
       let ptr = transl env arg in

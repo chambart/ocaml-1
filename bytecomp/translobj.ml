@@ -130,7 +130,7 @@ let transl_label_init_flambda f =
 let transl_store_label_init glob size f arg =
   assert(not Config.flambda);
   assert(!Clflags.native_code);
-  method_cache := Lprim(Pfield size, [Lprim(Pgetglobal glob, [])]);
+  method_cache := Lprim(pfield size, [Lprim(Pgetglobal glob, [])]);
   let expr = f arg in
   let (size, expr) =
     if !method_count = 0 then (size, expr) else

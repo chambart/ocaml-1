@@ -54,7 +54,7 @@ let mkappl (func, args) =
 let lsequence l1 l2 =
   if l2 = lambda_unit then l1 else Lsequence(l1, l2)
 
-let lfield v i = Lprim(Pfield i, [Lvar v])
+let lfield v i = Lprim(pfield i, [Lvar v])
 
 let transl_label l = share (Const_immstring l)
 
@@ -131,7 +131,7 @@ let rec build_object_init cl_table obj params inh_init obj_init cl =
       let envs, inh_init = inh_init in
       let env =
         match envs with None -> []
-        | Some envs -> [Lprim(Pfield (List.length inh_init + 1), [Lvar envs])]
+        | Some envs -> [Lprim(pfield (List.length inh_init + 1), [Lvar envs])]
       in
       ((envs, (obj_init, normalize_cl_path cl path)
         ::inh_init),
@@ -269,8 +269,8 @@ let rec build_class_init cla cstr super inh_init cl_init msubst top cl =
           let lpath = transl_path ~loc:cl.cl_loc cl.cl_env path in
           (inh_init,
            Llet (Strict, Pgenval, obj_init,
-                 mkappl(Lprim(Pfield 1, [lpath]), Lvar cla ::
-                        if top then [Lprim(Pfield 3, [lpath])] else []),
+                 mkappl(Lprim(pfield 1, [lpath]), Lvar cla ::
+                        if top then [Lprim(pfield 3, [lpath])] else []),
                  bind_super cla super cl_init))
       | _ ->
           assert false
@@ -522,7 +522,7 @@ let rec builtin_meths self env env2 body =
     | p when const_path p -> "const", [p]
     | Lprim(Parrayrefu _, [Lvar s; Lvar n]) when List.mem s self ->
         "var", [Lvar n]
-    | Lprim(Pfield n, [Lvar e]) when Ident.same e env ->
+    | Lprim(Pfield (n, _), [Lvar e]) when Ident.same e env ->
         "env", [Lvar env2; Lconst(Const_pointer n)]
     | Lsend(Self, met, Lvar s, [], _) when List.mem s self ->
         "meth", [met]
@@ -777,7 +777,7 @@ let transl_class ids cl_id pub_meths cl vflag =
     Lprim(Pmakeblock(0, Immutable, None),
           menv :: List.map (fun id -> Lvar id) !new_ids_init)
   and linh_envs =
-    List.map (fun (_, p) -> Lprim(Pfield 3, [transl_normal_path p]))
+    List.map (fun (_, p) -> Lprim(pfield 3, [transl_normal_path p]))
       (List.rev inh_init)
   in
   let make_envs lam =
@@ -794,7 +794,7 @@ let transl_class ids cl_id pub_meths cl vflag =
     List.filter
       (fun (_,path) -> List.mem (Path.head path) new_ids) inh_init in
   let inh_keys =
-    List.map (fun (_,p) -> Lprim(Pfield 1, [transl_normal_path p])) inh_paths in
+    List.map (fun (_,p) -> Lprim(pfield 1, [transl_normal_path p])) inh_paths in
   let lclass lam =
     Llet(Strict, Pgenval, class_init,
          Lfunction{kind = Curried; params = [cla];
