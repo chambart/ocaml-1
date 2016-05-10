@@ -85,6 +85,7 @@ let current_unit =
     ui_curry_fun = [];
     ui_apply_fun = [];
     ui_send_fun = [];
+    ui_counter = Misc.StringMap.empty;
     ui_force_link = false;
     ui_export_info = default_ui_export_info }
 
@@ -340,6 +341,13 @@ let need_apply_fun n =
 let need_send_fun n =
   if not (List.mem n current_unit.ui_send_fun) then
     current_unit.ui_send_fun <- n :: current_unit.ui_send_fun
+
+let need_counter name pos =
+  let n =
+    try max (Misc.StringMap.find name current_unit.ui_counter) pos with
+    | Not_found -> pos
+  in
+  current_unit.ui_counter <- Misc.StringMap.add name n current_unit.ui_counter
 
 (* Write the description of the current unit *)
 

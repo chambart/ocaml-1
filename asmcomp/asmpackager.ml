@@ -211,6 +211,11 @@ let build_package_cmx members cmxfile =
           union(List.map (fun info -> info.ui_apply_fun) units);
       ui_send_fun =
           union(List.map (fun info -> info.ui_send_fun) units);
+      ui_counter =
+        List.fold_left
+          (Misc.StringMap.union (fun _ a b -> Some (max a b)))
+          Misc.StringMap.empty
+          (List.map (fun info -> info.ui_counter) units);
       ui_force_link =
           List.exists (fun info -> info.ui_force_link) units;
       ui_export_info;

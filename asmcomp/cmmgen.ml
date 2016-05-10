@@ -721,9 +721,9 @@ let rec expr_size env = function
 
 (* Record application and currying functions *)
 
-let apply_function n =
+let apply_function_name n =
   Compilenv.need_apply_fun n; "caml_apply" ^ string_of_int n
-let curry_function n =
+let curry_function_name n =
   Compilenv.need_curry_fun n;
   if n >= 0
   then "caml_curry" ^ string_of_int n
@@ -1312,6 +1312,15 @@ let transl_int_switch arg low high cases default = match cases with
           (Array.of_list inters) store)
 
 
+let increment_counter path n =
+  let label = "caml_pfield_" ^ (Path.name path) in
+  Compilenv.need_counter label n;
+  bind (Printf.sprintf "counter_%i" n) (Cconst_symbol label) (fun v ->
+      Cop(Cstore (Word_int, Assignment),
+          [field_address v n;
+           Cop(Caddi,[Cconst_int 1;
+                      Cop(Cload Word_int, [field_address v n])])]))
+
 (* Auxiliary functions for optimizing "let" of boxed numbers (floats and
    boxed integers *)
 
@@ -1466,7 +1475,7 @@ let rec transl env e =
               transl_fundecls (pos + 3) rem
             else
               header ::
-              Cconst_symbol(curry_function f.arity) ::
+              Cconst_symbol(curry_function_name f.arity) ::
               int_const f.arity ::
               Cconst_symbol f.label ::
               transl_fundecls (pos + 4) rem in
@@ -1484,7 +1493,7 @@ let rec transl env e =
         Cop(Capply(typ_val, dbg), [get_field clos 0; transl env arg; clos]))
   | Ugeneric_apply(clos, args, dbg) ->
       let arity = List.length args in
-      let cargs = Cconst_symbol(apply_function arity) ::
+      let cargs = Cconst_symbol(apply_function_name arity) ::
         List.map (transl env) (args @ [clos]) in
       Cop(Capply(typ_val, dbg), cargs)
   | Usend(kind, met, obj, args, dbg) ->
@@ -1493,7 +1502,7 @@ let rec transl env e =
           Cop(Capply(typ_val, dbg), [get_field clos 0;obj;clos])
         else
           let arity = List.length args + 1 in
-          let cargs = Cconst_symbol(apply_function arity) :: obj ::
+          let cargs = Cconst_symbol(apply_function_name arity) :: obj ::
             (List.map (transl env) args) @ [clos] in
           Cop(Capply(typ_val, dbg), cargs)
       in
@@ -1744,8 +1753,13 @@ and transl_prim_1 env p arg dbg =
   | Pignore ->
       return_unit(remove_unit (transl env arg))
   (* Heap operations *)
-  | Pfield (n, _) ->
-      get_field (transl env arg) n
+  | Pfield (n, path) ->
+      let expr = get_field (transl env arg) n in
+      begin match path with
+      | None -> expr
+      | Some path ->
+          Csequence(increment_counter path n, expr)
+      end;
   | Pfloatfield n ->
       let ptr = transl env arg in
       box_float(
@@ -2609,7 +2623,7 @@ let emit_constant_closure ((_, global_symb) as symb) fundecls clos_vars cont =
           else
             Cint(infix_header pos) ::
             (closure_symbol f2) @
-            Csymbol_address(curry_function f2.arity) ::
+            Csymbol_address(curry_function_name f2.arity) ::
             cint_const f2.arity ::
             Csymbol_address f2.label ::
             emit_others (pos + 4) rem in
@@ -2622,7 +2636,7 @@ let emit_constant_closure ((_, global_symb) as symb) fundecls clos_vars cont =
         cint_const f1.arity ::
         emit_others 3 remainder
       else
-        Csymbol_address(curry_function f1.arity) ::
+        Csymbol_address(curry_function_name f1.arity) ::
         cint_const f1.arity ::
         Csymbol_address f1.label ::
         emit_others 4 remainder
@@ -2992,6 +3006,13 @@ let curry_function arity =
   then intermediate_curry_functions arity 0
   else [tuplify_function (-arity)]
 
+let counter_block name max =
+  let zeros =
+    Array.to_list
+      (Array.init (max + 1) (fun _index ->
+        Cint (Nativeint.of_int 0)))
+  in
+  Cdata (cdefine_symbol (name, Global) @ zeros)
 
 module IntSet = Set.Make(
   struct
@@ -3012,10 +3033,18 @@ let generic_functions shared units =
          List.fold_right IntSet.add ui.ui_curry_fun curry)
       (IntSet.empty,IntSet.empty,IntSet.empty)
       units in
+  let counters =
+    List.fold_left
+      (Misc.StringMap.union (fun _ a b -> Some (max a b)))
+      Misc.StringMap.empty
+      (List.map (fun info -> info.ui_counter) units)
+  in
   let apply = if shared then apply else IntSet.union apply default_apply in
   let accu = IntSet.fold (fun n accu -> apply_function n :: accu) apply [] in
   let accu = IntSet.fold (fun n accu -> send_function n :: accu) send accu in
-  IntSet.fold (fun n accu -> curry_function n @ accu) curry accu
+  let accu = IntSet.fold (fun n accu -> curry_function n @ accu) curry accu in
+  Misc.StringMap.fold (fun label max accu -> counter_block label max :: accu)
+    counters accu
 
 (* Generate the entry point *)
 

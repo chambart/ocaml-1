@@ -105,6 +105,7 @@ val need_apply_fun: int -> unit
 val need_send_fun: int -> unit
         (* Record the need of a currying (resp. application,
            message sending) function with the given arity *)
+val need_counter: string -> int -> unit
 
 val new_const_symbol : unit -> string
 val closure_symbol : Closure_id.t -> Symbol.t
