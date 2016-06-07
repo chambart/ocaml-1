@@ -327,7 +327,7 @@ let main () =
       in
       Compmisc.init_path true;
       Compmisc.with_ppf_dump ~file_prefix:target (fun ppf_dump ->
-        Asmlink.link ~ppf_dump (get_objfiles ~with_ocamlparam:true) target);
+        Asmlink.link ~ppf_dump ~backend (get_objfiles ~with_ocamlparam:true) target);
       Warnings.check_fatal ();
     end;
   with x ->
