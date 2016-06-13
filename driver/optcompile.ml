@@ -57,7 +57,7 @@ let flambda i backend typed =
         ~module_ident
         ~backend
         ~module_initializer:lam)
-    |> Asmgen.compile_implementation_flambda
+    |> Asmgen.compile_implementation_flambda ~opaque:!Clflags.opaque
       i.output_prefix ~required_globals ~backend ~ppf_dump:i.ppf_dump;
     Compilenv.save_unit_info (cmx i))
 
