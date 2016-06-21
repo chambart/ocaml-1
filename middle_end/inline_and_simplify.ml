@@ -1202,22 +1202,42 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
        as true), we can drop the if and replace it by a sequence.
        if arg is not effectful we can also drop it. *)
     simplify_free_variable env arg ~f:(fun env arg arg_approx ->
-      begin match arg_approx.descr with
-      | Value_constptr 0 | Value_int 0 ->  (* Constant [false]: keep [ifnot] *)
-        let ifnot, r = simplify env r ifnot in
-        ifnot, R.map_benefit r B.remove_branch
-      | Value_constptr _ | Value_int _
-      | Value_block _ ->  (* Constant [true]: keep [ifso] *)
-        let ifso, r = simplify env r ifso in
-        ifso, R.map_benefit r B.remove_branch
-      | _ ->
-        let env = E.inside_branch env in
-        let ifso, r = simplify env r ifso in
+      let as_const_bool = match arg_approx.descr with
+        | Value_constptr 0 | Value_int 0 ->  (* Constant [false]: keep [ifnot] *)
+          Some false
+        | Value_constptr _ | Value_int _
+        | Value_block _ ->  (* Constant [true]: keep [ifso] *)
+          Some true
+        | _ ->
+          None
+      in
+      let take_branch b branch =
+        match E.if_taken env arg b, as_const_bool with
+        | None, _ ->
+          Format.printf "remove if %b %a@." b Variable.print arg;
+          None
+        | _, Some const when b <> const ->
+          None
+        | Some env, _ ->
+          Some (branch, env)
+      in
+      let ifso_taken = take_branch true ifso in
+      let ifnot_taken = take_branch false ifnot in
+      begin match ifso_taken, ifnot_taken with
+      | None, None ->
+        Flambda.Proved_unreachable, R.map_benefit r B.remove_branch
+      | Some (branch, env), None | None, Some (branch, env) ->
+        let branch, r = simplify env r branch in
+        branch, R.map_benefit r B.remove_branch
+      | Some (_, ifso_env), Some (_, ifnot_env) ->
+        let ifso_env = E.inside_branch ifso_env in
+        let ifso, r = simplify ifso_env r ifso in
         let ifso_approx = R.approx r in
-        let ifnot, r = simplify env r ifnot in
+        let ifnot_env = E.inside_branch ifnot_env in
+        let ifnot, r = simplify ifnot_env r ifnot in
         let ifnot_approx = R.approx r in
         If_then_else (arg, ifso, ifnot),
-          ret r (A.meet ifso_approx ifnot_approx)
+        ret r (A.meet ifso_approx ifnot_approx)
       end)
   | While (cond, body) ->
     let cond, r = simplify env r cond in

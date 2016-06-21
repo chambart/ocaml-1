@@ -47,6 +47,7 @@ module Env = struct
     inlining_stats_closure_stack : Inlining_stats.Closure_stack.t;
     inlined_debuginfo : Debuginfo.t;
     branch : (Numbers.Int.Set.t * Numbers.Int.Set.t) Variable.Map.t;
+    if_ : bool Variable.Map.t;
   }
 
   let create ~never_inline ~backend ~round =
@@ -71,6 +72,7 @@ module Env = struct
         Inlining_stats.Closure_stack.create ();
       inlined_debuginfo = Debuginfo.none;
       branch = Variable.Map.empty;
+      if_ = Variable.Map.empty;
     }
 
   let get_branch env var =
@@ -79,7 +81,7 @@ module Env = struct
     | s1, s2 -> Set (s1, s2)
 
   let branch_taken env var ~block b =
-    let taken =match get_branch env var with
+    let taken = match get_branch env var with
       | Set (block_set, int_set) ->
           if block then
             Numbers.Int.Set.mem b block_set
@@ -98,6 +100,16 @@ module Env = struct
       Some { env with branch = Variable.Map.add var sets env.branch }
     else
       None
+
+  let if_taken env var b =
+    match Variable.Map.find var env.if_ with
+    | already_taken ->
+        if b = already_taken then
+          Some env
+        else
+          None
+    | exception Not_found ->
+      Some { env with if_ = Variable.Map.add var b env.if_ }
 
   let backend t = t.backend
   let round t = t.round

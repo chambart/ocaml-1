@@ -24,6 +24,7 @@ module Env : sig
   type t
 
   val branch_taken : t -> Variable.t -> block:bool -> int -> t option
+  val if_taken : t -> Variable.t -> bool -> t option
 
   (** Create a new environment.  If [never_inline] is true then the returned
       environment will prevent [Inline_and_simplify] from inlining.  The
