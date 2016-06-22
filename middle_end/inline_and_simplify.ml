@@ -1223,6 +1223,20 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
       in
       let ifso_taken = take_branch true ifso in
       let ifnot_taken = take_branch false ifnot in
+      let enforce_approximation env b v =
+        match (E.find_exn env b).relation, v with
+        | None, _ -> env
+        | Some (Eq (v1, v2)), true
+        | Some (Neq (v1, v2)), false -> begin
+            match E.find_opt env v1, E.find_opt env v2 with
+            | None, _ | _, None -> env
+            | Some a1, Some a2 ->
+              let a1, a2 = A.meet a1 a2 in
+              let env = E.improve_approximation env v1 a1 in
+              E.improve_approximation env v2 a2
+          end
+        | Some _, _ -> env
+      in
       begin match ifso_taken, ifnot_taken with
       | None, None ->
         Flambda.Proved_unreachable, R.map_benefit r B.remove_branch
@@ -1230,14 +1244,26 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
         let branch, r = simplify env r branch in
         branch, R.map_benefit r B.remove_branch
       | Some (_, ifso_env), Some (_, ifnot_env) ->
-        let ifso_env = E.inside_branch ifso_env in
+        let ifso_env =
+          enforce_approximation
+            (E.inside_branch ifso_env)
+            arg true
+        in
+        let ifnot_env =
+          let ifnot_env =
+            let arg_approx = A.value_constptr 0 in
+            E.improve_approximation ifnot_env arg arg_approx
+          in
+          enforce_approximation
+            (E.inside_branch ifnot_env)
+            arg false
+        in
         let ifso, r = simplify ifso_env r ifso in
         let ifso_approx = R.approx r in
-        let ifnot_env = E.inside_branch ifnot_env in
         let ifnot, r = simplify ifnot_env r ifnot in
         let ifnot_approx = R.approx r in
         If_then_else (arg, ifso, ifnot),
-        ret r (A.meet ifso_approx ifnot_approx)
+        ret r (A.join ifso_approx ifnot_approx)
       end)
   | While (cond, body) ->
     let cond, r = simplify env r cond in
@@ -1336,7 +1362,7 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
             acc, R.map_benefit r B.remove_branch, set
           | Some env ->
             let lam, r = simplify env r v in
-            ((i, lam)::acc, R.set_approx r (A.meet (R.approx r) approx), set)
+            ((i, lam)::acc, R.set_approx r (A.join (R.approx r) approx), set)
         in
         let r = R.set_approx r A.value_bottom in
         let consts, r, numconsts = List.fold_right (f false) sw.consts ([], r, sw.numconsts) in
@@ -1348,7 +1374,7 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
           | Some l ->
             let approx = R.approx r in
             let l, r = simplify env r l in
-            Some l, R.set_approx r (A.meet (R.approx r) approx)
+            Some l, R.set_approx r (A.join (R.approx r) approx)
         in
         (* match consts, blocks, failaction with *)
         (* | [], [_, b], None | [_, b], [], None -> b, r *)

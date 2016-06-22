@@ -226,4 +226,18 @@ let primitive (p : Lambda.primitive) (args, approxs) expr dbg ~size_int
       | Float ->
         expr, A.value_any_float, C.Benefit.zero
       | Other ->
-        expr, A.value_unknown Other, C.Benefit.zero
+        match p with
+        | Pintcomp Ceq -> begin
+            match args with
+            | [a1; a2] ->
+              expr, A.value_bool_relation (Eq (a1, a2)), C.Benefit.zero
+            | _ -> assert false
+          end
+        | Pintcomp Cneq -> begin
+            match args with
+            | [a1; a2] ->
+              expr, A.value_bool_relation (Neq (a1, a2)), C.Benefit.zero
+            | _ -> assert false
+          end
+        | _ ->
+          expr, A.value_unknown Other, C.Benefit.zero

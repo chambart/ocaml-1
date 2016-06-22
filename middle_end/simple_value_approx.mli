@@ -34,6 +34,10 @@ type unknown_because_of =
   | Unresolved_symbol of Symbol.t
   | Other
 
+type relation =
+  | Eq of Variable.t * Variable.t
+  | Neq of Variable.t * Variable.t
+
 (** A value of type [t] corresponds to an "approximation" of the result of
     a computation in the program being compiled.  That is to say, it
     represents what knowledge we have about such a result at compile time.
@@ -114,6 +118,7 @@ type t = private {
   descr : descr;
   var : Variable.t option;
   symbol : (Symbol.t * int option) option;
+  relation : relation option;
 }
 
 and descr = private
@@ -204,6 +209,7 @@ val value_extern : Export_id.t -> t
 val value_symbol : Symbol.t -> t
 val value_bottom : t
 val value_unresolved : Symbol.t -> t
+val value_bool_relation : relation -> t
 
 (** Construct a closure approximation given the approximation of the
     corresponding set of closures and the closure ID of the closure to
@@ -266,7 +272,7 @@ val equal_boxed_int : 'a boxed_int -> 'a -> 'b boxed_int -> 'b -> bool
 
 (* CR-soon mshinwell for pchambart: Add comment describing semantics.  (Maybe
    we should move the comment from the .ml file into here.) *)
-val meet : t -> t -> t
+val join : t -> t -> t
 
 (** An approximation is "known" iff it is not [Value_unknown]. *)
 val known : t -> bool
@@ -409,3 +415,5 @@ val check_approx_for_float : t -> float option
 
 (** Returns the value if it can be proved to be a constant float array *)
 val float_array_as_constant : value_float_array -> float list option
+
+val meet : t -> t -> t * t

@@ -33,10 +33,15 @@ type unknown_because_of =
   | Unresolved_symbol of Symbol.t
   | Other
 
+type relation =
+  | Eq of Variable.t * Variable.t
+  | Neq of Variable.t * Variable.t
+
 type t = {
   descr : descr;
   var : Variable.t option;
   symbol : (Symbol.t * int option) option;
+  relation : relation option;
 }
 
 and descr =
@@ -152,7 +157,7 @@ and print ppf { descr; var; symbol; } =
     Variable.print_opt var
     print symbol
 
-let approx descr = { descr; var = None; symbol = None }
+let approx descr = { descr; var = None; symbol = None; relation = None }
 
 let augment_with_variable t var = { t with var = Some var }
 let augment_with_symbol t symbol = { t with symbol = Some (symbol, None) }
@@ -206,12 +211,18 @@ let value_float f = approx (Value_float (Some f))
 let value_any_float = approx (Value_float None)
 let value_boxed_int bi i = approx (Value_boxed_int (bi,i))
 
+let value_bool_relation relation =
+  { descr = Value_unknown Other;
+    var = None; symbol = None;
+    relation = Some relation }
+
 let value_closure ?closure_var ?set_of_closures_var ?set_of_closures_symbol
       value_set_of_closures closure_id =
   let approx_set_of_closures =
     { descr = Value_set_of_closures value_set_of_closures;
       var = set_of_closures_var;
       symbol = Misc.may_map (fun s -> s, None) set_of_closures_symbol;
+      relation = None;
     }
   in
   let value_closure =
@@ -222,6 +233,7 @@ let value_closure ?closure_var ?set_of_closures_var ?set_of_closures_symbol
   { descr = Value_closure value_closure;
     var = closure_var;
     symbol = None;
+    relation = None;
   }
 
 let create_value_set_of_closures
@@ -265,6 +277,7 @@ let value_set_of_closures ?set_of_closures_var value_set_of_closures =
   { descr = Value_set_of_closures value_set_of_closures;
     var = set_of_closures_var;
     symbol = None;
+    relation = None;
   }
 
 let value_block t b = approx (Value_block (t, b))
@@ -582,7 +595,7 @@ let equal_boxed_int (type t1) (type t2)
    rewriting [Project_var] and [Project_closure] constructions
    in [Flambdainline.loop]
 *)
-let rec meet_descr d1 d2 = match d1, d2 with
+let rec join_descr d1 d2 = match d1, d2 with
   | Value_int i, Value_int j when i = j ->
       d1
   | Value_constptr i, Value_constptr j when i = j ->
@@ -598,10 +611,10 @@ let rec meet_descr d1 d2 = match d1, d2 with
       d1
   | Value_block (tag1, a1), Value_block (tag2, a2)
     when tag1 = tag2 && Array.length a1 = Array.length a2 ->
-      Value_block (tag1, Array.mapi (fun i v -> meet v a2.(i)) a1)
+      Value_block (tag1, Array.mapi (fun i v -> join v a2.(i)) a1)
   | _ -> Value_unknown Other
 
-and meet a1 a2 =
+and join a1 a2 =
   match a1, a2 with
   | { descr = Value_bottom }, a
   | a, { descr = Value_bottom } -> a
@@ -626,9 +639,22 @@ and meet a1 a2 =
               | _ -> None
             else None
       in
-      { descr = meet_descr a1.descr a2.descr;
+      let relation =
+        match a1.relation, a2.relation with
+        | None, _ | _, None -> None
+        | Some r1, Some r2 ->
+          (* CR pchambart: implement a real relation equality
+             instead of the polymorphic one *)
+          if r1 = r2 then
+            Some r1
+          else
+            None
+      in
+      { descr = join_descr a1.descr a2.descr;
         var;
-        symbol }
+        symbol;
+        relation;
+      }
 
 (* Given a set-of-closures approximation and a closure ID, apply any
    freshening specified in the approximation to the closure ID, and return
@@ -776,3 +802,18 @@ let float_array_as_constant (t:value_float_array) : float list option =
         | Value_extern _ | Value_boxed_int _ | Value_symbol _)
         -> None)
       contents (Some [])
+
+let meet t1 t2 =
+  let descr1, descr2 =
+    match t1.descr, t2.descr with
+    | ((Value_float _ | Value_int _ | Value_char _ | Value_constptr _
+       | Value_boxed_int _) as descr), _
+    | _, ((Value_float _ | Value_int _ | Value_char _ | Value_constptr _
+          | Value_boxed_int _) as descr) ->
+      descr, descr
+    | descr1, descr2 ->
+      (* TODO: be more precise for other cases like blocks, closures, ... *)
+      descr1, descr2
+  in
+  (* TODO: aliases and symbols *)
+  { t1 with descr = descr1 }, { t2 with descr = descr2 }

@@ -154,6 +154,17 @@ module Env = struct
   let add t var approx = add_internal t var approx ~scope:Current
   let add_outer_scope t var approx = add_internal t var approx ~scope:Outer
 
+  let improve_approximation t var approx =
+    match Variable.Map.find var t.approx with
+    | exception Not_found ->
+      Misc.fatal_errorf "Env.find_with_scope_exn: Unbound variable \
+          %a@.%s@. Environment: %a@."
+        Variable.print var
+        (Printexc.raw_backtrace_to_string (Printexc.get_callstack max_int))
+        print t
+    | (scope, _approx) ->
+      { t with approx = Variable.Map.add var (scope, approx) t.approx }
+
   let add_mutable t mut_var approx =
     { t with approx_mutable =
         Mutable_variable.Map.add mut_var approx t.approx_mutable;
