@@ -1251,12 +1251,15 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
         in
         let ifnot_env =
           let ifnot_env =
-            let arg_approx = A.value_constptr 0 in
-            E.improve_approximation ifnot_env arg arg_approx
+            enforce_approximation
+              (E.inside_branch ifnot_env)
+              arg false
           in
-          enforce_approximation
-            (E.inside_branch ifnot_env)
-            arg false
+          let arg_approx =
+            A.replace_description (E.find_exn env arg)
+              (A.value_constptr 0).descr
+          in
+          E.improve_approximation ifnot_env arg arg_approx
         in
         let ifso, r = simplify ifso_env r ifso in
         let ifso_approx = R.approx r in
