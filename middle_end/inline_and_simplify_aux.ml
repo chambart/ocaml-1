@@ -98,6 +98,10 @@ module Env = struct
 
   let mem t var = Variable.Map.mem var t.approx
 
+  let valid_alias t (var, env_id) =
+    Env_id.equal env_id t.id &&
+    mem t var
+
   let add_internal t var (approx : Simple_value_approx.t) ~scope =
     let approx =
       (* The semantics of this [match] are what preserve the property
@@ -105,8 +109,9 @@ module Env = struct
          [var] is mem on an approximation (amongst many possible [var]s),
          it is the one with the outermost scope. *)
       match approx.var with
-      | Some var when mem t var -> approx
-      | _ -> Simple_value_approx.augment_with_variable approx var
+      | Some alias when valid_alias t alias ->
+          approx
+      | _ -> Simple_value_approx.augment_with_variable approx (var, t.id)
     in
     { t with approx = Variable.Map.add var (scope, approx) t.approx }
 
@@ -529,7 +534,7 @@ let prepare_to_simplify_set_of_closures ~env
           in
           match
             A.simplify_var_to_var_using_env (E.find_exn env var)
-              ~is_present_in_env:(fun var -> E.mem env var)
+              ~is_present_in_env:(fun var -> E.valid_alias env var)
           with
           | None -> var
           | Some var -> var
@@ -559,7 +564,7 @@ let prepare_to_simplify_set_of_closures ~env
           let var =
             match
               A.simplify_var_to_var_using_env (E.find_exn env var)
-                ~is_present_in_env:(fun var -> E.mem env var)
+                ~is_present_in_env:(fun var -> E.valid_alias env var)
             with
             | None -> var
             | Some var -> var
@@ -633,7 +638,7 @@ let prepare_to_simplify_set_of_closures ~env
   let set_of_closures_env =
     Variable.Map.fold (fun closure _ env ->
         let approx =
-          A.value_closure ~closure_var:closure internal_value_set_of_closures
+          A.value_closure ~closure_var:(closure, E.id env) internal_value_set_of_closures
             (Closure_id.wrap closure)
         in
         E.add env closure approx

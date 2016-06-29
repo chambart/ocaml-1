@@ -148,7 +148,8 @@ let inline env r ~lhs_of_application
                   in
                   match t.A.var with
                   | Some v ->
-                    if (E.mem env v) then Inlining_cost.Benefit.remove_prim acc
+                    if (E.valid_alias env v) then
+                      Inlining_cost.Benefit.remove_prim acc
                     else acc
                   | None -> acc
                 with Not_found -> acc)

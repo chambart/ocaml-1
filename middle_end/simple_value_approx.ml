@@ -33,9 +33,11 @@ type unknown_because_of =
   | Unresolved_symbol of Symbol.t
   | Other
 
+type alias = Variable.t * Env_id.t
+
 type t = {
   descr : descr;
-  var : Variable.t option;
+  var : alias option;
   symbol : (Symbol.t * int option) option;
 }
 
@@ -147,9 +149,13 @@ and print ppf { descr; var; symbol; } =
     | Some (sym, Some field) ->
         Format.fprintf ppf "%a.(%i)" Symbol.print sym field
   in
+  let print_var ppf = function
+    | None -> Variable.print_opt ppf None
+    | Some (v, _env) -> Variable.print_opt ppf (Some v)
+  in
   Format.fprintf ppf "{ descr=%a var=%a symbol=%a }"
     print_descr descr
-    Variable.print_opt var
+    print_var var
     print symbol
 
 let approx descr = { descr; var = None; symbol = None }
@@ -426,7 +432,8 @@ let join_summaries summary ~replaced_by_var_or_symbol =
 let simplify_using_env t ~is_present_in_env flam =
   let replaced_by_var_or_symbol, flam =
     match t.var with
-    | Some var when is_present_in_env var -> true, Flambda.Var var
+    | Some ((var, _) as alias) when is_present_in_env alias ->
+        true, Flambda.Var var
     | _ ->
       match t.symbol with
       | Some (sym, None) -> true,
@@ -441,7 +448,7 @@ let simplify_using_env t ~is_present_in_env flam =
 let simplify_named_using_env t ~is_present_in_env named =
   let replaced_by_var_or_symbol, named =
     match t.var with
-    | Some var when is_present_in_env var ->
+    | Some ((var, _) as alias) when is_present_in_env alias ->
       true, Flambda.Expr (Var var)
     | _ ->
       match t.symbol with
@@ -455,7 +462,7 @@ let simplify_named_using_env t ~is_present_in_env named =
 
 let simplify_var_to_var_using_env t ~is_present_in_env =
   match t.var with
-  | Some var when is_present_in_env var -> Some var
+  | Some ((var, _) as alias) when is_present_in_env alias -> Some var
   | _ -> None
 
 let known t =
@@ -616,9 +623,9 @@ and meet ~really_import_approx a1 a2 =
       let var =
         match a1.var, a2.var with
         | None, _ | _, None -> None
-        | Some v1, Some v2 ->
-            if Variable.equal v1 v2
-            then Some v1
+        | Some (v1, env1), Some (v2, env2) ->
+            if Variable.equal v1 v2 && Env_id.equal env1 env2
+            then a1.var
             else None
       in
       let symbol =
@@ -663,7 +670,7 @@ type checked_approx_for_set_of_closures =
   | Unresolved of Symbol.t
   | Unknown
   | Unknown_because_of_unresolved_symbol of Symbol.t
-  | Ok of Variable.t option * value_set_of_closures
+  | Ok of alias option * value_set_of_closures
 
 let check_approx_for_set_of_closures t : checked_approx_for_set_of_closures =
   match t.descr with
@@ -683,7 +690,7 @@ let check_approx_for_set_of_closures t : checked_approx_for_set_of_closures =
 
 type strict_checked_approx_for_set_of_closures =
   | Wrong
-  | Ok of Variable.t option * value_set_of_closures
+  | Ok of alias option * value_set_of_closures
 
 let strict_check_approx_for_set_of_closures t
       : strict_checked_approx_for_set_of_closures =
@@ -697,7 +704,7 @@ type checked_approx_for_closure_allowing_unresolved =
   | Unresolved of Symbol.t
   | Unknown
   | Unknown_because_of_unresolved_symbol of Symbol.t
-  | Ok of value_closure * Variable.t option
+  | Ok of value_closure * alias option
           * Symbol.t option * value_set_of_closures
 
 let check_approx_for_closure_allowing_unresolved t
@@ -733,7 +740,7 @@ let check_approx_for_closure_allowing_unresolved t
 
 type checked_approx_for_closure =
   | Wrong
-  | Ok of value_closure * Variable.t option
+  | Ok of value_closure * alias option
           * Symbol.t option * value_set_of_closures
 
 let check_approx_for_closure t : checked_approx_for_closure =

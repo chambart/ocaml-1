@@ -107,6 +107,9 @@ module Env : sig
   (** Whether the environment has an approximation for the given variable. *)
   val mem : t -> Variable.t -> bool
 
+  (** Whether the alias information is usable in the environment *)
+  val valid_alias : t -> Simple_value_approx.alias -> bool
+
   (** Return the freshening that should be applied to variables when
       rewriting code (in [Inline_and_simplify], etc.) using the given
       environment. *)

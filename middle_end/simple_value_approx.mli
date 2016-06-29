@@ -34,6 +34,8 @@ type unknown_because_of =
   | Unresolved_symbol of Symbol.t
   | Other
 
+type alias = Variable.t * Env_id.t
+
 (** A value of type [t] corresponds to an "approximation" of the result of
     a computation in the program being compiled.  That is to say, it
     represents what knowledge we have about such a result at compile time.
@@ -112,7 +114,7 @@ type unknown_because_of =
 *)
 type t = private {
   descr : descr;
-  var : Variable.t option;
+  var : alias option;
   symbol : (Symbol.t * int option) option;
 }
 
@@ -212,8 +214,8 @@ val value_unresolved : Symbol.t -> t
     be used to access the closure value itself, so long as they are in
     scope at the proposed point of use. *)
 val value_closure
-   : ?closure_var:Variable.t
-  -> ?set_of_closures_var:Variable.t
+   : ?closure_var:alias
+  -> ?set_of_closures_var:alias
   -> ?set_of_closures_symbol:Symbol.t
   -> value_set_of_closures
   -> Closure_id.t
@@ -222,7 +224,7 @@ val value_closure
 (** Construct a set of closures approximation.  [set_of_closures_var] is as for
     the parameter of the same name in [value_closure], above. *)
 val value_set_of_closures
-   : ?set_of_closures_var:Variable.t
+   : ?set_of_closures_var:alias
   -> value_set_of_closures
   -> t
 
@@ -245,7 +247,7 @@ val make_const_boxed_int_named : 'i boxed_int -> 'i -> Flambda.named * t
 (** Augment an approximation with a given variable (see comment above).
     If the approximation was already augmented with a variable, the one
     passed to this function replaces it within the approximation. *)
-val augment_with_variable : t -> Variable.t -> t
+val augment_with_variable : t -> alias -> t
 
 (** Like [augment_with_variable], but for symbol information. *)
 val augment_with_symbol : t -> Symbol.t -> t
@@ -300,7 +302,7 @@ val simplify : t -> Flambda.t -> simplification_result
     will be accessible in the current environment. *)
 val simplify_using_env
    : t
-  -> is_present_in_env:(Variable.t -> bool)
+  -> is_present_in_env:(alias -> bool)
   -> Flambda.t
   -> simplification_result
 
@@ -308,7 +310,7 @@ val simplify_named : t -> Flambda.named -> simplification_result_named
 
 val simplify_named_using_env
    : t
-  -> is_present_in_env:(Variable.t -> bool)
+  -> is_present_in_env:(alias -> bool)
   -> Flambda.named
   -> simplification_result_named
 
@@ -317,7 +319,7 @@ val simplify_named_using_env
     in a [Some]), otherwise return [None]. *)
 val simplify_var_to_var_using_env
    : t
-  -> is_present_in_env:(Variable.t -> bool)
+  -> is_present_in_env:(alias -> bool)
   -> Variable.t option
 
 val simplify_var : t -> (Flambda.named * t) option
@@ -358,7 +360,7 @@ val freshen_and_check_closure_id
 
 type strict_checked_approx_for_set_of_closures =
   | Wrong
-  | Ok of Variable.t option * value_set_of_closures
+  | Ok of alias option * value_set_of_closures
 
 val strict_check_approx_for_set_of_closures
    : t
@@ -371,7 +373,7 @@ type checked_approx_for_set_of_closures =
   | Unknown_because_of_unresolved_symbol of Symbol.t
   (* In the [Ok] case, there may not be a variable associated with the set of
      closures; it might be out of scope. *)
-  | Ok of Variable.t option * value_set_of_closures
+  | Ok of (Variable.t * Env_id.t) option * value_set_of_closures
 
 (** Try to prove that a value with the given approximation may be used as a
     set of closures.  Values coming from external compilation units with
@@ -380,7 +382,7 @@ val check_approx_for_set_of_closures : t -> checked_approx_for_set_of_closures
 
 type checked_approx_for_closure =
   | Wrong
-  | Ok of value_closure * Variable.t option
+  | Ok of value_closure * alias option
           * Symbol.t option * value_set_of_closures
 
 (** Try to prove that a value with the given approximation may be used as a
@@ -395,7 +397,7 @@ type checked_approx_for_closure_allowing_unresolved =
   | Unresolved of Symbol.t
   | Unknown
   | Unknown_because_of_unresolved_symbol of Symbol.t
-  | Ok of value_closure * Variable.t option
+  | Ok of value_closure * alias option
           * Symbol.t option * value_set_of_closures
 
 (** As for [check_approx_for_closure], but values coming from external

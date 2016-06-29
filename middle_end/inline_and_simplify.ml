@@ -54,7 +54,7 @@ let simplify_free_variable_internal env original_var =
   let var =
     let approx = E.find_exn env var in
     match approx.var with
-    | Some var when E.mem env var -> var
+    | Some ((var, _) as alias) when E.valid_alias env alias -> var
     | Some _ | None -> var
   in
   (* CR-soon mshinwell: Should we update [r] when we *add* code?
@@ -142,7 +142,8 @@ let simplify_named_using_approx r lam approx =
 
 let simplify_using_approx_and_env env r original_lam approx =
   let lam, summary, approx =
-    A.simplify_using_env approx ~is_present_in_env:(E.mem env) original_lam
+    A.simplify_using_env approx ~is_present_in_env:(E.valid_alias env)
+      original_lam
   in
   let r =
     let r = ret r approx in
@@ -157,7 +158,7 @@ let simplify_using_approx_and_env env r original_lam approx =
 
 let simplify_named_using_approx_and_env env r original_named approx =
   let named, summary, approx =
-    A.simplify_named_using_env approx ~is_present_in_env:(E.mem env)
+    A.simplify_named_using_env approx ~is_present_in_env:(E.valid_alias env)
       original_named
   in
   let r =
@@ -240,7 +241,8 @@ let simplify_project_closure env r ~(project_closure : Flambda.project_closure)
       let projecting_from =
         match set_of_closures_var with
         | None -> None
-        | Some set_of_closures_var ->
+        | Some (set_of_closures_var, _) ->
+          (* CR pchambart: shoudln't this check for the validity ? *)
           let projection : Projection.t =
             Project_closure {
               set_of_closures = set_of_closures_var;
@@ -262,7 +264,8 @@ let simplify_project_closure env r ~(project_closure : Flambda.project_closure)
         | None ->
           let set_of_closures_var =
             match set_of_closures_var with
-            | Some set_of_closures_var' when E.mem env set_of_closures_var' ->
+            | Some set_of_closures_var'
+              when E.valid_alias env set_of_closures_var' ->
               set_of_closures_var
             | Some _ | None -> None
           in
@@ -340,7 +343,8 @@ let simplify_move_within_set_of_closures env r
             Expr (Var closure), ret r closure_approx
           else
             match set_of_closures_var with
-            | Some set_of_closures_var when E.mem env set_of_closures_var ->
+            | Some (set_of_closures_var, _ as alias)
+              when E.valid_alias env alias ->
               (* A variable bound to the set of closures is in scope,
                  meaning we can rewrite the [Move_within_set_of_closures] to a
                  [Project_closure]. *)
@@ -350,14 +354,15 @@ let simplify_move_within_set_of_closures env r
                 }
               in
               let approx =
-                A.value_closure ~set_of_closures_var value_set_of_closures
-                  move_to
+                A.value_closure ~set_of_closures_var:alias
+                  value_set_of_closures move_to
               in
               Project_closure project_closure, ret r approx
             | Some _ | None ->
               match set_of_closures_symbol with
               | Some set_of_closures_symbol ->
                 let set_of_closures_var = Variable.create "symbol" in
+                let alias = set_of_closures_var, E.id env in
                 let project_closure : Flambda.project_closure =
                   { set_of_closures = set_of_closures_var;
                     closure_id = move_to;
@@ -375,8 +380,8 @@ let simplify_move_within_set_of_closures env r
                     let1
                 in
                 let approx =
-                  A.value_closure ~set_of_closures_var ~set_of_closures_symbol
-                    value_set_of_closures move_to
+                  A.value_closure ~set_of_closures_var:alias
+                    ~set_of_closures_symbol value_set_of_closures move_to
                 in
                 Expr expr, ret r approx
               | None ->
@@ -712,7 +717,7 @@ and simplify_apply env r ~(apply : Flambda.apply) : Flambda.t * R.t =
                 }
               in
               let approx_for_surrogate =
-                A.value_closure ~closure_var:surrogate_var
+                A.value_closure ~closure_var:(surrogate_var, E.id env)
                   ?set_of_closures_var ?set_of_closures_symbol
                   value_set_of_closures surrogate
               in
