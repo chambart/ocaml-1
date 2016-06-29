@@ -525,7 +525,13 @@ let for_call_site ~env ~r ~(function_decls : Flambda.function_declarations)
     }
   in
   let original_r =
-    R.set_approx (R.seen_direct_application r) (A.value_unknown Other)
+    let approx =
+      try
+        Closure_id.Map.find closure_id_being_applied
+          value_set_of_closures.return_approximations
+      with Not_found -> assert false
+    in
+    R.set_approx (R.seen_direct_application r) approx
   in
   if function_decl.stub then
     let body, r =

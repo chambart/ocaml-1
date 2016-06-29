@@ -153,6 +153,7 @@ and value_set_of_closures = private {
   (* Any freshening that has been applied to [function_decls]. *)
   freshening : Freshening.Project_var.t;
   direct_call_surrogates : Closure_id.t Closure_id.Map.t;
+  return_approximations : t Closure_id.Map.t;
 }
 
 and value_float_array_contents =

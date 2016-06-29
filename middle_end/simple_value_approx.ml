@@ -71,6 +71,7 @@ and value_set_of_closures = {
   specialised_args : Flambda.specialised_to Variable.Map.t;
   freshening : Freshening.Project_var.t;
   direct_call_surrogates : Closure_id.t Closure_id.Map.t;
+  return_approximations : t Closure_id.Map.t;
 }
 
 and value_float_array_contents =
@@ -252,6 +253,10 @@ let create_value_set_of_closures
           Inlining_cost.lambda_smaller' function_decl.body ~than:max_size)
         function_decls.funs)
   in
+  let return_approximations =
+    Closure_id.Map.map (fun _ -> approx (Value_unknown Other))
+      (Closure_id.wrap_map function_decls.funs)
+  in
   { function_decls;
     bound_vars;
     invariant_params;
@@ -259,6 +264,7 @@ let create_value_set_of_closures
     specialised_args;
     freshening;
     direct_call_surrogates;
+    return_approximations;
   }
 
 let update_freshening_of_value_set_of_closures value_set_of_closures
