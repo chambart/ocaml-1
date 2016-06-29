@@ -42,6 +42,7 @@ module Env = struct
     closure_depth : int;
     inlining_stats_closure_stack : Inlining_stats.Closure_stack.t;
     inlined_debuginfo : Debuginfo.t;
+    id : Env_id.t;
   }
 
   let create ~never_inline ~backend ~round =
@@ -65,6 +66,7 @@ module Env = struct
       inlining_stats_closure_stack =
         Inlining_stats.Closure_stack.create ();
       inlined_debuginfo = Debuginfo.none;
+      id = Env_id.fresh ();
     }
 
   let backend t = t.backend
@@ -76,6 +78,7 @@ module Env = struct
       projections = Projection.Map.empty;
       freshening = Freshening.empty_preserving_activation_state env.freshening;
       inlined_debuginfo = Debuginfo.none;
+      id = Env_id.fresh ();
     }
 
   let inlining_level_up env =
@@ -404,6 +407,8 @@ module Env = struct
 
   let add_inlined_debuginfo t ~dbg =
     Debuginfo.concat t.inlined_debuginfo dbg
+
+  let id t = t.id
 end
 
 let initial_inlining_threshold ~round : Inlining_cost.Threshold.t =

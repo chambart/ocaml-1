@@ -154,6 +154,7 @@ MIDDLE_END=\
   middle_end/base_types/var_within_closure.cmo \
   middle_end/base_types/static_exception.cmo \
   middle_end/base_types/export_id.cmo \
+  middle_end/base_types/env_id.cmo \
   middle_end/base_types/symbol.cmo \
   middle_end/pass_wrapper.cmo \
   middle_end/semantics_of_primitives.cmo \
