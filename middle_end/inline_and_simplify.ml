@@ -591,15 +591,17 @@ and simplify_set_of_closures original_env r
       ~freshen:true
   in
   let simplify_function fun_var (function_decl : Flambda.function_declaration)
-        (funs, used_params, r)
-        : Flambda.function_declaration Variable.Map.t * Variable.Set.t * R.t =
+        (funs, return_approximations, used_params, r)
+        : Flambda.function_declaration Variable.Map.t *
+          Simple_value_approx.t Closure_id.Map.t * Variable.Set.t * R.t =
     let closure_env =
       Inline_and_simplify_aux.prepare_to_simplify_closure ~function_decl
         ~free_vars ~specialised_args ~parameter_approximations
         ~set_of_closures_env
     in
+    let closure_id = Closure_id.wrap fun_var in
     let body, r =
-      E.enter_closure closure_env ~closure_id:(Closure_id.wrap fun_var)
+      E.enter_closure closure_env ~closure_id
         ~inline_inside:
           (Inlining_decision.should_inline_inside_declaration function_decl)
         ~dbg:function_decl.dbg
@@ -633,12 +635,14 @@ and simplify_set_of_closures original_env r
         ~is_a_functor:function_decl.is_a_functor
     in
     let used_params' = Flambda.used_params function_decl in
+    let return_approximation = R.approx r in
     Variable.Map.add fun_var function_decl funs,
-      Variable.Set.union used_params used_params', r
+    Closure_id.Map.add closure_id return_approximation return_approximations,
+    Variable.Set.union used_params used_params', r
   in
-  let funs, _used_params, r =
+  let funs, return_approximations, _used_params, r =
     Variable.Map.fold simplify_function function_decls.funs
-      (Variable.Map.empty, Variable.Set.empty, r)
+      (Variable.Map.empty, Closure_id.Map.empty, Variable.Set.empty, r)
   in
   let function_decls =
     Flambda.update_function_declarations function_decls ~funs
@@ -655,6 +659,7 @@ and simplify_set_of_closures original_env r
       ~freshening:internal_value_set_of_closures.freshening
       ~direct_call_surrogates:
         internal_value_set_of_closures.direct_call_surrogates
+      ~return_approximations
   in
   let direct_call_surrogates =
     Closure_id.Map.fold (fun existing surrogate surrogates ->
@@ -1459,6 +1464,10 @@ let constant_defining_value_approx
       lazy (Invariant_params.invariant_params_in_recursion function_decls
         ~backend:(E.backend env))
     in
+    let return_approximations =
+      Closure_id.Map.map (fun _ -> A.value_unknown Other)
+        (Closure_id.wrap_map function_decls.funs)
+    in
     let value_set_of_closures =
       A.create_value_set_of_closures ~function_decls
         ~bound_vars:Var_within_closure.Map.empty
@@ -1466,6 +1475,7 @@ let constant_defining_value_approx
         ~specialised_args:Variable.Map.empty
         ~freshening:Freshening.Project_var.empty
         ~direct_call_surrogates:Closure_id.Map.empty
+        ~return_approximations
     in
     A.value_set_of_closures value_set_of_closures
   | Project_closure (set_of_closures_symbol, closure_id) -> begin

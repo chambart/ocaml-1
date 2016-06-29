@@ -621,6 +621,10 @@ let prepare_to_simplify_set_of_closures ~env
     E.enter_set_of_closures_declaration
       function_decls.set_of_closures_origin env
   in
+  let return_approximations =
+    Closure_id.Map.map (fun _ -> A.value_unknown Other)
+      (Closure_id.wrap_map function_decls.funs)
+  in
   (* we use the previous closure for evaluating the functions *)
   let internal_value_set_of_closures =
     let bound_vars =
@@ -630,7 +634,7 @@ let prepare_to_simplify_set_of_closures ~env
     in
     A.create_value_set_of_closures ~function_decls ~bound_vars
       ~invariant_params:(lazy Variable.Map.empty) ~specialised_args
-      ~freshening ~direct_call_surrogates
+      ~freshening ~direct_call_surrogates ~return_approximations
   in
   (* Populate the environment with the approximation of each closure.
      This part of the environment is shared between all of the closures in

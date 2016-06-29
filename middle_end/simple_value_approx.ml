@@ -234,7 +234,7 @@ let value_closure ?closure_var ?set_of_closures_var ?set_of_closures_symbol
 let create_value_set_of_closures
       ~(function_decls : Flambda.function_declarations) ~bound_vars
       ~invariant_params ~specialised_args ~freshening
-      ~direct_call_surrogates =
+      ~direct_call_surrogates ~return_approximations =
   let size =
     lazy (
       let functions = Variable.Map.keys function_decls.funs in
@@ -252,10 +252,6 @@ let create_value_set_of_closures
           in
           Inlining_cost.lambda_smaller' function_decl.body ~than:max_size)
         function_decls.funs)
-  in
-  let return_approximations =
-    Closure_id.Map.map (fun _ -> approx (Value_unknown Other))
-      (Closure_id.wrap_map function_decls.funs)
   in
   { function_decls;
     bound_vars;

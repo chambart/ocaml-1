@@ -74,7 +74,7 @@ let rec import_ex ex =
   ignore (Compilenv.approx_for_global (Export_id.get_compilation_unit ex));
   let ex_info = Compilenv.approx_env () in
   let import_value_set_of_closures ~set_of_closures_id ~bound_vars
-        ~(ex_info : Export_info.t) ~what : A.value_set_of_closures =
+        ~(ex_info : Export_info.t) ~results ~what : A.value_set_of_closures =
     let bound_vars = Var_within_closure.Map.map import_approx bound_vars in
     match
       Set_of_closures_id.Map.find set_of_closures_id ex_info.invariant_params
@@ -93,6 +93,7 @@ let rec import_ex ex =
         ~specialised_args:Variable.Map.empty
         ~freshening:Freshening.Project_var.empty
         ~direct_call_surrogates:Closure_id.Map.empty
+        ~return_approximations:(Closure_id.Map.map import_approx results)
   in
   match Export_info.find_description ex_info ex with
   | exception Not_found -> A.value_unknown Other
@@ -124,17 +125,19 @@ let rec import_ex ex =
     A.value_block tag (Array.map import_approx fields)
   | Value_closure { closure_id;
         set_of_closures =
-          { set_of_closures_id; bound_vars; aliased_symbol } } ->
+          { set_of_closures_id; bound_vars; aliased_symbol; results } } ->
     let value_set_of_closures =
       import_value_set_of_closures ~set_of_closures_id ~bound_vars ~ex_info
         ~what:(Format.asprintf "Value_closure %a" Closure_id.print closure_id)
+        ~results
     in
     A.value_closure ?set_of_closures_symbol:aliased_symbol
       value_set_of_closures closure_id
-  | Value_set_of_closures { set_of_closures_id; bound_vars; aliased_symbol } ->
+  | Value_set_of_closures { set_of_closures_id; bound_vars;
+                            results; aliased_symbol } ->
     let value_set_of_closures =
       import_value_set_of_closures ~set_of_closures_id ~bound_vars ~ex_info
-        ~what:"Value_set_of_closures"
+        ~results ~what:"Value_set_of_closures"
     in
     let approx = A.value_set_of_closures value_set_of_closures in
     match aliased_symbol with
