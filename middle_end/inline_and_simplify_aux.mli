@@ -107,7 +107,14 @@ module Env : sig
   (** Whether the environment has an approximation for the given variable. *)
   val mem : t -> Variable.t -> bool
 
-  (** Whether the alias information is usable in the environment *)
+  (** Alias information carried by approximations are only correct in
+      the scope of the binding. When some approximation is propagated
+      by the return approximation of a function, it could look like
+      the definition scope if the function is recursive. To avoid this
+      kind of problems, local environments are uniquely identified by
+      an id of type [Env_id.t]. An approximation is considered to be
+      valid only if the current environment is the one where the
+      variable was defined. *)
   val valid_alias : t -> Simple_value_approx.alias -> bool
 
   (** Return the freshening that should be applied to variables when
@@ -270,6 +277,7 @@ module Env : sig
   (** Appends the locations of inlined call-sites to the [~dbg] argument *)
   val add_inlined_debuginfo : t -> dbg:Debuginfo.t -> Debuginfo.t
 
+  (** Unique environment identifier. see [valid_alias] *)
   val id : t -> Env_id.t
 end
 
