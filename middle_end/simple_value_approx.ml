@@ -87,7 +87,7 @@ let descr t = t.descr
 
 let print_value_set_of_closures ppf
       { function_decls = { funs }; invariant_params; freshening; _ } =
-  Format.fprintf ppf "(set_of_closures:@ %a invariant_params=%a freshening=%a)"
+  Format.fprintf ppf "@[<2>(@ set_of_closures:@ %a@ invariant_params=%a@ freshening=%a@ )@]"
     (fun ppf -> Variable.Map.iter (fun id _ -> Variable.print ppf id)) funs
     (Variable.Map.print Variable.Set.print) (Lazy.force invariant_params)
     Freshening.Project_var.print freshening

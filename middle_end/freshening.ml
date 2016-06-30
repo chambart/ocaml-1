@@ -243,11 +243,15 @@ module Project_var = struct
     }
 
   let print ppf t =
-    Format.fprintf ppf "{ vars_within_closure %a, closure_id %a }"
-      (Var_within_closure.Map.print Var_within_closure.print)
-      t.vars_within_closure
-      (Closure_id.Map.print Closure_id.print)
-      t.closure_id
+    if Var_within_closure.Map.is_empty t.vars_within_closure &&
+       Closure_id.Map.is_empty t.closure_id then
+      Format.fprintf ppf "{}"
+    else
+      Format.fprintf ppf "@[<2>{@ vars_within_closure %a,@ closure_id %a }@]"
+        (Var_within_closure.Map.print Var_within_closure.print)
+        t.vars_within_closure
+        (Closure_id.Map.print Closure_id.print)
+        t.closure_id
 
   let new_subst_fv t id subst =
     match subst with
