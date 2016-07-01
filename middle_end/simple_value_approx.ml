@@ -33,12 +33,23 @@ type unknown_because_of =
   | Unresolved_symbol of Symbol.t
   | Other
 
+module Time = struct
+  module Id : Id_types.Id = Id_types.Id (struct end)
+
+  type t = Id.t
+
+  include Identifiable.Make (Id)
+
+  let fresh () : t = Id.create ()
+end
+
 type alias = Variable.t * Env_id.t
 
 type t = {
   descr : descr;
   var : alias option;
   symbol : (Symbol.t * int option) option;
+  time : Time.t;
 }
 
 and descr =
@@ -159,7 +170,7 @@ and print ppf { descr; var; symbol; } =
     print_var var
     print symbol
 
-let approx descr = { descr; var = None; symbol = None }
+let approx descr = { descr; var = None; symbol = None; time = Time.fresh () }
 
 let augment_with_variable t var = { t with var = Some var }
 let augment_with_symbol t symbol = { t with symbol = Some (symbol, None) }
@@ -219,6 +230,7 @@ let value_closure ?closure_var ?set_of_closures_var ?set_of_closures_symbol
     { descr = Value_set_of_closures value_set_of_closures;
       var = set_of_closures_var;
       symbol = Misc.may_map (fun s -> s, None) set_of_closures_symbol;
+      time = Time.fresh ();
     }
   in
   let value_closure =
@@ -229,6 +241,7 @@ let value_closure ?closure_var ?set_of_closures_var ?set_of_closures_symbol
   { descr = Value_closure value_closure;
     var = closure_var;
     symbol = None;
+    time = Time.fresh ();
   }
 
 let create_value_set_of_closures
@@ -273,6 +286,7 @@ let value_set_of_closures ?set_of_closures_var value_set_of_closures =
   { descr = Value_set_of_closures value_set_of_closures;
     var = set_of_closures_var;
     symbol = None;
+    time = Time.fresh ();
   }
 
 let value_block t b = approx (Value_block (t, b))
@@ -644,7 +658,8 @@ and meet ~really_import_approx a1 a2 =
       in
       { descr = meet_descr ~really_import_approx a1.descr a2.descr;
         var;
-        symbol }
+        symbol;
+        time = Time.fresh (); }
 
 (* Given a set-of-closures approximation and a closure ID, apply any
    freshening specified in the approximation to the closure ID, and return
@@ -857,3 +872,167 @@ let potentially_taken_block_switch_branch t tag =
   | Value_bottom ->
     Cannot_be_taken
 
+let rec compose_set_of_closure_freshening time
+    ~(old_set:value_set_of_closures) ~(recent_set:value_set_of_closures)
+  : value_set_of_closures =
+  let merge_closure_id_map old_map recent_map =
+    Closure_id.Map.mapi (fun closure_id recent_approx ->
+        match Closure_id.Map.find closure_id old_map with
+        | exception Not_found -> recent_approx
+        | old_approx ->
+            compose_freshening time ~old:old_approx ~recent:recent_approx)
+      recent_map
+  in
+  let merge_bound_var_map old_map recent_map =
+    Var_within_closure.Map.mapi (fun var_within_closure recent_approx ->
+        match Var_within_closure.Map.find var_within_closure old_map with
+        | exception Not_found -> recent_approx
+        | old_approx ->
+            compose_freshening time ~old:old_approx ~recent:recent_approx)
+      recent_map
+  in
+  let freshening =
+    Freshening.Project_var.compose ~earlier:old_set.freshening ~later:recent_set.freshening
+  in
+  let return_approximations =
+    merge_closure_id_map old_set.return_approximations recent_set.return_approximations
+  in
+  let bound_vars =
+    merge_bound_var_map old_set.bound_vars recent_set.bound_vars
+  in
+  {
+    function_decls = recent_set.function_decls;
+    invariant_params = recent_set.invariant_params;
+    size = recent_set.size;
+    specialised_args = recent_set.specialised_args;
+    direct_call_surrogates = recent_set.direct_call_surrogates;
+    freshening; return_approximations; bound_vars;
+  }
+
+(* TODO: sharing *)
+
+and compose_closure_freshening time ~(old:value_closure) ~(recent:value_closure) : value_closure =
+  let old_set_of_closures =
+    match check_approx_for_set_of_closures old.set_of_closures with
+    | Ok (_, s) -> Some s
+    | Unknown | Unknown_because_of_unresolved_symbol _ | Unresolved _ -> None
+    | Wrong -> assert false
+  in
+  let recent_set_of_closures =
+    match check_approx_for_set_of_closures recent.set_of_closures with
+    | Ok (_, s) -> Some s
+    | Unknown | Unknown_because_of_unresolved_symbol _ | Unresolved _ -> None
+    | Wrong -> assert false
+  in
+  let closure_id, set_of_closures =
+    match old_set_of_closures, recent_set_of_closures with
+    | Some _, None ->
+        assert false (* Approximaxion should improve, not decay *)
+    | None, None ->
+        assert(Closure_id.equal old.closure_id recent.closure_id);
+        recent.closure_id, recent.set_of_closures
+    | _, Some recent_set ->
+        let renamed_old =
+          Freshening.Project_var.apply_closure_id
+            recent_set.freshening old.closure_id
+        in
+        assert(Closure_id.equal renamed_old recent.closure_id);
+        let set_of_closures =
+          match old_set_of_closures with
+          | None -> recent_set
+          | Some old_set ->
+              compose_set_of_closure_freshening time ~old_set ~recent_set
+        in
+        recent.closure_id,
+        { recent.set_of_closures with descr = Value_set_of_closures set_of_closures }
+  in
+  { closure_id; set_of_closures }
+
+and compose_freshening time ~(old:t) ~(recent:t) : t =
+  if compare old.time time < 0 then
+    (* Avoid traversing values created before the fork *)
+    recent
+  else
+    { recent with descr = compose_descr_freshening time ~old:old.descr ~recent:recent.descr }
+
+and compose_descr_freshening time ~(old:descr) ~(recent:descr) =
+  match old, recent with
+  | (Value_unknown _ | Value_unresolved _ | Value_extern _ | Value_symbol _), _ -> recent
+  | Value_int i, Value_int j ->
+      assert(i = j);
+      recent
+  | Value_int _, _ -> assert false
+  | Value_char c1, Value_char c2 ->
+      assert(c1 = c2);
+      recent
+  | Value_char _, _ -> assert false
+  | Value_constptr i1, Value_constptr i2 ->
+      assert(i1 = i2);
+      recent
+  | Value_constptr _, _ -> assert false
+  | Value_float f1, Value_float f2 -> begin
+      match f1, f2 with
+      | None, None
+      | None, Some _ -> recent
+      | Some f1, Some f2 ->
+          assert(f1 = f2);
+          recent
+      | Some _, None ->
+          assert false
+    end
+  | Value_float _, _ -> assert false
+  | Value_bottom, Value_bottom ->
+      recent
+  | Value_bottom, _ -> assert false
+  | Value_boxed_int (Int32,i1) , Value_boxed_int (Int32,i2) ->
+      assert(i1 = i2);
+      recent
+  | Value_boxed_int (Int64,i1) , Value_boxed_int (Int64,i2) ->
+      assert(i1 = i2);
+      recent
+  | Value_boxed_int (Nativeint,i1) , Value_boxed_int (Nativeint,i2) ->
+      assert(i1 = i2);
+      recent
+  | Value_boxed_int _, _ -> assert false
+  | Value_string s1, Value_string s2 -> begin
+      assert(s1.size = s2.size);
+      match s1.contents, s2.contents with
+      | None, (None | Some _) -> recent
+      | Some _, None -> assert false
+      | Some s1, Some s2 ->
+          assert(s1 = s2);
+          recent
+    end
+  | Value_string _, _ -> assert false
+  | Value_block (tag1, fields1), Value_block (tag2, fields2) ->
+      assert(Tag.equal tag1 tag2);
+      assert(Array.length fields1 = Array.length fields2);
+      let fields =
+        Array.map2 (fun old recent -> compose_freshening time ~old ~recent)
+          fields1 fields2
+      in
+      Value_block (tag2, fields)
+  | Value_block _, _ -> assert false
+  | Value_set_of_closures old_set, Value_set_of_closures recent_set ->
+      let set =
+        compose_set_of_closure_freshening time~old_set ~recent_set
+      in
+      Value_set_of_closures set
+  | Value_set_of_closures _, _ -> assert false
+  | Value_closure old, Value_closure recent ->
+      Value_closure (compose_closure_freshening time ~old ~recent)
+  | Value_closure _, _ -> assert false
+  | Value_float_array fa1, Value_float_array fa2 -> begin
+      assert(fa1.size = fa2.size);
+      match fa1.contents, fa2.contents with
+      | Unknown_or_mutable, _ -> recent
+      | Contents _, Unknown_or_mutable -> assert false
+      | Contents cont1, Contents cont2 ->
+          assert(Array.length cont1 = Array.length cont2);
+          let contents =
+            Array.map2 (fun old recent -> compose_freshening time ~old ~recent)
+              cont1 cont2
+          in
+          Value_float_array { fa2 with contents = Contents contents }
+    end
+  | Value_float_array _, _ -> assert false

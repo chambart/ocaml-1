@@ -36,6 +36,11 @@ type unknown_because_of =
 
 type alias = Variable.t * Env_id.t
 
+module Time : sig
+  include Identifiable.S
+  val fresh : unit -> t
+end
+
 (** A value of type [t] corresponds to an "approximation" of the result of
     a computation in the program being compiled.  That is to say, it
     represents what knowledge we have about such a result at compile time.
@@ -116,6 +121,7 @@ type t = private {
   descr : descr;
   var : alias option;
   symbol : (Symbol.t * int option) option;
+  time : Time.t;
 }
 
 and descr = private
@@ -425,3 +431,5 @@ type switch_branch_selection =
 (** Check that the branch is compatible with the approximation *)
 val potentially_taken_const_switch_branch : t -> int -> switch_branch_selection
 val potentially_taken_block_switch_branch : t -> int -> switch_branch_selection
+
+val compose_freshening : Time.t -> old:t -> recent:t -> t

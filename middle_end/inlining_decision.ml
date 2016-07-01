@@ -186,6 +186,7 @@ let inline env r ~lhs_of_application
     let r =
       R.set_inlining_threshold r (Some remaining_inlining_threshold)
     in
+    let time_before_first_transform = A.Time.fresh () in
     let body, r_inlined =
       (* First we construct the code that would result from copying the body of
          the function, without doing any further inlining upon it, to the call
@@ -195,6 +196,7 @@ let inline env r ~lhs_of_application
         ~closure_id_being_applied ~specialise_requested ~inline_requested
         ~function_decl ~args ~dbg ~simplify
     in
+    let approx_after_first_transform = R.approx r_inlined in
     let num_direct_applications_seen =
       (R.num_direct_applications r_inlined) - (R.num_direct_applications r)
     in
@@ -232,7 +234,15 @@ let inline env r ~lhs_of_application
         then env
         else E.inlining_level_up env
       in
-      Changed ((simplify env r body), decision)
+      let result_body, result_r = simplify env r body in
+      let approx_after_second_transform = R.approx result_r in
+      let result_approx =
+        A.compose_freshening time_before_first_transform
+          ~old:approx_after_first_transform
+          ~recent:approx_after_second_transform
+      in
+      let result_r = R.set_approx result_r result_approx in
+      Changed ((result_body, result_r), decision)
     in
     if always_inline then
       keep_inlined_version S.Inlined.Annotation
@@ -264,7 +274,17 @@ let inline env r ~lhs_of_application
              to avoid having to check whether or not it is recursive *)
           E.inside_unrolled_function env function_decls.set_of_closures_origin
         in
-        let body, r_inlined = simplify env r_inlined body in
+        let body, r_inlined =
+          let body, result_r = simplify env r_inlined body in
+          let approx_after_second_transform = R.approx result_r in
+          let result_approx =
+            A.compose_freshening time_before_first_transform
+              ~old:approx_after_first_transform
+              ~recent:approx_after_second_transform
+          in
+          let result_r = R.set_approx result_r result_approx in
+          body, result_r
+        in
         let wsb_with_subfunctions =
           W.create ~original body
             ~toplevel:(E.at_toplevel env)
@@ -534,13 +554,23 @@ let for_call_site ~env ~r ~(function_decls : Flambda.function_declarations)
     R.set_approx (R.seen_direct_application r) approx
   in
   if function_decl.stub then
+    let time_before_first_transform = A.Time.fresh () in
     let body, r =
       Inlining_transforms.inline_by_copying_function_body ~env
         ~r ~function_decls ~lhs_of_application
         ~closure_id_being_applied ~specialise_requested ~inline_requested
         ~function_decl ~args ~dbg ~simplify
     in
-    simplify env r body
+    let approx_after_first_transform = R.approx r in
+    let result_body, result_r = simplify env r body in
+    let approx_after_second_transform = R.approx result_r in
+    let result_approx =
+      A.compose_freshening time_before_first_transform
+        ~old:approx_after_first_transform
+        ~recent:approx_after_second_transform
+    in
+    let result_r = R.set_approx result_r result_approx in
+    result_body, result_r
   else if E.never_inline env then
     (* This case only occurs when examining the body of a stub function
        but not in the context of inlining said function.  As such, there
