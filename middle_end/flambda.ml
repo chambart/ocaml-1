@@ -876,6 +876,8 @@ module With_free_variables = struct
     | Named (_, free_vars) -> free_vars
 end
 
+type ('acc, 'ret) fold_finish = last_body:t -> acc:'acc -> rev_lets:(Variable.t * named) list -> 'ret
+
 let fold_lets_option
     t ~init
     ~(for_defining_expr:('a -> Variable.t -> named -> 'a * Variable.t * named))
@@ -883,6 +885,7 @@ let fold_lets_option
     ~(filter_defining_expr:('b -> Variable.t -> named -> Variable.Set.t ->
                             'b * Variable.t * named option)) =
   let finish ~last_body ~acc ~rev_lets =
+    let last_body, acc = for_last_body acc last_body in
     let module W = With_free_variables in
     let acc, t =
       List.fold_left (fun (acc, t) (var, defining_expr) ->
@@ -902,19 +905,33 @@ let fold_lets_option
     in
     W.contents t, acc
   in
-  let rec loop (t : t) ~acc ~rev_lets =
+  let collect_finish ~last_body ~acc ~rev_lets =
+    Expr last_body, acc, rev_lets
+  in
+  let rec loop :
+    type ret.
+    t ->
+    finish:('a, ret) fold_finish ->
+    acc:'a -> rev_lets:(Variable.t * named) list -> ret =
+    fun (t : t) ~finish ~acc ~rev_lets ->
     match t with
     | Let { var; defining_expr; body; _ } ->
+      let defining_expr, acc, rev_lets =
+        match defining_expr with
+        | Expr (Let _ as inner_let) ->
+          loop inner_let ~finish:collect_finish ~acc ~rev_lets
+        | _ ->
+          defining_expr, acc, rev_lets
+      in
       let acc, var, defining_expr =
         for_defining_expr acc var defining_expr
       in
       let rev_lets = (var, defining_expr) :: rev_lets in
-      loop body ~acc ~rev_lets
+      loop body ~finish ~acc ~rev_lets
     | t ->
-      let last_body, acc = for_last_body acc t in
-      finish ~last_body ~acc ~rev_lets
+      finish ~last_body:t ~acc ~rev_lets
   in
-  loop t ~acc:init ~rev_lets:[]
+  loop t ~finish ~acc:init ~rev_lets:[]
 
 let free_symbols_helper symbols (named : named) =
   match named with
