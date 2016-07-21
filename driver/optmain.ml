@@ -55,7 +55,8 @@ module Options = Main_args.Make_optcomp_options (struct
   let _compact = clear optimize_for_speed
   let _config = Misc.show_config_and_exit
   let _config_var = Misc.show_config_variable_and_exit
-  let _cmx_contains_all_code = set cmx_contains_all_code
+  let _cmx_contains_all_code b () = cmx_contains_all_code := b
+  let _whole_program_rebuild = set whole_program_rebuild
   let _for_pack s = for_package := Some s
   let _g = set debug
   let _i () =
