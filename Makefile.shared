@@ -160,6 +160,7 @@ MIDDLE_END=\
   middle_end/flambda.cmo \
   middle_end/flambda_iterators.cmo \
   middle_end/flambda_utils.cmo \
+  middle_end/cps_transform.cmo \
   middle_end/inlining_cost.cmo \
   middle_end/effect_analysis.cmo \
   middle_end/freshening.cmo \
