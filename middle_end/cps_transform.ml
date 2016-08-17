@@ -262,9 +262,9 @@ let incr_inlined_static_exception k =
       (1 + get_static_exception_count !inlined_static_exception k)
       !inlined_static_exception
 
-let rec simplify_tail_jump_count tail count env (expr:Flambda.t) : Flambda.t =
+let rec simplify_tail_jump_count ~inline tail count env (expr:Flambda.t) : Flambda.t =
   let simplify_tail_jump tail env expr =
-    simplify_tail_jump_count tail count env expr
+    simplify_tail_jump_count ~inline tail count env expr
   in
   match expr with
   | Static_raise (k, args) -> begin
@@ -281,6 +281,13 @@ let rec simplify_tail_jump_count tail count env (expr:Flambda.t) : Flambda.t =
         else
           expr
     end
+  | Static_catch (k, params, Static_raise (k', args), handler) when
+      Static_exception.equal k k'->
+    let subst =
+      Variable.Map.of_list (List.combine params args)
+    in
+    let handler = Flambda_utils.toplevel_substitution subst handler in
+    simplify_tail_jump tail env handler
   | Static_catch (k, args, body, Static_raise (k', arg')) when
       Variable.List.equal args arg' ->
     simplify_tail_jump tail (add_subst env ~subst:k ~to_:(Static_exception k')) body
@@ -289,7 +296,9 @@ let rec simplify_tail_jump_count tail count env (expr:Flambda.t) : Flambda.t =
       let uses = get_static_exception_count count k in
       let env =
         match uses, handler with
-        | 1, _ | _, Var _ ->
+        | 1, _ when inline ->
+          add_subst env ~subst:k ~to_:(Expr (args, handler))
+        | _, Var _ ->
           add_subst env ~subst:k ~to_:(Expr (args, handler))
         | _ ->
           env
@@ -300,52 +309,66 @@ let rec simplify_tail_jump_count tail count env (expr:Flambda.t) : Flambda.t =
       else
         Static_catch (k, args, body, handler)
     end
-  | Var _ | Apply _ -> expr
+  | Var _ | Apply _ | Proved_unreachable | Send _ | Assign _ -> expr
   | Let _ ->
     Flambda.map_lets expr
-      ~for_defining_expr:(simplify_tail_named count env)
+      ~for_defining_expr:(simplify_tail_named ~inline count env)
       ~for_last_body:(simplify_tail_jump tail env)
       ~after_rebuild:(fun x -> x)
-  | If_then_else (cond, ifso, ifnot) ->
-    If_then_else (cond,
-                  simplify_tail_jump tail env ifso,
-                  simplify_tail_jump tail env ifnot)
   | Try_with (body, var, handler) ->
     Try_with (simplify_tail_jump false env body, var,
               simplify_tail_jump tail env handler)
-  | _ ->
-    Format.eprintf "@.%a@." Flambda.print expr;
-    assert false
+  | If_then_else _ | Switch _ | String_switch _ | Let_mutable _
+  | Let_rec _ ->
+    Flambda_iterators.map_subexpressions
+      (simplify_tail_jump tail env)
+      (simplify_tail_named ~inline count env)
+      expr
+  | For _ | While _ ->
+    Flambda_iterators.map_subexpressions
+      (simplify_tail_jump false env)
+      (simplify_tail_named ~inline count env)
+      expr
+  (* | _ -> *)
+  (*   Format.eprintf "@.%a@." Flambda.print expr; *)
+  (*   assert false *)
 
-and simplify_tail_named count env (_var:Variable.t) (named:Flambda.named) : Flambda.named =
+and simplify_tail_named ~inline count env (_var:Variable.t) (named:Flambda.named) : Flambda.named =
   match named with
   | Expr expr ->
-    Expr (simplify_tail_jump_count false count env expr)
+    Expr (simplify_tail_jump_count ~inline false count env expr)
   | Set_of_closures set_of_closures ->
-    Set_of_closures (simplify_tail_set_of_closures set_of_closures)
-  | Prim _ | Const _ | Symbol _ | Project_closure _ ->
+    Set_of_closures (simplify_tail_set_of_closures ~inline set_of_closures)
+  | Prim _ | Const _ | Symbol _ | Project_closure _
+  | Move_within_set_of_closures _ | Project_var _
+  | Allocated_const _ | Read_mutable _ | Read_symbol_field _ ->
     named
-  | _ ->
-    Format.eprintf "@.%a@." Flambda.print_named named;
-    assert false
+  (* | _ -> *)
+  (*   Format.eprintf "@.%a@." Flambda.print_named named; *)
+  (*   assert false *)
 
-and simplify_tail_set_of_closures (set_of_closures:Flambda.set_of_closures) =
+and simplify_tail_set_of_closures ~inline (set_of_closures:Flambda.set_of_closures) =
   Flambda_iterators.map_function_bodies set_of_closures
-    ~f:(simplify_tail_jump true)
+    ~f:(simplify_tail_jump ~inline)
 
-and simplify_tail_jump tail expr =
+and simplify_tail_jump ~inline expr =
   let redirected = redirect_raise None expr in
   let count = count_static_exception_uses redirected in
-  simplify_tail_jump_count tail count empty_subst redirected
+  simplify_tail_jump_count ~inline true count empty_subst redirected
 
 (* let rec simplify_static_catch is_continue (expr:Flambda.t) : Flambda.t = *)
 (*   match expr with *)
 (*   | Static_catch (k, args, *)
 (*   | Static_raise (k, [v]) -> *)
 
+let simplify_static_catch_noinline (expr:Flambda.t) : Flambda.t =
+  clear ();
+  let simplified = simplify_tail_jump ~inline:false expr in
+  simplified
+
 let simplify_static_catch (expr:Flambda.t) : Flambda.t =
   clear ();
-  let simplified = simplify_tail_jump true expr in
+  let simplified = simplify_tail_jump ~inline:true expr in
   simplified
 
 let transform_expr (expr:Flambda.t) : Flambda.t =
@@ -355,11 +378,13 @@ let transform_expr (expr:Flambda.t) : Flambda.t =
   (* let k v = Flambda.Var v in *)
   let body = cps_expr expr k in
   let body = Flambda.Static_catch (k', [ret_var], body, Var ret_var) in
+  let _simplified_noinline = simplify_static_catch_noinline body in
   let simplified = simplify_static_catch body in
-  (* Format.eprintf "original:@ %a@.@.cpsified:@ %a@.@.simplified:@ %a@." *)
-  (*   Flambda.print expr *)
-  (*   Flambda.print body *)
-  (*   Flambda.print simplified; *)
+  Format.eprintf "original:@ %a@.@.cpsified:@ %a@.@.simplified noinline:@ %a@.@.simplified:@ %a@."
+    Flambda.print expr
+    Flambda.print body
+    Flambda.print _simplified_noinline
+    Flambda.print simplified;
   simplified
 
 let run (program:Flambda.program) : Flambda.program =
