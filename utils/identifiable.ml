@@ -41,6 +41,13 @@ module Pair (A : Thing) (B : Thing) : Thing with type t = A.t * B.t = struct
   let print ppf (a, b) = Format.fprintf ppf " (%a, @ %a)" A.print a B.print b
 end
 
+module Make_list (T : Thing) = struct
+  let compare l1 l2 =
+    Misc.Stdlib.List.compare T.compare l1 l2
+  let equal l1 l2 =
+    compare l1 l2 = 0
+end
+
 module Make_map (T : Thing) = struct
   include Map.Make (T)
 
@@ -165,6 +172,11 @@ module type S = sig
   module T : Thing with type t = t
   include Thing with type t := T.t
 
+  module List : sig
+    val compare : t list -> t list -> int
+    val equal : t list -> t list -> bool
+  end
+
   module Set : sig
     include Stdlib_set.S
       with type elt = T.t
@@ -216,7 +228,7 @@ end
 module Make (T : Thing) = struct
   module T = T
   include T
-
+  module List = Make_list (T)
   module Set = Make_set (T)
   module Map = Make_map (T)
   module Tbl = Make_tbl (T)

@@ -23,7 +23,7 @@ type t = {
   (** [name_stamp]s are unique within any given compilation unit. *)
 }
 
-include Identifiable.Make (struct
+module M = Identifiable.Make (struct
   type nonrec t = t
 
   let compare t1 t2 =
@@ -103,17 +103,17 @@ let unique_name t =
   t.name ^ "_" ^ (string_of_int t.name_stamp)
 
 let print_list ppf ts =
-  List.iter (fun t -> Format.fprintf ppf "@ %a" print t) ts
+  List.iter (fun t -> Format.fprintf ppf "@ %a" M.print t) ts
 
 let debug_when_stamp_matches t ~stamp ~f =
   if t.name_stamp = stamp then f ()
 
 let print_opt ppf = function
   | None -> Format.fprintf ppf "<no var>"
-  | Some t -> print ppf t
+  | Some t -> M.print ppf t
 
 type pair = t * t
-module Pair = Identifiable.Make (Identifiable.Pair (T) (T))
+module Pair = Identifiable.Make (Identifiable.Pair (M.T) (M.T))
 
 let compare_lists l1 l2 =
   Misc.Stdlib.List.compare compare l1 l2
@@ -121,4 +121,6 @@ let compare_lists l1 l2 =
 let output_full chan t =
   Compilation_unit.output chan t.compilation_unit;
   output_string chan ".";
-  output chan t
+  M.output chan t
+
+include M

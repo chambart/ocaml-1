@@ -34,6 +34,11 @@ module type S = sig
   module T : Thing with type t = t
   include Thing with type t := T.t
 
+  module List : sig
+    val compare : t list -> t list -> int
+    val equal : t list -> t list -> bool
+  end
+
   module Set : sig
     include Set.S
       with type elt = T.t
