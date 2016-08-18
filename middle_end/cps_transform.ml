@@ -268,6 +268,119 @@ and redirect_raise_named current_handler _var (named:Flambda.named) : Flambda.na
   | Project_var _ | Prim _ ->
     named
 
+(***************************)
+(*    Circumvent branch    *)
+(***************************)
+
+type approx =
+  | Const_pointer of int
+  | Block of Tag.t
+  | Any
+
+type arg_position = int
+
+type branch_kind =
+  | If_direct of
+      (Static_exception.t * arg_position list) *
+      (Static_exception.t * arg_position list)
+  (* | Destruct of ... *)
+  | Other
+
+let args_positions args params =
+  let positions =
+    Variable.Map.of_list (List.mapi (fun i v -> v, i) args)
+  in
+  try
+    Some (List.map (fun v -> Variable.Map.find v positions) params)
+  with Not_found ->
+    None
+
+let select_args args positions =
+  let map =
+    Numbers.Int.Map.of_list (List.mapi (fun i (v, _) -> i, v) args)
+  in
+  List.map (fun pos -> Numbers.Int.Map.find pos map) positions
+
+let branch_kind args (expr:Flambda.t) =
+  match args, expr with
+  | [cond],
+    If_then_else
+      (cond', Static_raise (k_ifso, args1),
+       Static_raise (k_ifnot, args2))
+    when
+      Variable.equal cond cond' -> begin
+      match args_positions args args1, args_positions args args2 with
+      | Some args1, Some args2 ->
+        If_direct ((k_ifso, args1), (k_ifnot, args2))
+      | _ ->
+        Other
+    end
+  | _ ->
+    Other
+
+let choose_branch kind approxs =
+  match kind, approxs with
+  | If_direct (_k_ifso, (k_ifnot, positions)), [_, Const_pointer 0] ->
+    Some (k_ifnot, select_args approxs positions)
+  | If_direct ((k_ifso, positions), _k_ifnot), [_, (Block _ | Const_pointer _)] ->
+    Some (k_ifso, select_args approxs positions)
+  | _ -> None
+
+let named_approx (named:Flambda.named) : approx =
+  match named with
+  | Const (Const_pointer n) -> Const_pointer n
+  | Prim (Pmakeblock (tag,Immutable,_), _, _) -> Block (Tag.create_exn tag)
+  | _ -> Any
+
+let approx_map expr =
+  let map = ref Variable.Map.empty in
+  Flambda_iterators.iter_all_immutable_let_and_let_rec_bindings
+    ~f:(fun var named -> Variable.Map.set var (named_approx named) map)
+    expr;
+  !map
+
+let branch_map expr =
+  let map = ref Static_exception.Map.empty in
+  Flambda_iterators.iter_expr
+    (fun expr ->
+       match expr with
+       | Static_catch (k, args, _body, handler) ->
+         Static_exception.Map.set k (branch_kind args handler) map
+       | _ -> ())
+    expr;
+  !map
+
+let circumvent_if expr =
+  let approx_map = approx_map expr in
+  let branch_map = branch_map expr in
+  let redirect (expr:Flambda.t) =
+    match expr with
+    | Static_raise (k, args) -> begin
+      let kind =
+        try Static_exception.Map.find k branch_map with Not_found -> assert false
+      in
+      let approxs =
+        List.map (fun var ->
+            var, try Variable.Map.find var approx_map with Not_found -> Any)
+          args
+      in
+      match choose_branch kind approxs with
+      | None -> expr
+      | Some (k, args) ->
+        let res = Flambda.Static_raise (k, args) in
+        Format.eprintf "redirect %a -> %a"
+          Flambda.print expr
+          Flambda.print res;
+        res
+      end
+    | _ ->
+      expr
+  in
+  Flambda_iterators.map_expr redirect expr
+
+(***************************)
+
+
 let get_static_exception_count count k =
   match Static_exception.Map.find k count with
   | exception Not_found -> 0
@@ -341,6 +454,7 @@ let rec simplify_tail_jump_count ~inline tail count env (expr:Flambda.t) : Flamb
             Variable.Map.of_list (List.combine params args)
           in
           incr_inlined_static_exception k;
+          (* Warning quadratic problems *)
           let ret = Flambda_utils.toplevel_substitution subst expr' in
           (* Format.eprintf "rewrite %a to %a@." *)
           (*   Flambda.print expr *)
@@ -354,6 +468,7 @@ let rec simplify_tail_jump_count ~inline tail count env (expr:Flambda.t) : Flamb
     let subst =
       Variable.Map.of_list (List.combine params args)
     in
+    (* Warning quadratic problems *)
     let handler = Flambda_utils.toplevel_substitution subst handler in
     simplify_tail_jump tail env handler
   | Static_catch (k, args, body, Static_raise (k', arg')) when
@@ -504,14 +619,21 @@ let transform_expr (expr:Flambda.t) : Flambda.t =
   (* let body = Flambda.Static_catch (k', [ret_var], body, Var ret_var) in *)
   let _simplified_noinline = simplify_static_catch_noinline body in
   let _lifted = lift_catch _simplified_noinline in
+  let _circumvented = circumvent_if _lifted in
   let _simplified = simplify_static_catch body in
+  let result = simplify_static_catch @@ simplify_static_catch _circumvented in
   if debug then
-    Format.eprintf "original:@ %a@.@.cpsified:@ %a@.@.simplified noinline:@ %a@.@.simplified:@ %a@."
+    Format.eprintf "original:@ %a@.@.cpsified:@ %a@.@.simplified noinline:@ %a@.@.\
+                    lifted:@ %a@.@.circumvented:@ %a@.@.simplified:@ %a\
+                    @.@.result:@ %a@."
       Flambda.print expr
       Flambda.print body
       Flambda.print _simplified_noinline
-      Flambda.print _simplified;
-  _simplified
+      Flambda.print _lifted
+      Flambda.print _circumvented
+      Flambda.print _simplified
+      Flambda.print result;
+  result
 
 let run (program:Flambda.program) : Flambda.program =
   if debug then Format.eprintf "RUN@.@.";
