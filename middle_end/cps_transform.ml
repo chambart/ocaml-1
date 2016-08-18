@@ -279,8 +279,12 @@ type approx =
 
 type arg_position = int
 
+type cond =
+  | Direct
+  | Is_int
+
 type branch_kind =
-  | If_direct of
+  | If of cond *
       (Static_exception.t * arg_position list) *
       (Static_exception.t * arg_position list)
   (* | Destruct of ... *)
@@ -311,7 +315,24 @@ let branch_kind args (expr:Flambda.t) =
       Variable.equal cond cond' -> begin
       match args_positions args args1, args_positions args args2 with
       | Some args1, Some args2 ->
-        If_direct ((k_ifso, args1), (k_ifnot, args2))
+        If (Direct, (k_ifso, args1), (k_ifnot, args2))
+      | _ ->
+        Other
+    end
+  | [cond],
+    Let
+      { var;
+        defining_expr = Prim (Pisint, [isint], _);
+        body =
+          If_then_else
+            (cond', Static_raise (k_ifso, args1),
+             Static_raise (k_ifnot, args2)) }
+    when
+      Variable.equal var cond' &&
+      Variable.equal cond isint -> begin
+      match args_positions args args1, args_positions args args2 with
+      | Some args1, Some args2 ->
+        If (Is_int, (k_ifso, args1), (k_ifnot, args2))
       | _ ->
         Other
     end
@@ -320,10 +341,14 @@ let branch_kind args (expr:Flambda.t) =
 
 let choose_branch kind approxs =
   match kind, approxs with
-  | If_direct (_k_ifso, (k_ifnot, positions)), [_, Const_pointer 0] ->
-    Some (k_ifnot, select_args approxs positions)
-  | If_direct ((k_ifso, positions), _k_ifnot), [_, (Block _ | Const_pointer _)] ->
-    Some (k_ifso, select_args approxs positions)
+  | If (Direct, _k_ifso, (k_ifnot, positions)), [_, Const_pointer 0] ->
+    Some (k_ifnot, select_args approxs positions, "direct", "false")
+  | If (Direct, (k_ifso, positions), _k_ifnot), [_, (Block _ | Const_pointer _)] ->
+    Some (k_ifso, select_args approxs positions, "direc", "true")
+  | If (Is_int, (k_ifso, positions), _k_ifnot), [_, Const_pointer _] ->
+    Some (k_ifso, select_args approxs positions, "isin", "true")
+  | If (Is_int, _k_ifso, (k_ifnot, positions)), [_, Block _] ->
+    Some (k_ifnot, select_args approxs positions, "isint", "false")
   | _ -> None
 
 let named_approx (named:Flambda.named) : approx =
@@ -366,9 +391,10 @@ let circumvent_if expr =
       in
       match choose_branch kind approxs with
       | None -> expr
-      | Some (k, args) ->
+      | Some (k, args, descr, descr_branch) ->
         let res = Flambda.Static_raise (k, args) in
-        Format.eprintf "redirect %a -> %a"
+        Format.eprintf "redirect %s %s %a -> %a"
+          descr descr_branch
           Flambda.print expr
           Flambda.print res;
         res
@@ -555,8 +581,16 @@ let simplify_static_catch (expr:Flambda.t) : Flambda.t =
   let simplified = simplify_tail_jump ~inline:true expr in
   simplified
 
-let rec lift_catch (expr:Flambda.t) =
+(* Bien quadratique comme il faut ... *)
+let rec lift_catch (expr:Flambda.t) : Flambda.t =
   match expr with
+  | Let { var; body = Static_catch (k, args, body, handler); defining_expr }
+    when not (Variable.Set.mem var (Flambda.free_variables handler)) ->
+    lift_catch
+      (Flambda.Static_catch
+         (k, args,
+          Flambda.create_let var defining_expr body,
+          handler))
   | Static_catch
       (k1, args1, body1,
        (Static_catch (k2, args2, body2, handler) as lifted)) ->
@@ -595,6 +629,13 @@ let rec lift_catch (expr:Flambda.t) =
     (*   Flambda.print expr *)
     (*   Flambda.print expr'; *)
     lift_catch expr'
+  | Static_catch (k, args, body, handler) ->
+    let body' = lift_catch body in
+    let handler' = lift_catch handler in
+    if handler' == handler then
+      Static_catch (k, args, body', handler')
+    else
+      lift_catch (Flambda.Static_catch (k, args, body', handler'))
   | _ ->
     Flambda_iterators.map_subexpressions
       lift_catch
