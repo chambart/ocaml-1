@@ -80,6 +80,7 @@ module type S = sig
     val transpose_keys_and_data : key t -> key t
     val print :
       (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+    val set : key -> 'a -> 'a t ref -> unit
   end
 
   module Tbl : sig

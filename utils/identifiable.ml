@@ -111,6 +111,9 @@ module Make_map (T : Thing) = struct
   let of_set f set = T_set.fold (fun e map -> add e (f e) map) set empty
 
   let transpose_keys_and_data map = fold (fun k v m -> add v k m) map empty
+
+  let set k v map =
+    map := add k v !map
 end
 
 module Make_set (T : Thing) = struct
@@ -208,6 +211,7 @@ module type S = sig
     val transpose_keys_and_data : key t -> key t
     val print :
       (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+    val set : key -> 'a -> 'a t ref -> unit
   end
 
   module Tbl : sig
