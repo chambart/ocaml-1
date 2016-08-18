@@ -440,6 +440,57 @@ let simplify_static_catch (expr:Flambda.t) : Flambda.t =
   let simplified = simplify_tail_jump ~inline:true expr in
   simplified
 
+let rec lift_catch (expr:Flambda.t) =
+  match expr with
+  | Static_catch
+      (k1, args1, body1,
+       (Static_catch (k2, args2, body2, handler) as lifted)) ->
+    let free_vars = Flambda.free_variables lifted in
+    let added_args =
+      Variable.Set.elements
+        (Variable.Set.inter (Variable.Set.of_list args1) free_vars)
+    in
+    let added_subst =
+      List.map (fun v -> v, Variable.rename v) added_args
+    in
+    let new_args = List.map snd added_subst in
+    let handler =
+      Flambda_utils.toplevel_substitution (Variable.Map.of_list added_subst) handler
+    in
+    let replace expr =
+      let subst_static_raise (expr:Flambda.t) : Flambda.t =
+        match expr with
+        | Static_raise (k2', args) when Static_exception.equal k2 k2' ->
+          Static_raise (k2, added_args @ args) (* C'est forcement dans le scope *)
+        | _ -> expr
+      in
+      (* Peut être fait plus tard en représentant ça comme une autre static exception,
+         comme pour les fonctions stub pour les applications partielles *)
+      Flambda_iterators.map_toplevel_expr subst_static_raise expr
+    in
+    let body1 = replace body1 in
+    let body2 = replace body2 in
+    let expr' =
+      Flambda.Static_catch (k2, new_args @ args2,
+                            Static_catch
+                              (k1, args1, body1, body2),
+                            handler)
+    in
+    (* Format.eprintf "lift@ %a@ ->@ %a@.@." *)
+    (*   Flambda.print expr *)
+    (*   Flambda.print expr'; *)
+    lift_catch expr'
+  | _ ->
+    Flambda_iterators.map_subexpressions
+      lift_catch
+      (fun _var (named:Flambda.named) ->
+         match named with
+         | Expr expr -> Expr (lift_catch expr)
+         | Set_of_closures set ->
+           Set_of_closures (Flambda_iterators.map_function_bodies set ~f:lift_catch)
+         | _ -> named)
+      expr
+
 let debug =
   try ignore (Sys.getenv "CPSDEBUG": string); true with
   | _ -> false
@@ -452,6 +503,7 @@ let transform_expr (expr:Flambda.t) : Flambda.t =
   let body = cps_expr expr k in
   (* let body = Flambda.Static_catch (k', [ret_var], body, Var ret_var) in *)
   let _simplified_noinline = simplify_static_catch_noinline body in
+  let _lifted = lift_catch _simplified_noinline in
   let _simplified = simplify_static_catch body in
   if debug then
     Format.eprintf "original:@ %a@.@.cpsified:@ %a@.@.simplified noinline:@ %a@.@.simplified:@ %a@."
