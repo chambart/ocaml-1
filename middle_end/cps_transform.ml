@@ -284,10 +284,13 @@ type cond =
   | Is_int
 
 type branch_kind =
-  | If of cond *
-      (Static_exception.t * arg_position list) *
-      (Static_exception.t * arg_position list)
-  (* | Destruct of ... *)
+  | If of cond * arg_position *
+          (Static_exception.t * arg_position list) *
+          (Static_exception.t * arg_position list)
+  | Switch of
+      { consts : (int * (Static_exception.t * arg_position list)) list;
+        blocks : (int * (Static_exception.t * arg_position list)) list;
+        failaction : (Static_exception.t * arg_position list) option }
   | Other
 
 let args_positions args params =
@@ -307,15 +310,21 @@ let select_args args positions =
 
 let branch_kind args (expr:Flambda.t) =
   match args, expr with
-  | [cond],
+  | _,
     If_then_else
-      (cond', Static_raise (k_ifso, args1),
+      (cond, Static_raise (k_ifso, args1),
        Static_raise (k_ifnot, args2))
     when
-      Variable.equal cond cond' -> begin
+      List.exists (fun v -> Variable.equal v cond) args -> begin
+      (* Format.printf "if direct branch %a@." *)
+      (*   Flambda.print expr; *)
+      let cond_position, _ =
+        List.find (fun (_, v) -> Variable.equal v cond)
+          (List.mapi (fun i v -> i,v) args)
+      in
       match args_positions args args1, args_positions args args2 with
       | Some args1, Some args2 ->
-        If (Direct, (k_ifso, args1), (k_ifnot, args2))
+        If (Direct, cond_position, (k_ifso, args1), (k_ifnot, args2))
       | _ ->
         Other
     end
@@ -330,25 +339,103 @@ let branch_kind args (expr:Flambda.t) =
     when
       Variable.equal var cond' &&
       Variable.equal cond isint -> begin
+      Format.printf "isint branch %a@."
+        Flambda.print expr;
       match args_positions args args1, args_positions args args2 with
       | Some args1, Some args2 ->
-        If (Is_int, (k_ifso, args1), (k_ifnot, args2))
+        If (Is_int, 0, (k_ifso, args1), (k_ifnot, args2))
       | _ ->
         Other
     end
+  | [cond], Switch (cond', sw)
+    when Variable.equal cond cond' ->
+    (* TODO: faire la meme chose que pour if pour retrouver l'argument *)
+    let make_branch (n, (expr:Flambda.t)) =
+      match expr with
+      | Static_raise (k, k_args) -> begin
+          match args_positions args k_args with
+          | None -> raise Exit
+          | Some args -> n, (k, args)
+        end
+      | _ -> raise Exit
+    in
+    begin try
+      let consts = List.map make_branch sw.consts in
+      let blocks = List.map make_branch sw.blocks in
+      let failaction =
+        match sw.failaction with
+        | None -> None
+        | Some v -> Some (snd (make_branch (0, v)))
+      in
+      Format.printf "switch branch %a@."
+        Flambda.print expr;
+      Switch { consts; blocks; failaction }
+    with Exit -> Other end
+  | [_cond], Switch _ ->
+    Format.printf "switch with wrong argument %a@."
+      Flambda.print expr;
+    Other
+  | [], Switch _ ->
+    Other
+  | _, Switch _ ->
+    Format.printf "switch with wrong number of arguments %i %a@."
+      (List.length args)
+      Flambda.print expr;
+    Other
   | _ ->
     Other
 
+let choose_if kind pos ifso ifnot approxs =
+  let (_, cond_approx) = List.nth approxs pos in
+  let branch =
+    match kind, cond_approx with
+    | Direct, Const_pointer 0 -> Some (ifnot, "direct", "false")
+    | Direct, (Block _ | Const_pointer _) -> Some (ifso, "direct", "true")
+    | Is_int, Const_pointer _ -> Some (ifso, "isint", "true")
+    | Is_int, Block _ -> Some (ifnot, "isint", "false")
+    | _ ->
+      (* Format.printf "Any arg@."; *)
+      None
+  in
+  match branch with
+  | None -> None
+  | Some ((k, positions), descr, descr_bool) ->
+    Some (k, select_args approxs positions, descr, descr_bool)
+
 let choose_branch kind approxs =
   match kind, approxs with
-  | If (Direct, _k_ifso, (k_ifnot, positions)), [_, Const_pointer 0] ->
-    Some (k_ifnot, select_args approxs positions, "direct", "false")
-  | If (Direct, (k_ifso, positions), _k_ifnot), [_, (Block _ | Const_pointer _)] ->
-    Some (k_ifso, select_args approxs positions, "direc", "true")
-  | If (Is_int, (k_ifso, positions), _k_ifnot), [_, Const_pointer _] ->
-    Some (k_ifso, select_args approxs positions, "isin", "true")
-  | If (Is_int, _k_ifso, (k_ifnot, positions)), [_, Block _] ->
-    Some (k_ifnot, select_args approxs positions, "isint", "false")
+  | If (kind, pos, ifso, ifnot), _ ->
+    choose_if kind pos ifso ifnot approxs
+  (* | If (Direct, _k_ifso, (k_ifnot, positions)), [_, Const_pointer 0] -> *)
+  (*   Some (k_ifnot, select_args approxs positions, "direct", "false") *)
+  (* | If (Direct, (k_ifso, positions), _k_ifnot), [_, (Block _ | Const_pointer _)] -> *)
+  (*   Some (k_ifso, select_args approxs positions, "direct", "true") *)
+  (* | If (Is_int, (k_ifso, positions), _k_ifnot), [_, Const_pointer _] -> *)
+  (*   Some (k_ifso, select_args approxs positions, "isin", "true") *)
+  (* | If (Is_int, _k_ifso, (k_ifnot, positions)), [_, Block _] -> *)
+  (*   Some (k_ifnot, select_args approxs positions, "isint", "false") *)
+  | Switch { consts; failaction }, [_, Const_pointer n] -> begin
+      match List.find (fun (i, _) -> i = n) consts with
+      | exception Not_found -> begin
+        match failaction with
+        | None -> None
+        | Some (k, positions) ->
+          Some (k, select_args approxs positions, "switch", "int fa" ^ string_of_int n)
+        end
+      | (_, (k, positions)) ->
+        Some (k, select_args approxs positions, "switch", "int " ^ string_of_int n)
+    end
+  | Switch { blocks; failaction }, [_, Block n] -> begin
+      match List.find (fun (i, _) -> i = Tag.to_int n) blocks with
+      | exception Not_found -> begin
+          match failaction with
+          | None -> None
+          | Some (k, positions) ->
+            Some (k, select_args approxs positions, "switch", Format.asprintf "block fa %a" Tag.print n)
+        end
+      | (_, (k, positions)) ->
+        Some (k, select_args approxs positions, "switch", Format.asprintf "block %a" Tag.print n)
+    end
   | _ -> None
 
 let named_approx (named:Flambda.named) : approx =
@@ -386,17 +473,30 @@ let circumvent_if expr =
       in
       let approxs =
         List.map (fun var ->
-            var, try Variable.Map.find var approx_map with Not_found -> Any)
+            var, try Variable.Map.find var approx_map with Not_found ->
+              Any)
           args
       in
       match choose_branch kind approxs with
-      | None -> expr
+      | None ->
+        (* let () = *)
+        (*   match kind with *)
+        (*   | If _ -> *)
+        (*     Format.printf "choose if none@ %a@." *)
+        (*       Flambda.print expr *)
+        (*   | _ -> *)
+        (*     (\* Format.printf "choose other none@ %a@." *\) *)
+        (*     (\*   Flambda.print expr; *\) *)
+        (*     () *)
+        (* in *)
+        expr
       | Some (k, args, descr, descr_branch) ->
         let res = Flambda.Static_raise (k, args) in
-        Format.eprintf "redirect %s %s %a -> %a"
-          descr descr_branch
-          Flambda.print expr
-          Flambda.print res;
+        (* if descr <> "direct" then *)
+          Format.eprintf "redirect %s %s %a -> %a"
+            descr descr_branch
+            Flambda.print expr
+            Flambda.print res;
         res
       end
     | _ ->
@@ -462,6 +562,8 @@ let incr_inlined_static_exception k =
       (1 + get_static_exception_count !inlined_static_exception k)
       !inlined_static_exception
 
+let debug_print = ref false
+
 let rec simplify_tail_jump_count ~inline tail count env (expr:Flambda.t) : Flambda.t =
   (* Format.eprintf "tail: %b@ %a@." *)
   (*   tail *)
@@ -499,16 +601,19 @@ let rec simplify_tail_jump_count ~inline tail count env (expr:Flambda.t) : Flamb
     simplify_tail_jump tail env handler
   | Static_catch (k, args, body, Static_raise (k', arg')) when
       Variable.List.equal args arg' ->
+    (* Ça marche aussi avec un subset ou un ordre différent des arguments *)
+    if !debug_print then
+      Format.printf "rejump %a@." Flambda.print expr;
     simplify_tail_jump tail (add_subst env ~subst:k ~to_:(Static_exception k')) body
   | Static_catch (k, args, body, handler) -> begin
       let handler = simplify_tail_jump tail env handler in
       let uses = get_static_exception_count count k in
       let env =
         match uses, handler with
-        | 1, _ when inline ->
+        | 1, _ | _, Var _ when inline ->
           add_subst env ~subst:k ~to_:(Expr (args, handler))
-        | _, Var _ ->
-          add_subst env ~subst:k ~to_:(Expr (args, handler))
+        (* | _, Var _ -> *)
+        (*   add_subst env ~subst:k ~to_:(Expr (args, handler)) *)
         | _ ->
           env
       in
@@ -629,6 +734,7 @@ let rec lift_catch (expr:Flambda.t) : Flambda.t =
     (*   Flambda.print expr *)
     (*   Flambda.print expr'; *)
     lift_catch expr'
+(*
   | Static_catch (k, args, body, handler) ->
     let body' = lift_catch body in
     let handler' = lift_catch handler in
@@ -636,6 +742,7 @@ let rec lift_catch (expr:Flambda.t) : Flambda.t =
       Static_catch (k, args, body', handler')
     else
       lift_catch (Flambda.Static_catch (k, args, body', handler'))
+*)
   | _ ->
     Flambda_iterators.map_subexpressions
       lift_catch
@@ -647,32 +754,64 @@ let rec lift_catch (expr:Flambda.t) : Flambda.t =
          | _ -> named)
       expr
 
+let remove_unused_arguments expr =
+  let replace (expr:Flambda.t) : Flambda.t =
+    match expr with
+    | Static_catch (k, args, body, handler) ->
+      let fv = Flambda.free_variables handler in
+      let args' = List.filter (fun v -> Variable.Set.mem v fv) args in
+      if Variable.List.equal args args' then
+        expr
+      else
+        let args'' = List.filter (fun (_n, v) -> Variable.Set.mem v fv)
+            (List.mapi (fun i v -> i,v) args)
+        in
+        let body =
+          let subst_static_raise (expr:Flambda.t) : Flambda.t =
+            match expr with
+            | Static_raise (k', params) when Static_exception.equal k k' ->
+              let params = List.map (fun (i, _) -> List.nth params i) args'' in
+              Static_raise (k, params)
+            | _ -> expr
+          in
+          Flambda_iterators.map_toplevel_expr subst_static_raise body
+        in
+        Static_catch (k, args', body, handler)
+    | _ -> expr
+  in
+  Flambda_iterators.map_toplevel_expr replace expr
+
 let debug =
   try ignore (Sys.getenv "CPSDEBUG": string); true with
   | _ -> false
 
 let transform_expr (expr:Flambda.t) : Flambda.t =
-  (* let k' = Static_exception.create () in *)
-  (* let ret_var = Variable.create "ret_var" in *)
-  (* let k v = Flambda.Static_raise (k', [v]) in *)
-  let k v = Flambda.Var v in
+  let k' = Static_exception.create () in
+  let ret_var = Variable.create "ret_var" in
+  let k v = Flambda.Static_raise (k', [v]) in
+  (* let k v = Flambda.Var v in *)
   let body = cps_expr expr k in
-  (* let body = Flambda.Static_catch (k', [ret_var], body, Var ret_var) in *)
+  let body = Flambda.Static_catch (k', [ret_var], body, Var ret_var) in
   let _simplified_noinline = simplify_static_catch_noinline body in
-  let _lifted = lift_catch _simplified_noinline in
+  let _lifted = lift_catch @@ lift_catch @@ lift_catch _simplified_noinline in
   let _circumvented = circumvent_if _lifted in
   let _simplified = simplify_static_catch body in
-  let result = simplify_static_catch @@ simplify_static_catch _circumvented in
+  let _simplified2 = simplify_static_catch @@ simplify_static_catch _circumvented in
+  let result = remove_unused_arguments _simplified2 in
+  (* debug_print := true; *)
+  let result = simplify_static_catch result in
+  (* debug_print := false; *)
   if debug then
     Format.eprintf "original:@ %a@.@.cpsified:@ %a@.@.simplified noinline:@ %a@.@.\
                     lifted:@ %a@.@.circumvented:@ %a@.@.simplified:@ %a\
-                    @.@.result:@ %a@."
+                    @.@.resimplified:@ %a@.@.result:@ %a@."
       Flambda.print expr
       Flambda.print body
       Flambda.print _simplified_noinline
       Flambda.print _lifted
       Flambda.print _circumvented
       Flambda.print _simplified
+      Flambda.print _simplified2
       Flambda.print result;
   result
 
