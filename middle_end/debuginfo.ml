@@ -57,9 +57,9 @@ let item_from_location loc =
 let from_location loc =
   if loc == Location.none then [] else [item_from_location loc]
 
-let to_location = function
+let rec to_location = function
   | [] -> Location.none
-  | d :: _ ->
+  | [d] ->
     let loc_start =
       { pos_fname = d.dinfo_file;
         pos_lnum = d.dinfo_line;
@@ -68,6 +68,8 @@ let to_location = function
       } in
     let loc_end = { loc_start with pos_cnum = d.dinfo_char_end; } in
     { loc_ghost = false; loc_start; loc_end; }
+  | _ :: t ->
+    to_location t
 
 let inline loc t =
   if loc == Location.none then t
