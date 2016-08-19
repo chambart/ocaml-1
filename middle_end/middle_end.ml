@@ -36,18 +36,20 @@ let middle_end ppf ~source_provenance ~prefixname ~backend
     ~module_ident
     ~module_initializer =
   let pass_number = ref 0 in
+  let pass_name = ref "" in
   let round_number = ref 0 in
   let check flam =
     if !Clflags.flambda_invariant_checks then begin
       try Flambda_invariants.check_exn flam
       with exn ->
-        Misc.fatal_errorf "After Flambda pass %d, round %d:@.%s:@.%a"
-          !pass_number !round_number (Printexc.to_string exn)
+        Misc.fatal_errorf "After Flambda pass %d %s, round %d:@.%s:@.%a"
+          !pass_number !pass_name !round_number (Printexc.to_string exn)
           Flambda.print_program flam
     end
   in
   let (+-+) flam (name, pass) =
     incr pass_number;
+    pass_name := name;
     if !Clflags.dump_flambda_verbose then begin
       Format.fprintf ppf "@.PASS: %s@." name;
       Format.fprintf ppf "Before pass %d, round %d:@ %a@." !pass_number
@@ -81,23 +83,25 @@ let middle_end ppf ~source_provenance ~prefixname ~backend
     check flam;
     let fast_mode flam =
       pass_number := 0;
-      let round = 0 in
+      (* let round = 0 in *)
       flam
-      +-+ ("lift_lets 1", Lift_code.lift_lets)
-      +-+ ("Lift_constants", Lift_constants.lift_constants ~backend)
-      +-+ ("Share_constants", Share_constants.share_constants)
-      +-+ ("Lift_let_to_initialize_symbol",
-           Lift_let_to_initialize_symbol.lift ~backend)
-      +-+ ("Inline_and_simplify",
-           Inline_and_simplify.run ~never_inline:false ~backend
-             ~prefixname ~round)
-      +-+ ("Ref_to_variables",
-           Ref_to_variables.eliminate_ref)
-      +-+ ("Remove_unused_closure_vars 2",
-           Remove_unused_closure_vars.remove_unused_closure_variables
-             ~remove_direct_call_surrogates:false)
-      +-+ ("Initialize_symbol_to_let_symbol",
-           Initialize_symbol_to_let_symbol.run)
+      (* +-+ ("lift_lets 1", Lift_code.lift_lets) *)
+      (* +-+ ("Lift_constants", Lift_constants.lift_constants ~backend) *)
+      (* +-+ ("Share_constants", Share_constants.share_constants) *)
+      (* +-+ ("Lift_let_to_initialize_symbol", *)
+      (*      Lift_let_to_initialize_symbol.lift ~backend) *)
+      +-+ ("cps_transform", Cps_transform.run)
+
+      (* +-+ ("Inline_and_simplify", *)
+      (*      Inline_and_simplify.run ~never_inline:false ~backend *)
+      (*        ~prefixname ~round:0) *)
+      (* +-+ ("Ref_to_variables", *)
+      (*      Ref_to_variables.eliminate_ref) *)
+      (* +-+ ("Remove_unused_closure_vars 2", *)
+      (*      Remove_unused_closure_vars.remove_unused_closure_variables *)
+      (*        ~remove_direct_call_surrogates:false) *)
+      (* +-+ ("Initialize_symbol_to_let_symbol", *)
+      (*      Initialize_symbol_to_let_symbol.run) *)
     in
     let rec loop flam =
       pass_number := 0;
@@ -122,6 +126,7 @@ let middle_end ppf ~source_provenance ~prefixname ~backend
         +-+ ("Inline_and_simplify",
              Inline_and_simplify.run ~never_inline:false ~backend
                ~prefixname ~round)
+        +-+ ("cps_transform", Cps_transform.run)
         +-+ ("Remove_unused_closure_vars 2",
              Remove_unused_closure_vars.remove_unused_closure_variables
               ~remove_direct_call_surrogates:false)
@@ -140,6 +145,7 @@ let middle_end ppf ~source_provenance ~prefixname ~backend
     in
     let back_end flam =
       flam
+      +-+ ("cps_transform", Cps_transform.run)
       +-+ ("Remove_unused_closure_vars",
            Remove_unused_closure_vars.remove_unused_closure_variables
              ~remove_direct_call_surrogates:true)
@@ -152,6 +158,10 @@ let middle_end ppf ~source_provenance ~prefixname ~backend
       if !Clflags.classic_inlining then
         fast_mode flam
       else
+        let flam =
+          flam
+          (* +-+ ("cps_transform", Cps_transform.run) *)
+        in
         loop flam
     in
     let flam = back_end flam in
