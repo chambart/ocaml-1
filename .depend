@@ -1241,6 +1241,15 @@ middle_end/closure_conversion_aux.cmi : middle_end/base_types/variable.cmi \
     middle_end/base_types/static_exception.cmi \
     middle_end/base_types/mutable_variable.cmi parsing/location.cmi \
     bytecomp/lambda.cmi typing/ident.cmi
+middle_end/cps_transform.cmo : middle_end/base_types/variable.cmi \
+    middle_end/base_types/static_exception.cmi \
+    middle_end/flambda_iterators.cmi middle_end/flambda.cmi \
+    middle_end/cps_transform.cmi
+middle_end/cps_transform.cmx : middle_end/base_types/variable.cmx \
+    middle_end/base_types/static_exception.cmx \
+    middle_end/flambda_iterators.cmx middle_end/flambda.cmx \
+    middle_end/cps_transform.cmi
+middle_end/cps_transform.cmi : middle_end/flambda.cmi
 middle_end/debuginfo.cmo : parsing/location.cmi middle_end/debuginfo.cmi
 middle_end/debuginfo.cmx : parsing/location.cmx middle_end/debuginfo.cmi
 middle_end/debuginfo.cmi : parsing/location.cmi
