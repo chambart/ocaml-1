@@ -126,6 +126,18 @@ module Make_set (T : Thing) = struct
     | t :: q -> List.fold_left (fun acc e -> add e acc) (singleton t) q
 
   let map f s = of_list (List.map f (elements s))
+
+  let get_singleton s =
+    (* CR pchambart: this should be done more efficiently, but
+       this is probably the best we can do currently with the interface
+       of set *)
+    try
+      fold (fun s acc ->
+          match acc with
+          | None -> Some s
+          | Some _ -> raise Exit)
+        s None
+    with Exit -> None
 end
 
 module Make_tbl (T : Thing) = struct
@@ -175,6 +187,7 @@ module type S = sig
     val to_string : t -> string
     val of_list : elt list -> t
     val map : (elt -> elt) -> t -> t
+    val get_singleton : t -> elt option
   end
 
   module Map : sig

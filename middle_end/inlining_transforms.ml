@@ -56,13 +56,14 @@ let which_function_parameters_can_we_specialise ~params ~args
     [function_decls].  Each variable bound by the closure is passed to the
     user-specified function as an [Flambda.named] value that projects the
     variable from its closure. *)
-let fold_over_projections_of_vars_bound_by_closure ~closure_id_being_applied
+let fold_over_projections_of_vars_bound_by_closure
+    ~(closure_id_being_applied:Closure_id.t)
       ~lhs_of_application ~function_decls ~init ~f =
   Variable.Set.fold (fun var acc ->
       let expr : Flambda.named =
         Project_var {
           closure = lhs_of_application;
-          closure_id = closure_id_being_applied;
+          closure_id = Closure_id.Set.singleton closure_id_being_applied;
           var = Var_within_closure.wrap var;
         }
       in
@@ -165,8 +166,10 @@ let inline_by_copying_function_body ~env ~r
         Flambda.create_let another_closure_in_the_same_set
           (Move_within_set_of_closures {
             closure = lhs_of_application;
-            start_from = closure_id_being_applied;
-            move_to = Closure_id.wrap another_closure_in_the_same_set;
+            start_from = Closure_id.Set.singleton closure_id_being_applied;
+            move_to =
+              Closure_id.Set.singleton
+                (Closure_id.wrap another_closure_in_the_same_set);
           })
           expr
       else expr)
@@ -352,7 +355,7 @@ let inline_by_copying_function_declaration ~env ~r
     let duplicated_application : Flambda.t =
       let project_closure : Flambda.project_closure =
         { set_of_closures = set_of_closures_var;
-          closure_id = closure_id_being_applied;
+          closure_id = Closure_id.Set.singleton closure_id_being_applied;
         }
       in
       let func = new_var "dup_func" in

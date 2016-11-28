@@ -58,7 +58,7 @@ and descr =
 
 and value_closure = {
   set_of_closures : t;
-  closure_id : Closure_id.t;
+  closure_id : Closure_id.Set.t;
 }
 
 and value_set_of_closures = {
@@ -107,7 +107,7 @@ let rec print_descr ppf = function
   | Value_extern id -> Format.fprintf ppf "_%a_" Export_id.print id
   | Value_symbol sym -> Format.fprintf ppf "%a" Symbol.print sym
   | Value_closure { set_of_closures; closure_id; } ->
-    Format.fprintf ppf "(closure:@ %a from@ %a)" Closure_id.print closure_id
+    Format.fprintf ppf "(closure:@ %a from@ %a)" Closure_id.Set.print closure_id
       print set_of_closures
   | Value_set_of_closures set_of_closures ->
     print_value_set_of_closures ppf set_of_closures
@@ -642,21 +642,24 @@ and meet ~really_import_approx a1 a2 =
    that new closure ID.  A fatal error is produced if the new closure ID
    does not correspond to a function declaration in the given approximation. *)
 let freshen_and_check_closure_id
-      (value_set_of_closures : value_set_of_closures) closure_id =
+      (value_set_of_closures : value_set_of_closures)
+      (closure_id : Closure_id.Set.t) =
   let closure_id =
-    Freshening.Project_var.apply_closure_id
+    Freshening.Project_var.apply_closure_ids
       value_set_of_closures.freshening closure_id
   in
-  try
-    ignore (Flambda_utils.find_declaration closure_id
-      value_set_of_closures.function_decls);
-    closure_id
-  with Not_found ->
-    Misc.fatal_error (Format.asprintf
-      "Function %a not found in the set of closures@ %a@.%a@."
-      Closure_id.print closure_id
-      print_value_set_of_closures value_set_of_closures
-      Flambda.print_function_declarations value_set_of_closures.function_decls)
+  Closure_id.Set.iter (fun closure_id ->
+    try
+      ignore (Flambda_utils.find_declaration closure_id
+      value_set_of_closures.function_decls)
+    with Not_found ->
+      Misc.fatal_error (Format.asprintf
+        "Function %a not found in the set of closures@ %a@.%a@."
+        Closure_id.print closure_id
+        print_value_set_of_closures value_set_of_closures
+        Flambda.print_function_declarations value_set_of_closures.function_decls))
+    closure_id;
+  closure_id
 
 type checked_approx_for_set_of_closures =
   | Wrong
@@ -742,6 +745,25 @@ let check_approx_for_closure t : checked_approx_for_closure =
       value_set_of_closures) ->
     Ok (value_closure, set_of_closures_var, set_of_closures_symbol,
       value_set_of_closures)
+  | Wrong | Unknown | Unresolved _ | Unknown_because_of_unresolved_symbol _ ->
+    Wrong
+
+type checked_approx_for_closure_singleton =
+  | Wrong
+  | Ok of Closure_id.t * Variable.t option
+          * Symbol.t option * value_set_of_closures
+
+let check_approx_for_closure_singleton t : checked_approx_for_closure_singleton =
+  match check_approx_for_closure_allowing_unresolved t with
+  | Ok (value_closure, set_of_closures_var, set_of_closures_symbol,
+      value_set_of_closures) -> begin
+      match Closure_id.Set.get_singleton value_closure.closure_id with
+      | None ->
+        Wrong
+      | Some closure_id ->
+        Ok (closure_id, set_of_closures_var, set_of_closures_symbol,
+            value_set_of_closures)
+    end
   | Wrong | Unknown | Unresolved _ | Unknown_because_of_unresolved_symbol _ ->
     Wrong
 

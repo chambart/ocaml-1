@@ -52,8 +52,10 @@ let known_valid_projections ~env ~projections ~which_variables =
       | Project_closure project_closure ->
         begin match A.strict_check_approx_for_set_of_closures approx with
         | Ok (_var, value_set_of_closures) ->
-          Variable.Set.mem (Closure_id.unwrap project_closure.closure_id)
-            (Variable.Map.keys value_set_of_closures.function_decls.funs)
+          Closure_id.Set.for_all (fun closure_id ->
+              Variable.Set.mem (Closure_id.unwrap closure_id)
+                (Variable.Map.keys value_set_of_closures.function_decls.funs))
+            project_closure.closure_id
         | Wrong -> false
         end
       | Move_within_set_of_closures move ->
@@ -62,7 +64,7 @@ let known_valid_projections ~env ~projections ~which_variables =
               _value_set_of_closures) ->
           (* We could check that [move.move_to] is in [value_set_of_closures],
              but this is unnecessary, since [Closure_id]s are unique. *)
-          Closure_id.equal value_closure.closure_id move.start_from
+          Closure_id.Set.equal value_closure.closure_id move.start_from
         | Wrong -> false
         end
       | Field (field_index, _) ->

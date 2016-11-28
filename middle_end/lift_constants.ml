@@ -33,6 +33,15 @@ let make_variable_symbol prefix var =
     (Linkage_name.create
        (prefix ^ Variable.unique_name (Variable.rename var)))
 
+let closure_id_singleton closure_id_set =
+  match Closure_id.Set.elements closure_id_set with
+  | [] | _ :: _ :: _ ->
+    Misc.fatal_errorf "Project_closure can only be converted to a symbol when\
+                       when it projects from a singleton"
+  | [closure_id] ->
+    closure_id
+
+
 (** Traverse the given expression assigning symbols to [let]- and [let rec]-
     bound constant variables.  At the same time collect the definitions of
     such variables. *)
@@ -81,16 +90,25 @@ let assign_symbols_and_collect_constant_definitions
             Variable.Tbl.add var_to_symbol_tbl fun_var closure_symbol;
             let project_closure =
               Alias_analysis.Project_closure
-                { set_of_closures = var; closure_id }
+                { set_of_closures = var;
+                  closure_id = Closure_id.Set.singleton closure_id }
             in
             Variable.Tbl.add var_to_definition_tbl fun_var
               project_closure)
           funs
       | Move_within_set_of_closures ({ closure = _; start_from = _; move_to; }
-          as move) ->
-        assign_existing_symbol (closure_symbol ~backend  move_to);
-        record_definition (AA.Move_within_set_of_closures move)
+                                     as move) -> begin
+          match Closure_id.Set.get_singleton move_to with
+          | None ->
+            Misc.fatal_errorf "A constant move_within_set_of_closure use an\
+                               inconstant closure_id %a"
+              Closure_id.Set.print move_to
+          | Some move_to ->
+            assign_existing_symbol (closure_symbol ~backend move_to);
+            record_definition (AA.Move_within_set_of_closures move)
+        end
       | Project_closure ({ closure_id } as project_closure) ->
+        let closure_id = closure_id_singleton closure_id in
         assign_existing_symbol (closure_symbol ~backend  closure_id);
         record_definition (AA.Project_closure project_closure)
       | Prim (Pfield index, [block], _) ->
@@ -458,6 +476,7 @@ let translate_definition_and_resolve_alias inconstants
         Array with non-Pfloatarray kind: %a"
       Alias_analysis.print_constant_defining_value definition
   | Project_closure { set_of_closures; closure_id } ->
+    let closure_id = closure_id_singleton closure_id in
     begin match Variable.Map.find set_of_closures aliases with
     | Symbol s ->
       Some (Flambda.Project_closure (s, closure_id))
@@ -473,16 +492,21 @@ let translate_definition_and_resolve_alias inconstants
         Format.eprintf "var: %a@." Variable.print v;
         assert false
     end
-  | Move_within_set_of_closures { closure; move_to } ->
-    let set_of_closure_symbol =
-      find_original_set_of_closure
-        aliases
-        var_to_symbol_tbl
-        var_to_definition_tbl
-        project_closure_map
-        closure
-    in
-    Some (Flambda.Project_closure (set_of_closure_symbol, move_to))
+  | Move_within_set_of_closures { closure; move_to } -> begin
+      match Closure_id.Set.get_singleton move_to with
+      | None ->
+        assert false
+      | Some move_to ->
+        let set_of_closure_symbol =
+          find_original_set_of_closure
+            aliases
+            var_to_symbol_tbl
+            var_to_definition_tbl
+            project_closure_map
+            closure
+        in
+        Some (Flambda.Project_closure (set_of_closure_symbol, move_to))
+    end
   | Set_of_closures set_of_closures ->
     let set_of_closures =
       translate_set_of_closures

@@ -21,7 +21,7 @@
     detailed documentation below on [set_of_closures]. *)
 type project_closure = {
   set_of_closures : Variable.t; (** must yield a set of closures *)
-  closure_id : Closure_id.t;
+  closure_id : Closure_id.Set.t;
 }
 
 (** The selection of one closure given another closure in the same set of
@@ -30,8 +30,9 @@ type project_closure = {
     [start_from]. *)
 type move_within_set_of_closures = {
   closure : Variable.t;  (** must yield a closure *)
-  start_from : Closure_id.t;
-  move_to : Closure_id.t;
+  start_from : Closure_id.Set.t;
+  (* CR pchambart: There probably need a link between the start and the end *)
+  move_to : Closure_id.Set.t;
 }
 
 (** The selection from a closure of a variable bound by said closure.
@@ -39,7 +40,7 @@ type move_within_set_of_closures = {
     detailed documentation below on [set_of_closures]. *)
 type project_var = {
   closure : Variable.t;  (** must yield a closure *)
-  closure_id : Closure_id.t;
+  closure_id : Closure_id.Set.t;
   var : Var_within_closure.t;
 }
 

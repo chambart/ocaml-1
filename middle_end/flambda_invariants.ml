@@ -46,6 +46,7 @@ let ignore_allocated_const (_ : Allocated_const.t) = ()
 let ignore_set_of_closures_id (_ : Set_of_closures_id.t) = ()
 let ignore_set_of_closures_origin (_ : Set_of_closures_origin.t) = ()
 let ignore_closure_id (_ : Closure_id.t) = ()
+let ignore_closure_id_set (_ : Closure_id.Set.t) = ()
 let ignore_var_within_closure (_ : Var_within_closure.t) = ()
 let ignore_tag (_ : Tag.t) = ()
 let ignore_inline_attribute (_ : Lambda.inline_attribute) = ()
@@ -85,8 +86,8 @@ exception Closure_id_is_bound_multiple_times of Closure_id.t
 exception Set_of_closures_id_is_bound_multiple_times of Set_of_closures_id.t
 exception Unbound_closure_ids of Closure_id.Set.t
 exception Unbound_vars_within_closures of Var_within_closure.Set.t
-exception Move_to_a_closure_not_in_the_free_variables
-  of Variable.t * Variable.Set.t
+(* exception Move_to_a_closure_not_in_the_free_variables *)
+(*   of Variable.t * Variable.Set.t *)
 
 exception Flambda_invariants_failed
 
@@ -245,14 +246,14 @@ let variable_and_symbol_invariants (program : Flambda.program) =
       loop_set_of_closures env set_of_closures
     | Project_closure { set_of_closures; closure_id; } ->
       check_variable_is_bound env set_of_closures;
-      ignore_closure_id closure_id
+      ignore_closure_id_set closure_id
     | Move_within_set_of_closures { closure; start_from; move_to; } ->
       check_variable_is_bound env closure;
-      ignore_closure_id start_from;
-      ignore_closure_id move_to;
+      ignore_closure_id_set start_from;
+      ignore_closure_id_set move_to;
     | Project_var { closure; closure_id; var; } ->
       check_variable_is_bound env closure;
-      ignore_closure_id closure_id;
+      ignore_closure_id_set closure_id;
       ignore_var_within_closure var
     | Prim (prim, args, dbg) ->
       ignore_primitive prim;
@@ -554,12 +555,12 @@ let used_closure_ids (program:Flambda.program) =
   let f (flam : Flambda.named) =
     match flam with
     | Project_closure { closure_id; _} ->
-      used := Closure_id.Set.add closure_id !used;
+      used := Closure_id.Set.union closure_id !used;
     | Move_within_set_of_closures { closure = _; start_from; move_to; } ->
-      used := Closure_id.Set.add start_from !used;
-      used := Closure_id.Set.add move_to !used
+      used := Closure_id.Set.union start_from !used;
+      used := Closure_id.Set.union move_to !used
     | Project_var { closure = _; closure_id; var = _ } ->
-      used := Closure_id.Set.add closure_id !used
+      used := Closure_id.Set.union closure_id !used
     | Set_of_closures _ | Symbol _ | Const _ | Allocated_const _
     | Prim _ | Expr _ | Read_mutable _ | Read_symbol_field _ -> ()
   in
@@ -645,35 +646,35 @@ let every_static_exception_is_caught_at_a_single_position flam =
   in
   Flambda_iterators.iter f (fun (_ : Flambda.named) -> ()) flam
 
-let _every_move_within_set_of_closures_is_to_a_function_in_the_free_vars
-      program =
-  let moves = ref Closure_id.Map.empty in
-  Flambda_iterators.iter_named_of_program program
-    ~f:(function
-        | Move_within_set_of_closures { start_from; move_to; _ } ->
-          let moved_to =
-            try Closure_id.Map.find start_from !moves with
-            | Not_found -> Closure_id.Set.empty
-          in
-          moves :=
-            Closure_id.Map.add start_from
-              (Closure_id.Set.add move_to moved_to)
-              !moves
-        | _ -> ());
-  Flambda_iterators.iter_on_set_of_closures_of_program program
-    ~f:(fun ~constant:_ { Flambda.function_decls = { funs; _ }; _ } ->
-        Variable.Map.iter (fun fun_var { Flambda.free_variables; _ } ->
-            match Closure_id.Map.find (Closure_id.wrap fun_var) !moves with
-            | exception Not_found -> ()
-            | moved_to ->
-              let missing_dependencies =
-                Variable.Set.diff (Closure_id.unwrap_set moved_to)
-                  free_variables
-              in
-              if not (Variable.Set.is_empty missing_dependencies) then
-                raise (Move_to_a_closure_not_in_the_free_variables
-                         (fun_var, missing_dependencies)))
-          funs)
+(* let _every_move_within_set_of_closures_is_to_a_function_in_the_free_vars *)
+(*       program = *)
+(*   let moves = ref Closure_id.Map.empty in *)
+(*   Flambda_iterators.iter_named_of_program program *)
+(*     ~f:(function *)
+(*         | Move_within_set_of_closures { start_from; move_to; _ } -> *)
+(*           let moved_to = *)
+(*             try Closure_id.Map.find start_from !moves with *)
+(*             | Not_found -> Closure_id.Set.empty *)
+(*           in *)
+(*           moves := *)
+(*             Closure_id.Map.add start_from *)
+(*               (Closure_id.Set.add move_to moved_to) *)
+(*               !moves *)
+(*         | _ -> ()); *)
+(*   Flambda_iterators.iter_on_set_of_closures_of_program program *)
+(*     ~f:(fun ~constant:_ { Flambda.function_decls = { funs; _ }; _ } -> *)
+(*         Variable.Map.iter (fun fun_var { Flambda.free_variables; _ } -> *)
+(*             match Closure_id.Map.find (Closure_id.wrap fun_var) !moves with *)
+(*             | exception Not_found -> () *)
+(*             | moved_to -> *)
+(*               let missing_dependencies = *)
+(*                 Variable.Set.diff (Closure_id.unwrap_set moved_to) *)
+(*                   free_variables *)
+(*               in *)
+(*               if not (Variable.Set.is_empty missing_dependencies) then *)
+(*                 raise (Move_to_a_closure_not_in_the_free_variables *)
+(*                          (fun_var, missing_dependencies))) *)
+(*           funs) *)
 
 let check_exn ?(kind=Normal) ?(cmxfile=false) (flam:Flambda.program) =
   ignore kind;
@@ -813,11 +814,11 @@ let check_exn ?(kind=Normal) ?(cmxfile=false) (flam:Flambda.program) =
     | Prevapply_should_be_expanded ->
       Format.eprintf ">> The Prevapply primitive should never occur in an \
         Flambda expression (see closure_conversion.ml); use Apply instead"
-    | Move_to_a_closure_not_in_the_free_variables (start_from, move_to) ->
-      Format.eprintf ">> A Move_within_set_of_closures from the closure %a \
-        to closures that are not parts of its free variables: %a"
-          Variable.print start_from
-          Variable.Set.print move_to
+    (* | Move_to_a_closure_not_in_the_free_variables (start_from, move_to) -> *)
+    (*   Format.eprintf ">> A Move_within_set_of_closures from the closure %a \ *)
+    (*     to closures that are not parts of its free variables: %a" *)
+    (*       Variable.print start_from *)
+    (*       Variable.Set.print move_to *)
     | exn -> raise exn
     end;
     Format.eprintf "\n@?";

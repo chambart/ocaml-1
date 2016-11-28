@@ -200,7 +200,8 @@ and close t env (lam : Lambda.lambda) : Flambda.t =
     in
     let project_closure : Flambda.project_closure =
       { set_of_closures = set_of_closures_var;
-        closure_id = Closure_id.wrap closure_bound_var;
+        closure_id =
+          Closure_id.Set.singleton (Closure_id.wrap closure_bound_var);
       }
     in
     Flambda.create_let set_of_closures_var set_of_closures
@@ -286,7 +287,8 @@ and close t env (lam : Lambda.lambda) : Flambda.t =
             (Flambda.create_let let_bound_var
               (Project_closure {
                 set_of_closures = set_of_closures_var;
-                closure_id = Closure_id.wrap closure_bound_var;
+                closure_id =
+                  Closure_id.Set.singleton (Closure_id.wrap closure_bound_var);
               })
               body))
           (close t env body) function_declarations
@@ -627,7 +629,8 @@ and close_let_bound_expression t ?let_rec_ident let_bound_var env
     in
     let project_closure : Flambda.project_closure =
       { set_of_closures = set_of_closures_var;
-        closure_id = Closure_id.wrap closure_bound_var;
+        closure_id =
+          Closure_id.Set.singleton (Closure_id.wrap closure_bound_var);
       }
     in
     Expr (Flambda.create_let set_of_closures_var set_of_closures

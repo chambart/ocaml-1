@@ -124,6 +124,7 @@ module Project_var : sig
       function.
   *)
   val apply_closure_id : t -> Closure_id.t -> Closure_id.t
+  val apply_closure_ids : t -> Closure_id.Set.t -> Closure_id.Set.t
 
   (** Like [apply_closure_id], but for variables within closures. *)
   val apply_var_within_closure

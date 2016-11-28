@@ -257,9 +257,7 @@ let simplify_project_closure env r ~(project_closure : Flambda.project_closure)
           let r = R.map_benefit r (B.remove_projection projection) in
           Expr (Var var), ret r var_approx)
       | None ->
-        match reference_recursive_function_directly env closure_id with
-        | Some (flam, approx) -> flam, ret r approx
-        | None ->
+        let if_not_reference_recursive_function_directly () =
           let set_of_closures_var =
             match set_of_closures_var with
             | Some set_of_closures_var' when E.mem env set_of_closures_var' ->
@@ -270,7 +268,14 @@ let simplify_project_closure env r ~(project_closure : Flambda.project_closure)
             A.value_closure ?set_of_closures_var value_set_of_closures
               closure_id
           in
-          Project_closure { set_of_closures; closure_id; }, ret r approx)
+          (Project_closure { set_of_closures; closure_id; }:Flambda.named), ret r approx
+        in
+        match Closure_id.Set.get_singleton closure_id with
+        | None -> if_not_reference_recursive_function_directly ()
+        | Some closure_id ->
+          match reference_recursive_function_directly env closure_id with
+          | Some (flam, approx) -> flam, ret r approx
+          | None -> if_not_reference_recursive_function_directly ())
 
 (* Simplify an expression that, given one closure within some set of
    closures, returns another closure (possibly the same one) within the
@@ -279,7 +284,7 @@ let simplify_move_within_set_of_closures env r
       ~(move_within_set_of_closures : Flambda.move_within_set_of_closures)
       : Flambda.named * R.t =
   simplify_free_variable_named env move_within_set_of_closures.closure
-    ~f:(fun _env closure closure_approx ->
+    ~f:(fun _env closure closure_approx : (Flambda.named * R.t) ->
     match A.check_approx_for_closure_allowing_unresolved closure_approx with
     | Wrong ->
       Misc.fatal_errorf "Wrong approximation when moving within set of \
@@ -331,14 +336,16 @@ let simplify_move_within_set_of_closures env r
           let r = R.map_benefit r (B.remove_projection projection) in
           Expr (Var var), ret r var_approx)
       | None ->
-        match reference_recursive_function_directly env move_to with
-        | Some (flam, approx) -> flam, ret r approx
-        | None ->
-          if Closure_id.equal start_from move_to then
+        let not_reference_recursive_function_directly () : Flambda.named * R.t =
+          match
+            Closure_id.Set.get_singleton start_from,
+            Closure_id.Set.get_singleton move_to with
+          | Some start_from, Some move_to when
+              Closure_id.equal start_from move_to ->
             (* Moving from one closure to itself is a no-op.  We can return an
                [Var] since we already have a variable bound to the closure. *)
             Expr (Var closure), ret r closure_approx
-          else
+          | _ ->
             match set_of_closures_var with
             | Some set_of_closures_var when E.mem env set_of_closures_var ->
               (* A variable bound to the set of closures is in scope,
@@ -386,7 +393,14 @@ let simplify_move_within_set_of_closures env r
                   { closure; start_from; move_to; }
                 in
                 let approx = A.value_closure value_set_of_closures move_to in
-                Move_within_set_of_closures move_within, ret r approx)
+                Move_within_set_of_closures move_within, ret r approx
+        in
+        match Closure_id.Set.get_singleton move_to with
+        | None -> not_reference_recursive_function_directly ()
+        | Some move_to ->
+          match reference_recursive_function_directly env move_to with
+          | Some (flam, approx) -> flam, ret r approx
+          | None -> not_reference_recursive_function_directly ())
 
 (* Transform an expression denoting an access to a variable bound in
    a closure.  Variables in the closure ([project_var.closure]) may
@@ -445,15 +459,18 @@ let rec simplify_project_var env r ~(project_var : Flambda.project_var)
       let module F = Freshening.Project_var in
       let freshening = value_set_of_closures.freshening in
       let var = F.apply_var_within_closure freshening project_var.var in
-      let closure_id = F.apply_closure_id freshening project_var.closure_id in
+      let closure_id =
+        Closure_id.Set.map (F.apply_closure_id freshening)
+          project_var.closure_id
+      in
       let closure_id_in_approx = value_closure.closure_id in
-      if not (Closure_id.equal closure_id closure_id_in_approx) then begin
+      if not (Closure_id.Set.equal closure_id closure_id_in_approx) then begin
         Misc.fatal_errorf "When simplifying [Project_var], the closure ID %a \
             in the approximation of the set of closures did not match the \
             closure ID %a in the [Project_var] term.  Approximation: %a@. \
             Var-within-closure being projected: %a@."
-          Closure_id.print closure_id_in_approx
-          Closure_id.print closure_id
+          Closure_id.Set.print closure_id_in_approx
+          Closure_id.Set.print closure_id
           Simple_value_approx.print approx
           Var_within_closure.print var
       end;
@@ -681,12 +698,11 @@ and simplify_apply env r ~(apply : Flambda.apply) : Flambda.t * R.t =
            (even if the application is currently [Indirect]).  If
            successful---in which case we then have a direct
            application---consider inlining. *)
-        match A.check_approx_for_closure lhs_of_application_approx with
-        | Ok (value_closure, set_of_closures_var,
+        match A.check_approx_for_closure_singleton lhs_of_application_approx with
+        | Ok (closure_id_being_applied, set_of_closures_var,
               set_of_closures_symbol, value_set_of_closures) ->
           let lhs_of_application, closure_id_being_applied,
                 value_set_of_closures, env, wrap =
-            let closure_id_being_applied = value_closure.closure_id in
             (* If the call site is a direct call to a function that has a
                "direct call surrogate" (see inline_and_simplify_aux.mli),
                repoint the call to the surrogate. *)
@@ -707,14 +723,14 @@ and simplify_apply env r ~(apply : Flambda.apply) : Flambda.t * R.t =
               in
               let move_to_surrogate : Projection.move_within_set_of_closures =
                 { closure = lhs_of_application;
-                  start_from = closure_id_being_applied;
-                  move_to = surrogate;
+                  start_from = Closure_id.Set.singleton closure_id_being_applied;
+                  move_to = Closure_id.Set.singleton surrogate;
                 }
               in
               let approx_for_surrogate =
                 A.value_closure ~closure_var:surrogate_var
                   ?set_of_closures_var ?set_of_closures_symbol
-                  value_set_of_closures surrogate
+                  value_set_of_closures (Closure_id.Set.singleton surrogate)
               in
               let env = E.add env surrogate_var approx_for_surrogate in
               let wrap expr =
@@ -1474,7 +1490,8 @@ let constant_defining_value_approx
         match checked_approx with
         | Ok (_, value_set_of_closures) ->
           let closure_id =
-            A.freshen_and_check_closure_id value_set_of_closures closure_id
+            A.freshen_and_check_closure_id value_set_of_closures
+              (Closure_id.Set.singleton closure_id)
           in
           A.value_closure value_set_of_closures closure_id
         | Unresolved sym -> A.value_unresolved sym
@@ -1547,7 +1564,8 @@ let simplify_constant_defining_value
         match A.check_approx_for_set_of_closures set_of_closures_approx with
         | Ok (_, value_set_of_closures) ->
           let closure_id =
-            A.freshen_and_check_closure_id value_set_of_closures closure_id
+            A.freshen_and_check_closure_id value_set_of_closures
+              (Closure_id.Set.singleton closure_id)
           in
           A.value_closure value_set_of_closures closure_id
         | Unresolved sym -> A.value_unresolved sym

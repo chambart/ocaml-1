@@ -33,7 +33,11 @@ type ('a, 'b) declaration_position =
   | Imported_unit of 'b
   | Not_declared
 
-let get_fun_offset t closure_id =
+let get_fun_offset t (closure_id:Closure_id.Set.t) =
+  (* CR pchambart: TODO resolution des offsets dans un set *)
+  match Closure_id.Set.get_singleton closure_id with
+  | None -> failwith "TODO"
+  | Some closure_id ->
   let fun_offset_table =
     if Closure_id.in_compilation_unit closure_id (Compilenv.current_unit ())
     then t.current_unit.fun_offset_table

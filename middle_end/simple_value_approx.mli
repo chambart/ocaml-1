@@ -135,7 +135,7 @@ and descr = private
 
 and value_closure = {
   set_of_closures : t;
-  closure_id : Closure_id.t;
+  closure_id : Closure_id.Set.t;
 }
 
 (* CR-soon mshinwell: add support for the approximations of the results, so we
@@ -216,7 +216,7 @@ val value_closure
   -> ?set_of_closures_var:Variable.t
   -> ?set_of_closures_symbol:Symbol.t
   -> value_set_of_closures
-  -> Closure_id.t
+  -> Closure_id.Set.t
   -> t
 
 (** Construct a set of closures approximation.  [set_of_closures_var] is as for
@@ -353,8 +353,8 @@ val approx_for_bound_var : value_set_of_closures -> Var_within_closure.t -> t
     not correspond to any function declaration in the approximation. *)
 val freshen_and_check_closure_id
    : value_set_of_closures
-  -> Closure_id.t
-  -> Closure_id.t
+  -> Closure_id.Set.t
+  -> Closure_id.Set.t
 
 type strict_checked_approx_for_set_of_closures =
   | Wrong
@@ -389,6 +389,13 @@ type checked_approx_for_closure =
 (* CR-someday mshinwell: naming is inconsistent: this is as "strict"
    as "strict_check_approx_for_set_of_closures" *)
 val check_approx_for_closure : t -> checked_approx_for_closure
+
+type checked_approx_for_closure_singleton =
+  | Wrong
+  | Ok of Closure_id.t * Variable.t option
+          * Symbol.t option * value_set_of_closures
+
+val check_approx_for_closure_singleton : t -> checked_approx_for_closure_singleton
 
 type checked_approx_for_closure_allowing_unresolved =
   | Wrong
