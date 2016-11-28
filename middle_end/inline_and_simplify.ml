@@ -1213,11 +1213,13 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
     end
   | Try_with (body, id, handler) ->
     let body, r = simplify env r body in
+    let body_approx = R.approx r in
     let id, sb = Freshening.add_variable (E.freshening env) id in
     let env = E.add (E.set_freshening env sb) id (A.value_unknown Other) in
     let env = E.inside_branch env in
     let handler, r = simplify env r handler in
-    Try_with (body, id, handler), ret r (A.value_unknown Other)
+    let r = R.meet_approx r env body_approx in
+    Try_with (body, id, handler), r
   | If_then_else (arg, ifso, ifnot) ->
     (* When arg is the constant false or true (or something considered
        as true), we can drop the if and replace it by a sequence.
