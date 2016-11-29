@@ -21,6 +21,7 @@ type for_one_or_more_units = {
   fv_offset_table : int Var_within_closure.Map.t;
   closures : Flambda.function_declarations Closure_id.Map.t;
   constant_sets_of_closures : Set_of_closures_id.Set.t;
+  arity_table : int Closure_id.Map.t;
 }
 
 type t = {
@@ -32,6 +33,17 @@ type ('a, 'b) declaration_position =
   | Current_unit of 'a
   | Imported_unit of 'b
   | Not_declared
+
+let get_fun_arity t (closure_id:Closure_id.t) =
+  let arity_table =
+    if Closure_id.in_compilation_unit closure_id (Compilenv.current_unit ())
+    then t.current_unit.arity_table
+    else t.imported_units.arity_table
+  in
+  try Closure_id.Map.find closure_id arity_table
+  with Not_found ->
+    Misc.fatal_errorf "Flambda_to_clambda: missing arity for closure %a"
+      Closure_id.print closure_id
 
 let get_fun_offset t (closure_id:Closure_id.t) =
   let fun_offset_table =
@@ -112,6 +124,23 @@ let check_field ulam pos named_opt : Clambda.ulambda =
     Uprim (Pccall desc, [ulam; Clambda.Uconst (Uconst_int pos);
         Clambda.Uconst (Uconst_ref (str_const, None))],
       Debuginfo.none)
+
+let first_code_pointer_and_arity t closure_id =
+  let function_declarations =
+    match function_declaration_position t closure_id with
+    | Current_unit declarations
+    | Imported_unit declarations ->
+        declarations
+    | Not_declared ->
+        Misc.fatal_errorf "Flambda_to_clambda: missing closure %a"
+          Closure_id.print closure_id
+  in
+  let (first_closure_var, ({ params } : Flambda.function_declaration)) =
+    Variable.Map.min_binding function_declarations.funs
+  in
+  let first_closure_id = Closure_id.wrap first_closure_var in
+  Clambda.Uconst(Uconst_ref (Compilenv.function_label first_closure_id, None)),
+  List.length params
 
 module Env : sig
   type t
@@ -368,20 +397,59 @@ and to_clambda_named t env var (named : Flambda.named) : Clambda.ulambda =
   | Set_of_closures set_of_closures ->
     to_clambda_set_of_closures t env set_of_closures
   | Project_closure { set_of_closures; closure_id } -> begin
-    match Closure_id.Set.get_singleton closure_id with
-    | None ->
-        failwith "TODO 13987632"
-    | Some closure_id ->
+    let uset_of_closures =
+      check_closure (subst_var env set_of_closures)
+        (Flambda.Expr (Var set_of_closures))
+    in
+    match Closure_id.Set.elements closure_id with
+    | [] -> assert false
+    | [closure_id] ->
     (* Note that we must use [build_uoffset] to ensure that we do not generate
        a [Uoffset] construction in the event that the offset is zero, otherwise
        we might break pattern matches in Cmmgen (in particular for the
        compilation of "let rec"). *)
         check_closure (
           build_uoffset
-            (check_closure (subst_var env set_of_closures)
-               (Flambda.Expr (Var set_of_closures)))
+            uset_of_closures
             (get_fun_offset t closure_id))
           named
+    | first_closure_id :: other_closure_ids ->
+        let make_project_closure closure_id =
+            build_uoffset
+              uset_of_closures
+              (get_fun_offset t closure_id)
+        in
+        let test_set_of_closures closure_id : Clambda.ulambda =
+          let first_code_pointer_in_set_of_closures,
+              arity_of_first_code_pointer =
+            first_code_pointer_and_arity t closure_id
+          in
+          let recovered_code_pointer =
+            let get_code_pointer_field field =
+              Clambda.Uprim (Pfield field, [uset_of_closures], Debuginfo.none)
+            in
+            (* If the arity is zero or one, the code pointer is at offset 0
+               othewise it is at offset 2 *)
+            if arity_of_first_code_pointer <= 1 then
+              get_code_pointer_field 0
+            else
+              get_code_pointer_field 2
+          in
+          Uprim (Pintcomp Ceq,
+                 [first_code_pointer_in_set_of_closures;
+                  recovered_code_pointer],
+                 Debuginfo.none)
+        in
+        let ulam =
+          List.fold_left (fun body closure_id ->
+              Clambda.Uifthenelse(test_set_of_closures closure_id,
+                                  make_project_closure closure_id,
+                                  body)
+            )
+            (make_project_closure first_closure_id)
+            other_closure_ids
+        in
+        check_closure ulam named
     end
   | Move_within_set_of_closures { closure; start_from; move_to } -> begin
       match Closure_id.Set.get_singleton move_to,
@@ -421,20 +489,16 @@ and to_clambda_named t env var (named : Flambda.named) : Clambda.ulambda =
           in
           let test_closure_id closure_id : Clambda.ulambda =
             (* This should be static, but it is just easier right now like that *)
-            let arity_is_one_or_zero =
-              Clambda.Uprim(Pintcomp Cle,
-                            [Clambda.Uprim (Pfield 1, [uclosure], Debuginfo.none);
-                             Clambda.Uconst(Uconst_int 1)], Debuginfo.none)
-            in
             let recovered_code_pointer =
               let get_code_pointer_field field =
                 Clambda.Uprim (Pfield field, [uclosure], Debuginfo.none)
               in
               (* If the arity is zero or one, the code pointer is at offset 0
                  othewise it is at offset 2 *)
-              Clambda.Uifthenelse(arity_is_one_or_zero,
-                                  get_code_pointer_field 0,
-                                  get_code_pointer_field 2)
+              if get_fun_arity t closure_id <= 0 then
+                get_code_pointer_field 0
+              else
+                get_code_pointer_field 2
             in
             Uprim (Pintcomp Ceq,
                    [code_pointer closure_id;
@@ -701,6 +765,32 @@ type result = {
   exported : Export_info.t;
 }
 
+let closure_arities program =
+  let table = ref Closure_id.Map.empty in
+  Flambda_iterators.iter_on_set_of_closures_of_program program
+    ~f:(fun ~constant:_ { function_decls = { funs } } ->
+        Variable.Map.iter
+          (fun closure_var ({ params }:Flambda.function_declaration) ->
+             table :=
+               Closure_id.Map.add (Closure_id.wrap closure_var)
+                 (List.length params)
+                 !table)
+          funs);
+  !table
+
+let import_arities ({sets_of_closures}:Export_info.t) =
+  let table = ref Closure_id.Map.empty in
+  Set_of_closures_id.Map.iter (fun _ ({ funs } : Flambda.function_declarations) ->
+      Variable.Map.iter
+        (fun closure_var ({ params }:Flambda.function_declaration) ->
+           table :=
+             Closure_id.Map.add (Closure_id.wrap closure_var)
+               (List.length params)
+               !table)
+        funs)
+    sets_of_closures;
+  !table
+
 let convert (program, exported) : result =
   let current_unit =
     let offsets = Closure_offsets.compute program in
@@ -709,6 +799,7 @@ let convert (program, exported) : result =
       closures = Flambda_utils.make_closure_map program;
       constant_sets_of_closures =
         Flambda_utils.all_lifted_constant_sets_of_closures program;
+      arity_table = closure_arities program;
     }
   in
   let imported_units =
@@ -717,6 +808,7 @@ let convert (program, exported) : result =
       fv_offset_table = imported.offset_fv;
       closures = imported.closures;
       constant_sets_of_closures = imported.constant_sets_of_closures;
+      arity_table = import_arities imported;
     }
   in
   let t = { current_unit; imported_units; } in
