@@ -224,13 +224,9 @@ let rec approx_of_expr (env : Env.t) (flam : Flambda.t) : Export_info.approx =
       match Env.get_descr env (Env.find_approx env func) with
       | Some (Value_closure
               { closure_id; set_of_closures = { results; _ }; }) -> begin
-          match Closure_id.Set.get_singleton closure_id with
-          | None -> assert false
-          (* This is a direct application. It must be a singleton *)
-          | Some closure_id ->
-              assert (Closure_id.equal closure_id closure_id');
-              assert (Closure_id.Map.mem closure_id results);
-              Closure_id.Map.find closure_id results
+          assert (Closure_id.equal closure_id closure_id');
+          assert (Closure_id.Map.mem closure_id results);
+          Closure_id.Map.find closure_id results
         end
       | _ -> Value_unknown
     end
@@ -285,12 +281,14 @@ and descr_of_named (env : Env.t) (named : Flambda.named)
         Misc.fatal_errorf "Could not build export description for \
             [Project_closure]: closure ID %a not in set of closures"
           Closure_id.Set.print closure_id
-      end;
-      let descr : Export_info.descr =
-        Value_closure { closure_id = closure_id;
-                        set_of_closures; }
-      in
-      Value_id (Env.new_descr env descr)
+        end;
+        begin match Closure_id.Set.get_singleton closure_id with
+        | None -> Value_unknown
+        | Some closure_id ->
+            Value_id (Env.new_descr env
+              (Value_closure { closure_id = closure_id;
+                 set_of_closures; }))
+        end
     | _ ->
       (* It would be nice if this were [assert false], but owing to the fact
          that this pass may propagate less information than for example
@@ -299,33 +297,39 @@ and descr_of_named (env : Env.t) (named : Flambda.named)
     end
   | Move_within_set_of_closures { closure; start_from; move_to; } ->
     begin match Env.get_descr env (Env.find_approx env closure) with
-    | Some (Value_closure { set_of_closures; closure_id; }) ->
-      assert (Closure_id.Set.equal closure_id start_from);
-      let descr : Export_info.descr =
-        Value_closure { closure_id = move_to; set_of_closures; }
-      in
-      Value_id (Env.new_descr env descr)
+    | Some (Value_closure { set_of_closures; closure_id; }) -> begin
+        match Closure_id.Set.get_singleton start_from,
+              Closure_id.Set.get_singleton move_to with
+        | None, _ | _, None -> Value_unknown
+        | Some start_from, Some move_to ->
+            assert (Closure_id.equal closure_id start_from);
+            let descr : Export_info.descr =
+              Value_closure { closure_id = move_to; set_of_closures; }
+            in
+            Value_id (Env.new_descr env descr)
+      end
     | _ -> Value_unknown
     end
-  | Project_var _ ->
-      failwith "TODO"
-  (* | Project_var { closure; closure_id = closure_id'; var; } -> *)
-  (*   begin match Env.get_descr env (Env.find_approx env closure) with *)
-  (*   | Some (Value_closure *)
-  (*       { set_of_closures = { bound_vars; _ }; closure_id; }) -> *)
-  (*     assert (Closure_id.Set.equal closure_id closure_id'); *)
-  (*     if not (Var_within_closure.Map.mem var bound_vars) then begin *)
-  (*       Misc.fatal_errorf "Project_var from %a (closure ID %a) of \ *)
-  (*           variable %a that is not bound by the closure.  \ *)
-  (*           Variables bound by the closure are: %a" *)
-  (*         Variable.print closure *)
-  (*         Closure_id.Set.print closure_id *)
-  (*         Var_within_closure.print var *)
-  (*         (Var_within_closure.Map.print (fun _ _ -> ())) bound_vars *)
-  (*     end; *)
-  (*     Var_within_closure.Map.find var bound_vars *)
-  (*   | _ -> Value_unknown *)
-  (*   end *)
+  | Project_var { closure; var } ->
+      begin match Env.get_descr env (Env.find_approx env closure) with
+      | Some (Value_closure { set_of_closures = { bound_vars; _ }; closure_id; }) -> begin
+          match Closure_id.Map.get_singleton var with
+          | None -> Value_unknown
+          | Some (closure_id', var) ->
+              assert (Closure_id.equal closure_id closure_id');
+              if not (Var_within_closure.Map.mem var bound_vars) then begin
+                Misc.fatal_errorf "Project_var from %a (closure ID %a) of \
+                  variable %a that is not bound by the closure.  \
+                  Variables bound by the closure are: %a"
+                  Variable.print closure
+                  Closure_id.print closure_id
+                  Var_within_closure.print var
+                  (Var_within_closure.Map.print (fun _ _ -> ())) bound_vars
+              end;
+              Var_within_closure.Map.find var bound_vars
+        end
+      | _ -> Value_unknown
+      end
 
 and describe_set_of_closures env (set : Flambda.set_of_closures)
       : Export_info.value_set_of_closures =
@@ -364,7 +368,7 @@ and describe_set_of_closures env (set : Flambda.set_of_closures)
     Variable.Map.mapi (fun fun_var _function_decl ->
         let descr : Export_info.descr =
           Value_closure
-            { closure_id = Closure_id.Set.singleton (Closure_id.wrap fun_var);
+            { closure_id = Closure_id.wrap fun_var;
               set_of_closures = initial_value_set_of_closures;
             }
         in
@@ -428,7 +432,7 @@ let describe_constant_defining_value env export_id symbol
       end;
       let descr =
         Export_info.Value_closure
-          { closure_id = Closure_id.Set.singleton closure_id; set_of_closures; }
+          { closure_id = closure_id; set_of_closures; }
       in
       Env.record_descr env export_id descr
     | None ->

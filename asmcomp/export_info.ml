@@ -48,7 +48,7 @@ type descr =
   | Value_set_of_closures of value_set_of_closures
 
 and value_closure = {
-  closure_id : Closure_id.Set.t;
+  closure_id : Closure_id.t;
   set_of_closures : value_set_of_closures;
 }
 
@@ -118,7 +118,7 @@ let equal_descr (d1:descr) (d2:descr) : bool =
   | Value_string s1, Value_string s2 ->
     s1 = s2
   | Value_closure c1, Value_closure c2 ->
-    Closure_id.Set.equal c1.closure_id c2.closure_id &&
+    Closure_id.equal c1.closure_id c2.closure_id &&
     equal_set_of_closures c1.set_of_closures c2.set_of_closures
   | Value_set_of_closures s1, Value_set_of_closures s2 ->
     equal_set_of_closures s1 s2
@@ -262,7 +262,7 @@ let print_approx ppf ((t,root_symbols) : t * Symbol.t list) =
     | Value_mutable_block (tag, size) ->
       fprintf ppf "[mutable %a:%i]" Tag.print tag size
     | Value_closure {closure_id; set_of_closures} ->
-      fprintf ppf "(closure %a, %a)" Closure_id.Set.print closure_id
+      fprintf ppf "(closure %a, %a)" Closure_id.print closure_id
         print_set_of_closures set_of_closures
     | Value_set_of_closures set_of_closures ->
       fprintf ppf "(set_of_closures %a)" print_set_of_closures set_of_closures

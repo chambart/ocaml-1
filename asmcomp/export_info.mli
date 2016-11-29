@@ -51,7 +51,8 @@ type descr =
   | Value_set_of_closures of value_set_of_closures
 
 and value_closure = {
-  closure_id : Closure_id.Set.t;
+  closure_id : Closure_id.t;
+  (* closure_id : Closure_id.Set.t; *)
   (* CR pchambart: this is probably a mistake to allow a set here:
      What happens if this set is extended in an other file ? how to
      generate the fields accesses ?

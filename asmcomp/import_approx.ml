@@ -127,10 +127,10 @@ let rec import_ex ex =
           { set_of_closures_id; bound_vars; aliased_symbol } } ->
     let value_set_of_closures =
       import_value_set_of_closures ~set_of_closures_id ~bound_vars ~ex_info
-        ~what:(Format.asprintf "Value_closure %a" Closure_id.Set.print closure_id)
+        ~what:(Format.asprintf "Value_closure %a" Closure_id.print closure_id)
     in
     A.value_closure ?set_of_closures_symbol:aliased_symbol
-      value_set_of_closures closure_id
+      value_set_of_closures (Closure_id.Set.singleton closure_id)
   | Value_set_of_closures { set_of_closures_id; bound_vars; aliased_symbol } ->
     let value_set_of_closures =
       import_value_set_of_closures ~set_of_closures_id ~bound_vars ~ex_info
