@@ -389,9 +389,9 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
             mark_curr curr
           end
       end
-    | Project_var ({ closure; closure_id; var = _ }) -> begin
-        match Closure_id.Set.get_singleton closure_id with
-        | Some closure_id ->
+    | Project_var ({ closure; var }) -> begin
+        match Closure_id.Map.get_singleton var with
+        | Some (closure_id, _var) ->
           if Closure_id.in_compilation_unit closure_id compilation_unit then
             mark_var closure curr
           else

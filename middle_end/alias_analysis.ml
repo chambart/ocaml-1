@@ -25,13 +25,19 @@ type allocated_const =
   | Array of Lambda.array_kind * Asttypes.mutable_flag * Variable.t list
   | Duplicate_array of Lambda.array_kind * Asttypes.mutable_flag * Variable.t
 
+type constant_project_var = {
+  closure : Variable.t;
+  closure_id : Closure_id.t;
+  var : Var_within_closure.t;
+}
+
 type constant_defining_value =
   | Allocated_const of allocated_const
   | Block of Tag.t * Variable.t list
   | Set_of_closures of Flambda.set_of_closures
   | Project_closure of Flambda.project_closure
   | Move_within_set_of_closures of Flambda.move_within_set_of_closures
-  | Project_var of Flambda.project_var
+  | Project_var of constant_project_var
   | Field of Variable.t * int
   | Symbol_field of Symbol.t * int
   | Const of Flambda.const
@@ -45,6 +51,12 @@ type definitions = {
   initialize_symbol : initialize_symbol_field list Symbol.Tbl.t;
   symbol : Flambda.constant_defining_value Symbol.Tbl.t;
 }
+
+let print_constant_project_var ppf (project_var : constant_project_var) =
+  Format.fprintf ppf "@[<2>(project_var@ %a@ from %a=%a)@]"
+    Var_within_closure.print project_var.var
+    Closure_id.print project_var.closure_id
+    Variable.print project_var.closure
 
 let print_constant_defining_value ppf = function
   | Allocated_const (Normal const) -> Allocated_const.print ppf const
@@ -61,7 +73,7 @@ let print_constant_defining_value ppf = function
   | Project_closure project -> Flambda.print_project_closure ppf project
   | Move_within_set_of_closures move ->
     Flambda.print_move_within_set_of_closures ppf move
-  | Project_var project -> Flambda.print_project_var ppf project
+  | Project_var project -> print_constant_project_var ppf project
   | Field (var, field) -> Format.fprintf ppf "%a.(%d)" Variable.print var field
   | Symbol_field (sym, field) ->
     Format.fprintf ppf "%a.(%d)" Symbol.print sym field

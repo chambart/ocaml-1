@@ -57,8 +57,8 @@ and descr =
   | Value_unresolved of Symbol.t (* No description was found for this symbol *)
 
 and value_closure = {
-  set_of_closures : t;
-  closure_id : Closure_id.Set.t;
+  (* set_of_closures : t; *)
+  potential_closure : t Closure_id.Map.t; (* Set of closure for each potential *)
 }
 
 and value_set_of_closures = {
@@ -84,7 +84,7 @@ let descr t = t.descr
 
 let print_value_set_of_closures ppf
       { function_decls = { funs }; invariant_params; freshening; _ } =
-  Format.fprintf ppf "(set_of_closures:@ %a invariant_params=%a freshening=%a)"
+  Format.fprintf ppf "(@[set_of_closures:@ %a invariant_params=%a freshening=%a@])"
     (fun ppf -> Variable.Map.iter (fun id _ -> Variable.print ppf id)) funs
     (Variable.Map.print Variable.Set.print) (Lazy.force invariant_params)
     Freshening.Project_var.print freshening
@@ -106,9 +106,17 @@ let rec print_descr ppf = function
   | Value_bottom -> Format.fprintf ppf "bottom"
   | Value_extern id -> Format.fprintf ppf "_%a_" Export_id.print id
   | Value_symbol sym -> Format.fprintf ppf "%a" Symbol.print sym
-  | Value_closure { set_of_closures; closure_id; } ->
-    Format.fprintf ppf "(closure:@ %a from@ %a)" Closure_id.Set.print closure_id
-      print set_of_closures
+  (* | Value_closure { set_of_closures; closure_id; } -> *)
+  (*   Format.fprintf ppf "(closure:@ %a from@ %a)" Closure_id.Set.print closure_id *)
+  (*     print set_of_closures *)
+  | Value_closure { potential_closure } ->
+    Format.fprintf ppf "(closure:@ @[<2>[@ ";
+    Closure_id.Map.iter (fun closure_id set_of_closures ->
+      Format.fprintf ppf "%a @[<2>from@ %a@];@ "
+        Closure_id.print closure_id
+        print set_of_closures)
+      potential_closure;
+    Format.fprintf ppf "]@])";
   | Value_set_of_closures set_of_closures ->
     print_value_set_of_closures ppf set_of_closures
   | Value_unresolved sym ->
@@ -215,9 +223,16 @@ let value_closure ?closure_var ?set_of_closures_var ?set_of_closures_symbol
     }
   in
   let value_closure =
-    { set_of_closures = approx_set_of_closures;
-      closure_id;
-    }
+    match Closure_id.Set.get_singleton closure_id with
+    | None ->
+      failwith "TODO value_closure not singleton"
+    | Some closure_id ->
+      { potential_closure =
+          Closure_id.Map.singleton closure_id
+            approx_set_of_closures }
+    (* { set_of_closures = approx_set_of_closures; *)
+    (*   closure_id; *)
+    (* } *)
   in
   { descr = Value_closure value_closure;
     var = closure_var;
@@ -602,6 +617,16 @@ let rec meet_descr ~really_import_approx d1 d2 = match d1, d2 with
       Array.mapi (fun i v -> meet ~really_import_approx v a2.(i)) a1
     in
     Value_block (tag1, fields)
+  | Value_closure { potential_closure = map1 },
+    Value_closure { potential_closure = map2 } ->
+    (* Probablement n'importe quoi: il faut checker que les choses mergées
+       correspondent à la même cloture *)
+    let potential_closure =
+      Closure_id.Map.disjoint_union
+        ~eq:(fun _ _ -> false) (* hum ? *)
+        map1 map2
+    in
+    Value_closure { potential_closure }
   | _ -> Value_unknown Other
 
 and meet ~really_import_approx a1 a2 =
@@ -700,27 +725,47 @@ type checked_approx_for_closure_allowing_unresolved =
   | Unresolved of Symbol.t
   | Unknown
   | Unknown_because_of_unresolved_symbol of Symbol.t
-  | Ok of value_closure * Variable.t option
-          * Symbol.t option * value_set_of_closures
+  | Ok of
+      value_set_of_closures Closure_id.Map.t * Variable.t option * Symbol.t option
 
 let check_approx_for_closure_allowing_unresolved t
       : checked_approx_for_closure_allowing_unresolved =
   match t.descr with
-  | Value_closure value_closure ->
-    begin match value_closure.set_of_closures.descr with
-    | Value_set_of_closures value_set_of_closures ->
-      let symbol = match value_closure.set_of_closures.symbol with
-        | Some (symbol, None) -> Some symbol
-        | None | Some (_, Some _) -> None
-      in
-      Ok (value_closure, value_closure.set_of_closures.var,
-          symbol, value_set_of_closures)
-    | Value_unresolved _
-    | Value_closure _ | Value_block _ | Value_int _ | Value_char _
-    | Value_constptr _ | Value_float _ | Value_boxed_int _ | Value_unknown _
-    | Value_bottom | Value_extern _ | Value_string _ | Value_float_array _
-    | Value_symbol _ ->
-      Wrong
+  | Value_closure value_closure -> begin
+    match Closure_id.Map.get_singleton value_closure.potential_closure with
+    | None -> begin
+      try
+        let closures =
+          Closure_id.Map.map (fun set_of_closures ->
+            match set_of_closures.descr with
+            | Value_set_of_closures value_set_of_closures ->
+              value_set_of_closures
+            | Value_unresolved _
+            | Value_closure _ | Value_block _ | Value_int _ | Value_char _
+            | Value_constptr _ | Value_float _ | Value_boxed_int _ | Value_unknown _
+            | Value_bottom | Value_extern _ | Value_string _ | Value_float_array _
+            | Value_symbol _ ->
+              raise Exit)
+            value_closure.potential_closure
+        in
+        Ok (closures, None, None)
+      with Exit -> Wrong
+      end
+    | Some (closure_id, set_of_closures) ->
+      match set_of_closures.descr with
+      | Value_set_of_closures value_set_of_closures ->
+        let symbol = match set_of_closures.symbol with
+          | Some (symbol, None) -> Some symbol
+          | None | Some (_, Some _) -> None
+        in
+        Ok (Closure_id.Map.singleton closure_id value_set_of_closures,
+            set_of_closures.var, symbol)
+      | Value_unresolved _
+      | Value_closure _ | Value_block _ | Value_int _ | Value_char _
+      | Value_constptr _ | Value_float _ | Value_boxed_int _ | Value_unknown _
+      | Value_bottom | Value_extern _ | Value_string _ | Value_float_array _
+      | Value_symbol _ ->
+        Wrong
     end
   | Value_unknown (Unresolved_symbol symbol) ->
     Unknown_because_of_unresolved_symbol symbol
@@ -736,31 +781,29 @@ let check_approx_for_closure_allowing_unresolved t
 
 type checked_approx_for_closure =
   | Wrong
-  | Ok of value_closure * Variable.t option
-          * Symbol.t option * value_set_of_closures
+  | Ok of
+      value_set_of_closures Closure_id.Map.t * Variable.t option * Symbol.t option
 
 let check_approx_for_closure t : checked_approx_for_closure =
   match check_approx_for_closure_allowing_unresolved t with
-  | Ok (value_closure, set_of_closures_var, set_of_closures_symbol,
-      value_set_of_closures) ->
-    Ok (value_closure, set_of_closures_var, set_of_closures_symbol,
-      value_set_of_closures)
+  | Ok (value_closures, set_of_closures_var, set_of_closures_symbol) ->
+    Ok (value_closures, set_of_closures_var, set_of_closures_symbol)
   | Wrong | Unknown | Unresolved _ | Unknown_because_of_unresolved_symbol _ ->
     Wrong
 
 type checked_approx_for_closure_singleton =
   | Wrong
-  | Ok of Closure_id.t * Variable.t option
+  | Ok of
+      Closure_id.t * Variable.t option
           * Symbol.t option * value_set_of_closures
 
 let check_approx_for_closure_singleton t : checked_approx_for_closure_singleton =
   match check_approx_for_closure_allowing_unresolved t with
-  | Ok (value_closure, set_of_closures_var, set_of_closures_symbol,
-      value_set_of_closures) -> begin
-      match Closure_id.Set.get_singleton value_closure.closure_id with
+  | Ok (value_closures, set_of_closures_var, set_of_closures_symbol) -> begin
+      match Closure_id.Map.get_singleton value_closures with
       | None ->
         Wrong
-      | Some closure_id ->
+      | Some (closure_id, value_set_of_closures) ->
         Ok (closure_id, set_of_closures_var, set_of_closures_symbol,
             value_set_of_closures)
     end

@@ -307,23 +307,25 @@ and descr_of_named (env : Env.t) (named : Flambda.named)
       Value_id (Env.new_descr env descr)
     | _ -> Value_unknown
     end
-  | Project_var { closure; closure_id = closure_id'; var; } ->
-    begin match Env.get_descr env (Env.find_approx env closure) with
-    | Some (Value_closure
-        { set_of_closures = { bound_vars; _ }; closure_id; }) ->
-      assert (Closure_id.Set.equal closure_id closure_id');
-      if not (Var_within_closure.Map.mem var bound_vars) then begin
-        Misc.fatal_errorf "Project_var from %a (closure ID %a) of \
-            variable %a that is not bound by the closure.  \
-            Variables bound by the closure are: %a"
-          Variable.print closure
-          Closure_id.Set.print closure_id
-          Var_within_closure.print var
-          (Var_within_closure.Map.print (fun _ _ -> ())) bound_vars
-      end;
-      Var_within_closure.Map.find var bound_vars
-    | _ -> Value_unknown
-    end
+  | Project_var _ ->
+      failwith "TODO"
+  (* | Project_var { closure; closure_id = closure_id'; var; } -> *)
+  (*   begin match Env.get_descr env (Env.find_approx env closure) with *)
+  (*   | Some (Value_closure *)
+  (*       { set_of_closures = { bound_vars; _ }; closure_id; }) -> *)
+  (*     assert (Closure_id.Set.equal closure_id closure_id'); *)
+  (*     if not (Var_within_closure.Map.mem var bound_vars) then begin *)
+  (*       Misc.fatal_errorf "Project_var from %a (closure ID %a) of \ *)
+  (*           variable %a that is not bound by the closure.  \ *)
+  (*           Variables bound by the closure are: %a" *)
+  (*         Variable.print closure *)
+  (*         Closure_id.Set.print closure_id *)
+  (*         Var_within_closure.print var *)
+  (*         (Var_within_closure.Map.print (fun _ _ -> ())) bound_vars *)
+  (*     end; *)
+  (*     Var_within_closure.Map.find var bound_vars *)
+  (*   | _ -> Value_unknown *)
+  (*   end *)
 
 and describe_set_of_closures env (set : Flambda.set_of_closures)
       : Export_info.value_set_of_closures =

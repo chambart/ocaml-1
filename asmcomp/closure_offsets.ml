@@ -125,9 +125,11 @@ let compute_reexported_offsets program
       | Move_within_set_of_closures { start_from; move_to; _ } ->
         Closure_id.Set.iter used_closure_id start_from;
         Closure_id.Set.iter used_closure_id move_to
-      | Project_var { closure_id; var; _ } ->
-        Closure_id.Set.iter used_closure_id closure_id;
-        used_var_within_closure var
+      | Project_var { var; _ } ->
+        Closure_id.Map.iter (fun closure_id var ->
+            used_closure_id closure_id;
+            used_var_within_closure var)
+          var
       | Symbol _ | Const _ | Allocated_const _ | Read_mutable _
       | Read_symbol_field _ | Set_of_closures _ | Prim _ | Expr _ -> ());
   Flambda_iterators.iter_constant_defining_values_on_program program

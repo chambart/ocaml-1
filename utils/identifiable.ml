@@ -104,6 +104,18 @@ module Make_map (T : Thing) = struct
   let of_set f set = T_set.fold (fun e map -> add e (f e) map) set empty
 
   let transpose_keys_and_data map = fold (fun k v m -> add v k m) map empty
+
+  let get_singleton s =
+    (* CR pchambart: this should be done more efficiently, but
+       this is probably the best we can do currently with the interface
+       of set *)
+    try
+      fold (fun k s acc ->
+          match acc with
+          | None -> Some (k, s)
+          | Some _ -> raise Exit)
+        s None
+    with Exit -> None
 end
 
 module Make_set (T : Thing) = struct
@@ -209,6 +221,7 @@ module type S = sig
     val transpose_keys_and_data : key t -> key t
     val print :
       (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+    val get_singleton : 'a t -> (key * 'a) option
   end
 
   module Tbl : sig

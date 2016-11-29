@@ -25,13 +25,19 @@ type allocated_const =
   | Array of Lambda.array_kind * Asttypes.mutable_flag * Variable.t list
   | Duplicate_array of Lambda.array_kind * Asttypes.mutable_flag * Variable.t
 
+type constant_project_var = {
+  closure : Variable.t;
+  closure_id : Closure_id.t;
+  var : Var_within_closure.t;
+}
+
 type constant_defining_value =
   | Allocated_const of allocated_const
   | Block of Tag.t * Variable.t list
   | Set_of_closures of Flambda.set_of_closures
   | Project_closure of Flambda.project_closure
   | Move_within_set_of_closures of Flambda.move_within_set_of_closures
-  | Project_var of Flambda.project_var
+  | Project_var of constant_project_var
   | Field of Variable.t * int
   | Symbol_field of Symbol.t * int
   | Const of Flambda.const

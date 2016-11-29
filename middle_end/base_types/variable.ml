@@ -122,3 +122,6 @@ let output_full chan t =
   Compilation_unit.output chan t.compilation_unit;
   output_string chan ".";
   output chan t
+
+let is_named t s =
+  t.name = s

@@ -60,3 +60,5 @@ val compare_lists : t list -> t list -> int
 
 val output_full : out_channel -> t -> unit
 (** Unlike [output], [output_full] includes the compilation unit. *)
+
+val is_named : t -> string -> bool

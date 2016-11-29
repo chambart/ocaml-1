@@ -76,6 +76,7 @@ module type S = sig
     val transpose_keys_and_data : key t -> key t
     val print :
       (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+    val get_singleton : 'a t -> (key * 'a) option
   end
 
   module Tbl : sig

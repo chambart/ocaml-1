@@ -150,6 +150,11 @@ val does_not_freshen : t -> Variable.t list -> bool
 
 val print : Format.formatter -> t -> unit
 
+val freshen_project_var
+   : Var_within_closure.t Closure_id.Map.t
+  -> closure_freshening:Project_var.t
+  -> Var_within_closure.t Closure_id.Map.t
+
 (** N.B. This does not freshen the domain of the supplied map, only the
     range. *)
 (* CR-someday mshinwell: consider fixing that *)

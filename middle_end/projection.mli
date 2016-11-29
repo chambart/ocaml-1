@@ -40,8 +40,8 @@ type move_within_set_of_closures = {
     detailed documentation below on [set_of_closures]. *)
 type project_var = {
   closure : Variable.t;  (** must yield a closure *)
-  closure_id : Closure_id.Set.t;
-  var : Var_within_closure.t;
+  (* closure_id : Closure_id.Set.t; *)
+  var : Var_within_closure.t Closure_id.Map.t;
 }
 
 val print_project_closure

@@ -177,8 +177,7 @@ and same_named (named1 : Flambda.named) (named2 : Flambda.named) =
   | Project_closure _, _ | _, Project_closure _ -> false
   | Project_var v1, Project_var v2 ->
     Variable.equal v1.closure v2.closure
-      && Closure_id.Set.equal v1.closure_id v2.closure_id
-      && Var_within_closure.equal v1.var v2.var
+      && Closure_id.Map.equal Var_within_closure.equal v1.var v2.var
   | Project_var _, _ | _, Project_var _ -> false
   | Move_within_set_of_closures m1, Move_within_set_of_closures m2 ->
     same_move_within_set_of_closures m1 m2

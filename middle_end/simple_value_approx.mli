@@ -134,8 +134,8 @@ and descr = private
   | Value_unresolved of Symbol.t (* No description was found for this symbol *)
 
 and value_closure = {
-  set_of_closures : t;
-  closure_id : Closure_id.Set.t;
+  (* set_of_closures : t; *)
+  potential_closure : t Closure_id.Map.t; (* Set of closure for each potential *)
 }
 
 (* CR-soon mshinwell: add support for the approximations of the results, so we
@@ -380,8 +380,8 @@ val check_approx_for_set_of_closures : t -> checked_approx_for_set_of_closures
 
 type checked_approx_for_closure =
   | Wrong
-  | Ok of value_closure * Variable.t option
-          * Symbol.t option * value_set_of_closures
+  | Ok of
+      value_set_of_closures Closure_id.Map.t * Variable.t option * Symbol.t option
 
 (** Try to prove that a value with the given approximation may be used as a
     closure.  Values coming from external compilation units with unresolved
@@ -402,8 +402,8 @@ type checked_approx_for_closure_allowing_unresolved =
   | Unresolved of Symbol.t
   | Unknown
   | Unknown_because_of_unresolved_symbol of Symbol.t
-  | Ok of value_closure * Variable.t option
-          * Symbol.t option * value_set_of_closures
+  | Ok of
+      value_set_of_closures Closure_id.Map.t * Variable.t option * Symbol.t option
 
 (** As for [check_approx_for_closure], but values coming from external
     compilation units with unresolved approximations are permitted. *)

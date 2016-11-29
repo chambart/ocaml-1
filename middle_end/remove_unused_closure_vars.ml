@@ -28,11 +28,11 @@ let remove_unused_closure_variables ~remove_direct_call_surrogates program =
         Closure_id.Set.iter (fun closure_id ->
             Closure_id.Tbl.add used_fun closure_id ())
           closure_id
-      | Project_var { closure_id; var } ->
-        Var_within_closure.Tbl.add used var ();
-        Closure_id.Set.iter (fun closure_id ->
+      | Project_var { closure = _; var } ->
+        Closure_id.Map.iter (fun closure_id var ->
+          Var_within_closure.Tbl.add used var ();
           Closure_id.Tbl.add used_fun closure_id ())
-          closure_id;
+          var
       | Move_within_set_of_closures { closure = _; start_from; move_to } ->
         Closure_id.Set.iter (fun start_from ->
           Closure_id.Tbl.add used_fun start_from ())

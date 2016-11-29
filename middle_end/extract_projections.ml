@@ -42,11 +42,16 @@ let known_valid_projections ~env ~projections ~which_variables =
       let approx = E.find_exn env outer_var in
       match projection with
       | Project_var project_var ->
-        begin match A.check_approx_for_closure approx with
+        (* CR pchambart: TODO: gerer le cas qui n'est pas singleton. *)
+        begin match A.check_approx_for_closure_singleton approx with
         | Ok (_value_closure, _approx_var, _approx_sym,
-              value_set_of_closures) ->
-          Var_within_closure.Map.mem project_var.var
-            value_set_of_closures.bound_vars
+              value_set_of_closures) -> begin
+            match Closure_id.Map.get_singleton project_var.var with
+            | None -> false
+            | Some (_closure_id, var) ->
+              Var_within_closure.Map.mem var
+                value_set_of_closures.bound_vars
+          end
         | Wrong -> false
         end
       | Project_closure project_closure ->
@@ -59,12 +64,20 @@ let known_valid_projections ~env ~projections ~which_variables =
         | Wrong -> false
         end
       | Move_within_set_of_closures move ->
-        begin match A.check_approx_for_closure approx with
+        begin match A.check_approx_for_closure_singleton approx with
         | Ok (value_closure, _approx_var, _approx_sym,
               _value_set_of_closures) ->
           (* We could check that [move.move_to] is in [value_set_of_closures],
              but this is unnecessary, since [Closure_id]s are unique. *)
-          Closure_id.Set.equal value_closure.closure_id move.start_from
+          (* begin *)
+          (*   match Closure_id.Map.get_singleton value_closure.potential_closure with *)
+          (*   | None -> *)
+          (*     failwith "TODO known_valid_projections"; *)
+          (*   | Some (closure_id, _) *)
+          (* end *)
+          Closure_id.Set.equal
+            (Closure_id.Set.singleton value_closure)
+            move.start_from
         | Wrong -> false
         end
       | Field (field_index, _) ->

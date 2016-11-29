@@ -189,7 +189,7 @@ let rec lam ppf (flam : t) =
   match flam with
   | Var (id) ->
       Variable.print ppf id
-  | Apply({func; args; kind; inline; dbg}) ->
+  | Apply({func; args; kind; inline; dbg = _dbg}) ->
     let direct ppf () =
       match kind with
       | Indirect -> ()
@@ -202,8 +202,8 @@ let rec lam ppf (flam : t) =
       | Unroll i -> fprintf ppf "<unroll %i>" i
       | Default_inline -> ()
     in
-    fprintf ppf "@[<2>(apply%a%a<%s>@ %a%a)@]" direct () inline ()
-      (Debuginfo.to_string dbg)
+    fprintf ppf "@[<2>(apply%a%a@ %a%a)@]" direct () inline ()
+      (* (Debuginfo.to_string dbg) *)
       Variable.print func Variable.print_list args
   | Assign { being_assigned; new_value; } ->
     fprintf ppf "@[<2>(assign@ %a@ %a)@]"
@@ -344,9 +344,9 @@ and print_named ppf (named : named) =
     print_move_within_set_of_closures ppf move_within_set_of_closures
   | Set_of_closures (set_of_closures) ->
     print_set_of_closures ppf set_of_closures
-  | Prim(prim, args, dbg) ->
-    fprintf ppf "@[<2>(%a<%s>%a)@]" Printlambda.primitive prim
-      (Debuginfo.to_string dbg)
+  | Prim(prim, args, _dbg) ->
+    fprintf ppf "@[<2>(%a%a)@]" Printlambda.primitive prim
+      (* (Debuginfo.to_string dbg) *)
       Variable.print_list args
   | Expr expr ->
     fprintf ppf "*%a" lam expr
@@ -398,22 +398,28 @@ and print_set_of_closures ppf (set_of_closures : set_of_closures) =
     let spec ppf spec_args =
       if not (Variable.Map.is_empty spec_args)
       then begin
-        fprintf ppf "@ ";
+        fprintf ppf "@ @[<2>specialised_args={";
         Variable.Map.iter (fun id (spec_to : specialised_to) ->
             fprintf ppf "@ %a := %a"
               Variable.print id print_specialised_to spec_to)
-          spec_args
+          spec_args;
+        fprintf ppf "})@]"
       end
     in
-    fprintf ppf "@[<2>(set_of_closures id=%a@ %a@ @[<2>free_vars={%a@ }@]@ \
-        @[<2>specialised_args={%a})@]@ \
-        @[<2>direct_call_surrogates=%a@]@]"
+    let direct_call_surrogates ppf () =
+      if not (Variable.Map.is_empty set_of_closures.direct_call_surrogates) then
+        fprintf ppf "@ @[<2>direct_call_surrogates=%a@]"
+          (Variable.Map.print Variable.print)
+          set_of_closures.direct_call_surrogates
+    in
+    fprintf ppf "@[<2>(set_of_closures id=%a@ %a@ @[<2>free_vars={%a@ }@]\
+        %a\
+        %a@]"
       Set_of_closures_id.print function_decls.set_of_closures_id
       funs function_decls.funs
       vars free_vars
       spec specialised_args
-      (Variable.Map.print Variable.print)
-      set_of_closures.direct_call_surrogates
+      direct_call_surrogates ()
 
 and print_const ppf (c : const) =
   match c with
@@ -629,7 +635,7 @@ and variables_usage_named ?ignore_uses_in_project_var
       specialised_args
   | Project_closure { set_of_closures; closure_id = _ } ->
     free_variable set_of_closures
-  | Project_var { closure; closure_id = _; var = _ } ->
+  | Project_var { closure; var = _ } ->
     begin match ignore_uses_in_project_var with
     | None -> free_variable closure
     | Some () -> ()

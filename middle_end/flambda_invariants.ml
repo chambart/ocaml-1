@@ -47,6 +47,7 @@ let ignore_set_of_closures_id (_ : Set_of_closures_id.t) = ()
 let ignore_set_of_closures_origin (_ : Set_of_closures_origin.t) = ()
 let ignore_closure_id (_ : Closure_id.t) = ()
 let ignore_closure_id_set (_ : Closure_id.Set.t) = ()
+let ignore_closure_id_map (_ : 'a -> unit) (_ : 'a Closure_id.Map.t) = ()
 let ignore_var_within_closure (_ : Var_within_closure.t) = ()
 let ignore_tag (_ : Tag.t) = ()
 let ignore_inline_attribute (_ : Lambda.inline_attribute) = ()
@@ -251,10 +252,9 @@ let variable_and_symbol_invariants (program : Flambda.program) =
       check_variable_is_bound env closure;
       ignore_closure_id_set start_from;
       ignore_closure_id_set move_to;
-    | Project_var { closure; closure_id; var; } ->
+    | Project_var { closure; var; } ->
       check_variable_is_bound env closure;
-      ignore_closure_id_set closure_id;
-      ignore_var_within_closure var
+      ignore_closure_id_map ignore_var_within_closure var;
     | Prim (prim, args, dbg) ->
       ignore_primitive prim;
       check_variables_are_bound env args;
@@ -559,8 +559,8 @@ let used_closure_ids (program:Flambda.program) =
     | Move_within_set_of_closures { closure = _; start_from; move_to; } ->
       used := Closure_id.Set.union start_from !used;
       used := Closure_id.Set.union move_to !used
-    | Project_var { closure = _; closure_id; var = _ } ->
-      used := Closure_id.Set.union closure_id !used
+    | Project_var { closure = _; var } ->
+      used := Closure_id.Set.union (Closure_id.Map.keys var) !used
     | Set_of_closures _ | Symbol _ | Const _ | Allocated_const _
     | Prim _ | Expr _ | Read_mutable _ | Read_symbol_field _ -> ()
   in
@@ -573,8 +573,10 @@ let used_vars_within_closures (flam:Flambda.program) =
   let used = ref Var_within_closure.Set.empty in
   let f (flam : Flambda.named) =
     match flam with
-    | Project_var { closure = _; closure_id = _; var; } ->
-      used := Var_within_closure.Set.add var !used
+    | Project_var { closure = _; var; } ->
+      Closure_id.Map.iter (fun _ var ->
+        used := Var_within_closure.Set.add var !used)
+        var
     | _ -> ()
   in
   Flambda_iterators.iter_named_of_program ~f flam;

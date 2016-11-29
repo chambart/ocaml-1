@@ -48,7 +48,7 @@ let get_fun_offset t (closure_id:Closure_id.Set.t) =
     Misc.fatal_errorf "Flambda_to_clambda: missing offset for closure %a"
       Closure_id.print closure_id
 
-let get_fv_offset t var_within_closure =
+let _get_fv_offset t var_within_closure =
   let fv_offset_table =
     if Var_within_closure.in_compilation_unit var_within_closure
         (Compilenv.current_unit ())
@@ -388,14 +388,16 @@ and to_clambda_named t env var (named : Flambda.named) : Clambda.ulambda =
          (Flambda.Expr (Var closure)))
       ((get_fun_offset t move_to) - (get_fun_offset t start_from)))
       named
-  | Project_var { closure; var; closure_id } ->
-    let ulam = subst_var env closure in
-    let fun_offset = get_fun_offset t closure_id in
-    let var_offset = get_fv_offset t var in
-    let pos = var_offset - fun_offset in
-    Uprim (Pfield pos,
-      [check_field (check_closure ulam (Expr (Var closure))) pos (Some named)],
-      Debuginfo.none)
+  | Project_var _ ->
+      failwith "TODO 9873209"
+  (* | Project_var { closure; var; closure_id } -> *)
+  (*   let ulam = subst_var env closure in *)
+  (*   let fun_offset = get_fun_offset t closure_id in *)
+  (*   let var_offset = get_fv_offset t var in *)
+  (*   let pos = var_offset - fun_offset in *)
+  (*   Uprim (Pfield pos, *)
+  (*     [check_field (check_closure ulam (Expr (Var closure))) pos (Some named)], *)
+  (*     Debuginfo.none) *)
   | Prim (Pfield index, [block], dbg) ->
     Uprim (Pfield index, [check_field (subst_var env block) index None], dbg)
   | Prim (Psetfield (index, maybe_ptr, init), [block; new_value], dbg) ->

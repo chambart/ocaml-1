@@ -63,8 +63,10 @@ let fold_over_projections_of_vars_bound_by_closure
       let expr : Flambda.named =
         Project_var {
           closure = lhs_of_application;
-          closure_id = Closure_id.Set.singleton closure_id_being_applied;
-          var = Var_within_closure.wrap var;
+          var =
+            Closure_id.Map.singleton
+              closure_id_being_applied
+              (Var_within_closure.wrap var);
         }
       in
       f ~acc ~var ~expr)

@@ -126,8 +126,17 @@ let assign_symbols_and_collect_constant_definitions
       | Prim _ ->
         Misc.fatal_errorf "Primitive not expected to be constant: @.%a@."
           Flambda.print_named named
-      | Project_var project_var ->
-        record_definition (AA.Project_var project_var)
+      | Project_var project_var -> begin
+          match Closure_id.Map.get_singleton project_var.var with
+          | None -> assert false
+          | Some (closure_id, var) ->
+            record_definition
+              (AA.Project_var {
+                 closure = project_var.closure;
+                 closure_id;
+                 var
+               })
+        end
       | Expr e ->
         match tail_variable e with
         | None -> assert false  (* See [Inconstant_idents]. *)
@@ -743,11 +752,15 @@ let rewrite_project_var
       (var_to_block_field_tbl
         : Flambda.constant_defining_value_block_field Variable.Tbl.t)
       (project_var : Flambda.project_var) ~original : Flambda.named =
-  let var = Var_within_closure.unwrap project_var.var in
-  match Variable.Tbl.find var_to_block_field_tbl var with
-  | exception Not_found -> original
-  | Symbol sym -> Symbol sym
-  | Const const -> Const const
+  match Closure_id.Map.get_singleton project_var.var with
+  | None -> (* can't be constant, no rewriting *)
+    original
+  | Some (_closure_id, var) ->
+    let var = Var_within_closure.unwrap var in
+    match Variable.Tbl.find var_to_block_field_tbl var with
+    | exception Not_found -> original
+    | Symbol sym -> Symbol sym
+    | Const const -> Const const
 
 let introduce_free_variables_in_sets_of_closures
     (var_to_block_field_tbl:
