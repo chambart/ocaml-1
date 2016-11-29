@@ -33,11 +33,7 @@ type ('a, 'b) declaration_position =
   | Imported_unit of 'b
   | Not_declared
 
-let get_fun_offset t (closure_id:Closure_id.Set.t) =
-  (* CR pchambart: TODO resolution des offsets dans un set *)
-  match Closure_id.Set.get_singleton closure_id with
-  | None -> failwith "TODO"
-  | Some closure_id ->
+let get_fun_offset t (closure_id:Closure_id.t) =
   let fun_offset_table =
     if Closure_id.in_compilation_unit closure_id (Compilenv.current_unit ())
     then t.current_unit.fun_offset_table
@@ -48,7 +44,7 @@ let get_fun_offset t (closure_id:Closure_id.Set.t) =
     Misc.fatal_errorf "Flambda_to_clambda: missing offset for closure %a"
       Closure_id.print closure_id
 
-let _get_fv_offset t var_within_closure =
+let get_fv_offset t var_within_closure =
   let fv_offset_table =
     if Var_within_closure.in_compilation_unit var_within_closure
         (Compilenv.current_unit ())
@@ -371,33 +367,88 @@ and to_clambda_named t env var (named : Flambda.named) : Clambda.ulambda =
     Uprim (Pfield field, [to_clambda_symbol env symbol], Debuginfo.none)
   | Set_of_closures set_of_closures ->
     to_clambda_set_of_closures t env set_of_closures
-  | Project_closure { set_of_closures; closure_id } ->
+  | Project_closure { set_of_closures; closure_id } -> begin
+    match Closure_id.Set.get_singleton closure_id with
+    | None ->
+        failwith "TODO 13987632"
+    | Some closure_id ->
     (* Note that we must use [build_uoffset] to ensure that we do not generate
        a [Uoffset] construction in the event that the offset is zero, otherwise
        we might break pattern matches in Cmmgen (in particular for the
        compilation of "let rec"). *)
-    check_closure (
-      build_uoffset
-        (check_closure (subst_var env set_of_closures)
-           (Flambda.Expr (Var set_of_closures)))
-        (get_fun_offset t closure_id))
-      named
-  | Move_within_set_of_closures { closure; start_from; move_to } ->
-    check_closure (build_uoffset
-      (check_closure (subst_var env closure)
-         (Flambda.Expr (Var closure)))
-      ((get_fun_offset t move_to) - (get_fun_offset t start_from)))
-      named
-  | Project_var _ ->
-      failwith "TODO 9873209"
-  (* | Project_var { closure; var; closure_id } -> *)
-  (*   let ulam = subst_var env closure in *)
-  (*   let fun_offset = get_fun_offset t closure_id in *)
-  (*   let var_offset = get_fv_offset t var in *)
-  (*   let pos = var_offset - fun_offset in *)
-  (*   Uprim (Pfield pos, *)
-  (*     [check_field (check_closure ulam (Expr (Var closure))) pos (Some named)], *)
-  (*     Debuginfo.none) *)
+        check_closure (
+          build_uoffset
+            (check_closure (subst_var env set_of_closures)
+               (Flambda.Expr (Var set_of_closures)))
+            (get_fun_offset t closure_id))
+          named
+    end
+  | Move_within_set_of_closures { closure; start_from; move_to } -> begin
+      match Closure_id.Set.get_singleton move_to,
+            Closure_id.Set.get_singleton start_from with
+      | None, _ | _, None ->
+          failwith "TODO 0847298732"
+      | Some move_to, Some start_from ->
+          check_closure (build_uoffset
+            (check_closure (subst_var env closure)
+               (Flambda.Expr (Var closure)))
+            ((get_fun_offset t move_to) - (get_fun_offset t start_from)))
+            named
+    end
+  | Project_var { closure; var } -> begin
+      match Closure_id.Map.bindings var with
+      | [] -> assert false
+      | [closure_id, var] ->
+          let ulam = subst_var env closure in
+          let fun_offset = get_fun_offset t closure_id in
+          let var_offset = get_fv_offset t var in
+          let pos = var_offset - fun_offset in
+          Uprim (Pfield pos,
+                 [check_field (check_closure ulam (Expr (Var closure))) pos (Some named)],
+                 Debuginfo.none)
+      | first_closure :: other_closures ->
+          let uclosure = subst_var env closure in
+          let make_project_var (closure_id, var) =
+            let fun_offset = get_fun_offset t closure_id in
+            let var_offset = get_fv_offset t var in
+            let pos = var_offset - fun_offset in
+            Clambda.Uprim (Pfield pos,
+                   [check_field (check_closure uclosure (Expr (Var closure))) pos (Some named)],
+                   Debuginfo.none)
+          in
+          let code_pointer closure_id : Clambda.ulambda =
+            Uconst(Uconst_ref (Compilenv.function_label closure_id, None))
+          in
+          let test_closure_id closure_id : Clambda.ulambda =
+            (* This should be static, but it is just easier right now like that *)
+            let arity_is_one_or_zero =
+              Clambda.Uprim(Pintcomp Cle,
+                            [Clambda.Uprim (Pfield 1, [uclosure], Debuginfo.none);
+                             Clambda.Uconst(Uconst_int 1)], Debuginfo.none)
+            in
+            let recovered_code_pointer =
+              let get_code_pointer_field field =
+                Clambda.Uprim (Pfield field, [uclosure], Debuginfo.none)
+              in
+              (* If the arity is zero or one, the code pointer is at offset 0
+                 othewise it is at offset 2 *)
+              Clambda.Uifthenelse(arity_is_one_or_zero,
+                                  get_code_pointer_field 0,
+                                  get_code_pointer_field 2)
+            in
+            Uprim (Pintcomp Ceq,
+                   [code_pointer closure_id;
+                    recovered_code_pointer],
+                   Debuginfo.none)
+          in
+          List.fold_left (fun body ((closure_id, _) as projection) ->
+              Clambda.Uifthenelse(test_closure_id closure_id,
+                          make_project_var projection,
+                          body)
+            )
+            (make_project_var first_closure)
+            other_closures
+    end
   | Prim (Pfield index, [block], dbg) ->
     Uprim (Pfield index, [check_field (subst_var env block) index None], dbg)
   | Prim (Psetfield (index, maybe_ptr, init), [block; new_value], dbg) ->
