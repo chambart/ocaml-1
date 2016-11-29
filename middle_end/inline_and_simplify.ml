@@ -458,34 +458,47 @@ let simplify_move_within_set_of_closures env r
 let rec simplify_project_var env r ~(project_var : Flambda.project_var)
       : Flambda.named * R.t =
   simplify_free_variable_named env project_var.closure
-    ~f:(fun _env closure approx ->
+    ~f:(fun _env closure closure_approx ->
     let module F = Freshening.Project_var in
-    match A.check_approx_for_closure_allowing_unresolved approx with
+    match A.check_approx_for_closure_allowing_unresolved closure_approx with
     | Ok (value_closures, _set_of_closures_var, _set_of_closures_symbol) -> begin
-        let project_var : Projection.project_var =
-          let var =
-            Closure_id.Map.fold
-              (fun
-                closure_id_in_approx
-                (value_set_of_closures:A.value_set_of_closures) map ->
-                let module F = Freshening.Project_var in
-                let closure_freshening = value_set_of_closures.freshening in
-                (* No need to freshen closure in project_var, but it
-                   is less verbose *)
-                let var =
-                  Freshening.freshen_project_var project_var.var
+        let closure_var, approx =
+          Closure_id.Map.fold
+            (fun
+              closure_id_in_approx
+              (value_set_of_closures:A.value_set_of_closures) (map, set_approx) ->
+              let module F = Freshening.Project_var in
+              let closure_freshening = value_set_of_closures.freshening in
+              (* No need to freshen closure in project_var, but it
+                 is less verbose *)
+              let var =
+                Freshening.freshen_project_var project_var.var
                     ~closure_freshening:closure_freshening
-                in
-                assert(Closure_id.Map.mem closure_id_in_approx var);
-                Closure_id.Map.disjoint_union var map)
-              value_closures Closure_id.Map.empty
-          in
-          { closure; var; }
+              in
+              assert(Closure_id.Map.mem closure_id_in_approx var);
+              let meet a1 a2 =
+                let really_import_approx = E.really_import_approx env in
+                A.meet ~really_import_approx a1 a2
+              in
+              let set_approx =
+                Closure_id.Map.fold (fun _closure_id var set_approx ->
+                  let approx = A.approx_for_bound_var value_set_of_closures var in
+                  meet approx set_approx)
+                  var set_approx
+              in
+              Closure_id.Map.disjoint_union var map,
+              set_approx)
+            value_closures (Closure_id.Map.empty, A.value_bottom)
+        in
+        let project_var : Projection.project_var =
+          { closure; var = closure_var; }
         in
         let expr : Flambda.named = Project_var project_var in
         match Closure_id.Map.get_singleton value_closures,
               Closure_id.Map.get_singleton project_var.var with
         | None, None ->
+          Format.printf "NOT Singleton@ %a@."
+            A.print approx;
           simplify_named_using_approx_and_env env r expr approx
         | Some _, None ->
           (* Il faut y réfléchir un peu, mais c'est probablement possible si
@@ -512,6 +525,7 @@ let rec simplify_project_var env r ~(project_var : Flambda.project_var)
         | None, Some _ -> assert false
         | Some (closure_id_in_approx, value_set_of_closures),
           Some (closure_id, var) ->
+          Format.printf "Singleton@.";
           if not (Closure_id.equal closure_id closure_id_in_approx) then begin
             Misc.fatal_errorf "When simplifying [Project_var], the closure ID %a \
                 in the approximation of the set of closures did not match the \
@@ -525,6 +539,7 @@ let rec simplify_project_var env r ~(project_var : Flambda.project_var)
           let projection : Projection.t = Project_var project_var in
           begin match E.find_projection env ~projection with
           | Some var ->
+            Format.printf "Find projection@.";
             simplify_free_variable_named env var ~f:(fun _env var var_approx ->
               let r = R.map_benefit r (B.remove_projection projection) in
               Expr (Var var), ret r var_approx)
@@ -560,7 +575,7 @@ let rec simplify_project_var env r ~(project_var : Flambda.project_var)
           approximation: %a@.closure=%a@.approx of closure=%a@."
         Flambda.print_project_var project_var
         Variable.print closure
-        Simple_value_approx.print approx)
+        Simple_value_approx.print closure_approx)
 
 (* Transforms closure definitions by applying [loop] on the code of every
    one of the set and on the expressions of the free variables.
@@ -1037,7 +1052,12 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
     end
   | Project_closure project_closure ->
     simplify_project_closure env r ~project_closure
-  | Project_var project_var -> simplify_project_var env r ~project_var
+  | Project_var project_var ->
+    let res, r = simplify_project_var env r ~project_var in
+    Format.printf "Simplify project var:@ %a@.TO@.%a@.@."
+      Flambda.print_named tree
+      Flambda.print_named res;
+    res, r
   | Move_within_set_of_closures move_within_set_of_closures ->
     simplify_move_within_set_of_closures env r ~move_within_set_of_closures
   | Prim (prim, args, dbg) ->
