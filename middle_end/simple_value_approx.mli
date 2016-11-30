@@ -134,9 +134,9 @@ and descr = private
   | Value_unresolved of Symbol.t (* No description was found for this symbol *)
 
 and value_closure = {
-  set_of_closures : t;
-  closure_id : Closure_id.t;
-}
+  (* Map of closures ids to set of closures *)
+  potential_closure : t Closure_id.Map.t;
+} [@@unboxed]
 
 (* CR-soon mshinwell: add support for the approximations of the results, so we
    can do all of the tricky higher-order cases. *)
@@ -216,7 +216,7 @@ val value_closure
   -> ?set_of_closures_var:Variable.t
   -> ?set_of_closures_symbol:Symbol.t
   -> value_set_of_closures
-  -> Closure_id.t
+  -> Closure_id.Set.t
   -> t
 
 (** Construct a set of closures approximation.  [set_of_closures_var] is as for
@@ -339,8 +339,8 @@ val approx_for_bound_var : value_set_of_closures -> Var_within_closure.t -> t
     not correspond to any function declaration in the approximation. *)
 val freshen_and_check_closure_id
    : value_set_of_closures
-  -> Closure_id.t
-  -> Closure_id.t
+  -> Closure_id.Set.t
+  -> Closure_id.Set.t
 
 type strict_checked_approx_for_set_of_closures =
   | Wrong
@@ -366,8 +366,8 @@ val check_approx_for_set_of_closures : t -> checked_approx_for_set_of_closures
 
 type checked_approx_for_closure =
   | Wrong
-  | Ok of value_closure * Variable.t option
-          * Symbol.t option * value_set_of_closures
+  | Ok of value_set_of_closures Closure_id.Map.t
+          * Variable.t option * Symbol.t option
 
 (** Try to prove that a value with the given approximation may be used as a
     closure.  Values coming from external compilation units with unresolved
@@ -381,8 +381,8 @@ type checked_approx_for_closure_allowing_unresolved =
   | Unresolved of Symbol.t
   | Unknown
   | Unknown_because_of_unresolved_symbol of Symbol.t
-  | Ok of value_closure * Variable.t option
-          * Symbol.t option * value_set_of_closures
+  | Ok of value_set_of_closures Closure_id.Map.t
+          * Variable.t option * Symbol.t option
 
 (** As for [check_approx_for_closure], but values coming from external
     compilation units with unresolved approximations are permitted. *)

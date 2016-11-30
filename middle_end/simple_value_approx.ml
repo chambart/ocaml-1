@@ -55,9 +55,8 @@ and descr =
   | Value_unresolved of Symbol.t (* No description was found for this symbol *)
 
 and value_closure = {
-  set_of_closures : t;
-  closure_id : Closure_id.t;
-}
+  potential_closure : t Closure_id.Map.t;
+} [@@unboxed]
 
 and value_set_of_closures = {
   function_decls : Flambda.function_declarations;
@@ -104,9 +103,14 @@ let rec print_descr ppf = function
   | Value_bottom -> Format.fprintf ppf "bottom"
   | Value_extern id -> Format.fprintf ppf "_%a_" Export_id.print id
   | Value_symbol sym -> Format.fprintf ppf "%a" Symbol.print sym
-  | Value_closure { set_of_closures; closure_id; } ->
-    Format.fprintf ppf "(closure:@ %a from@ %a)" Closure_id.print closure_id
-      print set_of_closures
+  | Value_closure { potential_closure } ->
+    Format.fprintf ppf "(closure:@ @[<2>[@ ";
+    Closure_id.Map.iter (fun closure_id set_of_closures ->
+      Format.fprintf ppf "%a @[<2>from@ %a@];@ "
+        Closure_id.print closure_id
+        print set_of_closures)
+      potential_closure;
+    Format.fprintf ppf "]@])";
   | Value_set_of_closures set_of_closures ->
     print_value_set_of_closures ppf set_of_closures
   | Value_unresolved sym ->
@@ -212,12 +216,10 @@ let value_closure ?closure_var ?set_of_closures_var ?set_of_closures_symbol
       symbol = Misc.may_map (fun s -> s, None) set_of_closures_symbol;
     }
   in
-  let value_closure =
-    { set_of_closures = approx_set_of_closures;
-      closure_id;
-    }
+  let potential_closure =
+    Closure_id.Map.of_set (fun _ -> approx_set_of_closures) closure_id
   in
-  { descr = Value_closure value_closure;
+  { descr = Value_closure { potential_closure };
     var = closure_var;
     symbol = None;
   }
@@ -530,6 +532,35 @@ let rec meet_descr ~really_import_approx d1 d2 = match d1, d2 with
       Array.mapi (fun i v -> meet ~really_import_approx v a2.(i)) a1
     in
     Value_block (tag1, fields)
+  | Value_closure { potential_closure = map1 },
+    Value_closure { potential_closure = map2 } ->
+    let potential_closure =
+      Closure_id.Map.union_merge
+        (* merging the closure value might loose information in the
+           case of one branch having the approximation and the other
+           having 'Value_unknown'. We could imagine such as
+
+           {[if ... then M1.f else M2.f]}
+
+           where M1 is where the function is defined and M2 is
+
+           {[let f = M3.f]}
+
+           and M3 is
+
+           {[let f = M1.f]}
+
+           with the cmx for M3 missing
+
+           Since we know that the approximation comes from the same
+           value, we know that both version provide additional
+           information on the value. Hence what we really want is an
+           approximation intersection, not an union (that this meet
+           is). *)
+        (meet ~really_import_approx)
+        map1 map2
+    in
+    Value_closure { potential_closure }
   | _ -> Value_unknown Other
 
 and meet ~really_import_approx a1 a2 =
