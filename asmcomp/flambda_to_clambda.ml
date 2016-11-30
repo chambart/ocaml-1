@@ -452,15 +452,16 @@ and to_clambda_named t env var (named : Flambda.named) : Clambda.ulambda =
         check_closure ulam named
     end
   | Move_within_set_of_closures { closure; move; } -> begin
-      match Closure_id.Map.get_singleton move with
-      | None ->
-          failwith "TODO 0847298732"
-      | Some (start_from, move_to) ->
+      match Closure_id.Map.bindings move with
+      | [] -> assert false
+      | [start_from, move_to] ->
           check_closure (build_uoffset
             (check_closure (subst_var env closure)
                (Flambda.Expr (Var closure)))
             ((get_fun_offset t move_to) - (get_fun_offset t start_from)))
             named
+      | _h :: _t ->
+          failwith "TODO 0847298732"
     end
   | Project_var { closure; var } -> begin
       match Closure_id.Map.bindings var with

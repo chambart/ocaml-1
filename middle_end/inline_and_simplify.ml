@@ -493,8 +493,8 @@ let rec simplify_project_var env r ~(project_var : Flambda.project_var)
         match Closure_id.Map.get_singleton value_closures,
               Closure_id.Map.get_singleton project_var.var with
         | None, None ->
-          Format.printf "NOT Singleton@ %a@."
-            A.print approx;
+          (* Format.printf "NOT Singleton@ %a@." *)
+          (*   A.print approx; *)
           simplify_named_using_approx_and_env env r expr approx
         | Some _, None ->
           (* Il faut y réfléchir un peu, mais c'est probablement possible si
@@ -521,7 +521,7 @@ let rec simplify_project_var env r ~(project_var : Flambda.project_var)
         | None, Some _ -> assert false
         | Some (closure_id_in_approx, value_set_of_closures),
           Some (closure_id, var) ->
-          Format.printf "Singleton@.";
+          (* Format.printf "Singleton@."; *)
           if not (Closure_id.equal closure_id closure_id_in_approx) then begin
             Misc.fatal_errorf "When simplifying [Project_var], the closure ID %a \
                 in the approximation of the set of closures did not match the \
@@ -535,7 +535,7 @@ let rec simplify_project_var env r ~(project_var : Flambda.project_var)
           let projection : Projection.t = Project_var project_var in
           begin match E.find_projection env ~projection with
           | Some var ->
-            Format.printf "Find projection@.";
+            (* Format.printf "Find projection@."; *)
             simplify_free_variable_named env var ~f:(fun _env var var_approx ->
               let r = R.map_benefit r (B.remove_projection projection) in
               Expr (Var var), ret r var_approx)
@@ -1051,9 +1051,9 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
     simplify_project_closure env r ~project_closure
   | Project_var project_var ->
     let res, r = simplify_project_var env r ~project_var in
-    Format.printf "Simplify project var:@ %a@.TO@.%a@.@."
-      Flambda.print_named tree
-      Flambda.print_named res;
+    (* Format.printf "Simplify project var:@ %a@.TO@.%a@.@." *)
+    (*   Flambda.print_named tree *)
+    (*   Flambda.print_named res; *)
     res, r
   | Move_within_set_of_closures move_within_set_of_closures ->
     simplify_move_within_set_of_closures env r ~move_within_set_of_closures
@@ -1324,6 +1324,10 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
         let ifso, r = simplify env r ifso in
         let ifso_approx = R.approx r in
         let ifnot, r = simplify env r ifnot in
+
+        (* Format.printf "if_approx %a@." *)
+        (*   A.print (R.approx (R.meet_approx r env ifso_approx)); *)
+
         If_then_else (arg, ifso, ifnot),
           R.meet_approx r env ifso_approx
       end)
