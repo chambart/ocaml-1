@@ -223,16 +223,9 @@ let value_closure ?closure_var ?set_of_closures_var ?set_of_closures_symbol
     }
   in
   let value_closure =
-    match Closure_id.Set.get_singleton closure_id with
-    | None ->
-      failwith "TODO value_closure not singleton"
-    | Some closure_id ->
-      { potential_closure =
-          Closure_id.Map.singleton closure_id
-            approx_set_of_closures }
-    (* { set_of_closures = approx_set_of_closures; *)
-    (*   closure_id; *)
-    (* } *)
+    { potential_closure =
+        Closure_id.Map.of_set (fun _ -> approx_set_of_closures) closure_id
+    }
   in
   { descr = Value_closure value_closure;
     var = closure_var;
@@ -619,11 +612,30 @@ let rec meet_descr ~really_import_approx d1 d2 = match d1, d2 with
     Value_block (tag1, fields)
   | Value_closure { potential_closure = map1 },
     Value_closure { potential_closure = map2 } ->
-    (* Probablement n'importe quoi: il faut checker que les choses mergées
-       correspondent à la même cloture *)
     let potential_closure =
-      Closure_id.Map.disjoint_union
-        ~eq:(fun _ _ -> false) (* hum ? *)
+      Closure_id.Map.union_merge
+        (* merging the closure value might loose information in the
+           case of one branch having the approximation and the other
+           having 'Value_unknown'. We could imagine such as
+
+           {[if ... then M1.f else M2.f]}
+
+           where M1 is where the function is defined and M2 is
+
+           {[let f = M3.f]}
+
+           and M3 is
+
+           {[let f = M1.f]}
+
+           with the cmx for M3 missing
+
+           Since we know that the approximation comes from the same
+           value, we know that both version provide additional
+           information on the value. Hence what we really want is an
+           approximation intersection, not an union (that this meet
+           is). *)
+        (meet ~really_import_approx)
         map1 map2
     in
     Value_closure { potential_closure }

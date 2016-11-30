@@ -134,7 +134,7 @@ and descr = private
   | Value_unresolved of Symbol.t (* No description was found for this symbol *)
 
 and value_closure = {
-  (* set_of_closures : t; *)
+  (* Map of closures ids to set of closures *)
   potential_closure : t Closure_id.Map.t; (* Set of closure for each potential *)
 }
 
