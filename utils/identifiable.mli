@@ -45,6 +45,10 @@ module type S = sig
     val of_list : elt list -> t
     val map : (elt -> elt) -> t -> t
     val filter_map : t -> f:(elt -> elt option) -> t
+
+    (** [get_singleton s] is [Some value] if the set is a singleton
+        containing only [value]. Otherwise it is [None] *)
+    val get_singleton : t -> elt option
   end
 
   module Map : sig
@@ -74,6 +78,12 @@ module type S = sig
     val data : 'a t -> 'a list
     val of_set : (key -> 'a) -> Set.t -> 'a t
     val transpose_keys_and_data : key t -> key t
+
+    (** [get_singleton m] is [Some (key, value)] if the map is a
+        singleton containing only the binding of [key] to
+        [value]. Otherwise it is [None] *)
+    val get_singleton : 'a t -> (key * 'a) option
+
     val print :
       (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
   end

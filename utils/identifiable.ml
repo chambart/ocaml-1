@@ -104,6 +104,18 @@ module Make_map (T : Thing) = struct
   let of_set f set = T_set.fold (fun e map -> add e (f e) map) set empty
 
   let transpose_keys_and_data map = fold (fun k v m -> add v k m) map empty
+
+  let get_singleton s =
+    (* CR pchambart: this should be done more efficiently, but
+       this is probably the best we can do currently with the interface
+       of map (It might be simplifiable through unrolling with CPS) *)
+    try
+      fold (fun k s acc ->
+          match acc with
+          | None -> Some (k, s)
+          | Some _ -> raise Exit)
+        s None
+    with Exit -> None
 end
 
 module Make_set (T : Thing) = struct
@@ -128,6 +140,18 @@ module Make_set (T : Thing) = struct
   let map f s = of_list (List.map f (elements s))
 
   let filter_map t ~f = of_list (Misc.Stdlib.List.filter_map f (elements t))
+
+  let get_singleton s =
+    (* CR pchambart: this should be done more efficiently, but
+       this is probably the best we can do currently with the interface
+       of set *)
+    try
+      fold (fun s acc ->
+          match acc with
+          | None -> Some s
+          | Some _ -> raise Exit)
+        s None
+    with Exit -> None
 end
 
 module Make_tbl (T : Thing) = struct
@@ -178,6 +202,7 @@ module type S = sig
     val of_list : elt list -> t
     val map : (elt -> elt) -> t -> t
     val filter_map : t -> f:(elt -> elt option) -> t
+    val get_singleton : t -> elt option
   end
 
   module Map : sig
@@ -197,6 +222,7 @@ module type S = sig
     val data : 'a t -> 'a list
     val of_set : (key -> 'a) -> Make_set (T).t -> 'a t
     val transpose_keys_and_data : key t -> key t
+    val get_singleton : 'a t -> (key * 'a) option
     val print :
       (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
   end

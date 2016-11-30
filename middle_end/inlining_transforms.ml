@@ -62,8 +62,8 @@ let fold_over_projections_of_vars_bound_by_closure ~closure_id_being_applied
       let expr : Flambda.named =
         Project_var {
           closure = lhs_of_application;
-          closure_id = closure_id_being_applied;
-          var = Var_within_closure.wrap var;
+          var = Closure_id.Map.singleton closure_id_being_applied
+                  (Var_within_closure.wrap var);
         }
       in
       f ~acc ~var ~expr)
@@ -175,8 +175,8 @@ let inline_by_copying_function_body ~env ~r
         Flambda.create_let another_closure_in_the_same_set
           (Move_within_set_of_closures {
             closure = lhs_of_application;
-            start_from = closure_id_being_applied;
-            move_to = Closure_id.wrap another_closure_in_the_same_set;
+            move = Closure_id.Map.singleton closure_id_being_applied
+                     (Closure_id.wrap another_closure_in_the_same_set);
           })
           expr
       else expr)
@@ -362,7 +362,7 @@ let inline_by_copying_function_declaration ~env ~r
     let duplicated_application : Flambda.t =
       let project_closure : Flambda.project_closure =
         { set_of_closures = set_of_closures_var;
-          closure_id = closure_id_being_applied;
+          closure_id = Closure_id.Set.singleton closure_id_being_applied;
         }
       in
       let func = new_var "dup_func" in

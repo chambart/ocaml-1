@@ -33,6 +33,24 @@ let make_variable_symbol prefix var =
     (Linkage_name.create
        (prefix ^ Variable.unique_name (Variable.rename var)))
 
+let closure_id_set_singleton closure_id =
+  match Closure_id.Set.get_singleton closure_id with
+  | None ->
+    Misc.fatal_errorf
+      "A closure_id singleton set was expected, but this set is %a"
+      Closure_id.Set.print closure_id
+  | Some closure_id ->
+    closure_id
+
+let closure_id_map_singleton print map =
+  match Closure_id.Map.get_singleton map with
+  | None ->
+    Misc.fatal_errorf
+      "A closure_id singleton map was expected, but this map is %a"
+      (Closure_id.Map.print print) map
+  | Some (k, v) ->
+    k, v
+
 (** Traverse the given expression assigning symbols to [let]- and [let rec]-
     bound constant variables.  At the same time collect the definitions of
     such variables. *)
@@ -82,16 +100,19 @@ let assign_symbols_and_collect_constant_definitions
             Variable.Tbl.add var_to_symbol_tbl fun_var closure_symbol;
             let project_closure =
               Alias_analysis.Project_closure
-                { set_of_closures = var; closure_id }
+                { set_of_closures = var;
+                  closure_id = Closure_id.Set.singleton closure_id }
             in
             Variable.Tbl.add var_to_definition_tbl fun_var
               project_closure)
           funs
-      | Move_within_set_of_closures ({ closure = _; start_from = _; move_to; }
-          as move) ->
-        assign_existing_symbol (closure_symbol ~backend  move_to);
-        record_definition (AA.Move_within_set_of_closures move)
+      | Move_within_set_of_closures ({ closure = _; move; }
+          as projection) ->
+        let (_, move_to) = closure_id_map_singleton Closure_id.print move in
+        assign_existing_symbol (closure_symbol ~backend move_to);
+        record_definition (AA.Move_within_set_of_closures projection)
       | Project_closure ({ closure_id } as project_closure) ->
+        let closure_id = closure_id_set_singleton closure_id in
         assign_existing_symbol (closure_symbol ~backend  closure_id);
         record_definition (AA.Project_closure project_closure)
       | Prim (Pfield index, [block], _) ->
@@ -110,7 +131,13 @@ let assign_symbols_and_collect_constant_definitions
         Misc.fatal_errorf "Primitive not expected to be constant: @.%a@."
           Flambda.print_named named
       | Project_var project_var ->
-        record_definition (AA.Project_var project_var)
+        let (closure_id, var) =
+          closure_id_map_singleton Var_within_closure.print project_var.var
+        in
+        record_definition (AA.Project_var {
+          closure = project_var.closure;
+          closure_id;
+          var; })
       | Proved_unreachable -> ()
     end
   in
@@ -460,6 +487,7 @@ let translate_definition_and_resolve_alias inconstants
         Array with non-Pfloatarray kind: %a"
       Alias_analysis.print_constant_defining_value definition
   | Project_closure { set_of_closures; closure_id } ->
+    let closure_id = closure_id_set_singleton closure_id in
     begin match Variable.Map.find set_of_closures aliases with
     | Symbol s ->
       Some (Flambda.Project_closure (s, closure_id))
@@ -475,7 +503,8 @@ let translate_definition_and_resolve_alias inconstants
         Format.eprintf "var: %a@." Variable.print v;
         assert false
     end
-  | Move_within_set_of_closures { closure; move_to } ->
+  | Move_within_set_of_closures { closure; move } ->
+    let (_, move_to) = closure_id_map_singleton Closure_id.print move in
     let set_of_closure_symbol =
       find_original_set_of_closure
         aliases
@@ -724,11 +753,15 @@ let rewrite_project_var
       (var_to_block_field_tbl
         : Flambda.constant_defining_value_block_field Variable.Tbl.t)
       (project_var : Flambda.project_var) ~original : Flambda.named =
-  let var = Var_within_closure.unwrap project_var.var in
-  match Variable.Tbl.find var_to_block_field_tbl var with
-  | exception Not_found -> original
-  | Symbol sym -> Symbol sym
-  | Const const -> Const const
+  match Closure_id.Map.get_singleton project_var.var with
+  | None -> (* it cannot be a constant, no rewriting *)
+    original
+  | Some (_closure_id, var) ->
+    let var = Var_within_closure.unwrap var in
+    match Variable.Tbl.find var_to_block_field_tbl var with
+    | exception Not_found -> original
+    | Symbol sym -> Symbol sym
+    | Const const -> Const const
 
 let introduce_free_variables_in_sets_of_closures
     (var_to_block_field_tbl:

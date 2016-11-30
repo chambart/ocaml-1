@@ -191,13 +191,16 @@ let rec close t env (lam : Ilambda.t) : Flambda.t =
           let let_rec_ident = Function_decl.let_rec_ident decl in
           let closure_bound_var = Function_decl.closure_bound_var decl in
           let let_bound_var = Env.find_var env let_rec_ident in
+          let closure_id =
+            Closure_id.Set.singleton (Closure_id.wrap closure_bound_var)
+          in
           (* Inside the body of the [let], each function is referred to by
              a [Project_closure] expression, which projects from the set of
              closures. *)
           (Flambda.create_let let_bound_var
             (Project_closure {
               set_of_closures = set_of_closures_var;
-              closure_id = Closure_id.wrap closure_bound_var;
+              closure_id;
             })
             body))
         (close t env body) function_declarations

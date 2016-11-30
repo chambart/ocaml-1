@@ -146,8 +146,7 @@ and same_named (named1 : Flambda.named) (named2 : Flambda.named) =
   | Project_closure _, _ | _, Project_closure _ -> false
   | Project_var v1, Project_var v2 ->
     Variable.equal v1.closure v2.closure
-      && Closure_id.equal v1.closure_id v2.closure_id
-      && Var_within_closure.equal v1.var v2.var
+      && Closure_id.Map.equal Var_within_closure.equal v1.var v2.var
   | Project_var _, _ | _, Project_var _ -> false
   | Move_within_set_of_closures m1, Move_within_set_of_closures m2 ->
     same_move_within_set_of_closures m1 m2
@@ -174,13 +173,12 @@ and same_set_of_closures (c1 : Flambda.set_of_closures)
 and same_project_closure (s1 : Flambda.project_closure)
       (s2 : Flambda.project_closure) =
   Variable.equal s1.set_of_closures s2.set_of_closures
-    && Closure_id.equal s1.closure_id s2.closure_id
+    && Closure_id.Set.equal s1.closure_id s2.closure_id
 
 and same_move_within_set_of_closures (m1 : Flambda.move_within_set_of_closures)
       (m2 : Flambda.move_within_set_of_closures) =
   Variable.equal m1.closure m2.closure
-    && Closure_id.equal m1.start_from m2.start_from
-    && Closure_id.equal m1.move_to m2.move_to
+    && Closure_id.Map.equal Closure_id.equal m1.move m2.move
 
 and sameswitch (fs1 : Flambda.switch) (fs2 : Flambda.switch) =
   let samecase (n1, a1) (n2, a2) = n1 = n2 && Continuation.equal a1 a2 in
@@ -336,7 +334,7 @@ let make_closure_declaration ~id ~body ~params ~continuation_param
   let project_closure : Flambda.named =
     Project_closure {
         set_of_closures = set_of_closures_var;
-        closure_id = Closure_id.wrap id;
+        closure_id = Closure_id.Set.singleton (Closure_id.wrap id);
       }
   in
   let project_closure_var =

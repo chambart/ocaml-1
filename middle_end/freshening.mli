@@ -130,6 +130,7 @@ module Project_var : sig
       function.
   *)
   val apply_closure_id : t -> Closure_id.t -> Closure_id.t
+  val apply_closure_ids : t -> Closure_id.Set.t -> Closure_id.Set.t
 
   (** Like [apply_closure_id], but for variables within closures. *)
   val apply_var_within_closure
@@ -154,6 +155,16 @@ val apply_function_decls_and_free_vars
 val does_not_freshen : t -> Variable.t list -> bool
 
 val print : Format.formatter -> t -> unit
+
+val freshen_project_var
+   : Var_within_closure.t Closure_id.Map.t
+  -> closure_freshening:Project_var.t
+  -> Var_within_closure.t Closure_id.Map.t
+
+val freshen_move_within_set_of_closures
+   : Closure_id.t Closure_id.Map.t
+  -> closure_freshening:Project_var.t
+  -> Closure_id.t Closure_id.Map.t
 
 (** N.B. This does not freshen the domain of the supplied map, only the
     range. *)

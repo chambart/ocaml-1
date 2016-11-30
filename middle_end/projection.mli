@@ -22,9 +22,11 @@
 type project_closure = {
   set_of_closures : Variable.t; (** must yield a set of closures *)
   closure_id : Closure_id.Set.t;
-  (** For each possible value of set_of_closures, get a different
-      closure from the set. The set is implicit as there can be only
-      one set defining a closure_id *)
+  (** Every closure_id from the set must come from a different set.
+      A projection with multiple potential closure represents a
+      conditionnal projection depending on the given set of closures.
+      The set of closure is implicit as there can also be only one
+      set defining a given closure_id *)
 }
 
 (** The selection of one closure given another closure in the same set of

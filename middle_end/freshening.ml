@@ -374,6 +374,10 @@ module Project_var = struct
     try Closure_id.Map.find closure_id t.closure_id
     with Not_found -> closure_id
 
+  let apply_closure_ids t closure_id =
+    try Closure_id.Set.map (fun id -> Closure_id.Map.find id t.closure_id) closure_id
+    with Not_found -> closure_id
+
   let apply_var_within_closure t var_in_closure =
     try Var_within_closure.Map.find var_in_closure t.vars_within_closure
     with Not_found -> var_in_closure
@@ -426,25 +430,49 @@ let does_not_freshen t vars =
   | Active subst ->
     not (List.exists (fun var -> Variable.Map.mem var subst.sb_var) vars)
 
+let freshen_project_var (var:_ Closure_id.Map.t)
+      ~closure_freshening : _ Closure_id.Map.t =
+  Closure_id.Map.fold (fun closure_id var map ->
+    let closure_id =
+      Project_var.apply_closure_id closure_freshening closure_id
+    in
+    let var =
+      Project_var.apply_var_within_closure closure_freshening var
+    in
+    assert(not (Closure_id.Map.mem closure_id map));
+    Closure_id.Map.add closure_id var map)
+    var Closure_id.Map.empty
+
+let freshen_move_within_set_of_closures (move:_ Closure_id.Map.t)
+      ~closure_freshening : _ Closure_id.Map.t =
+  Closure_id.Map.fold (fun start_from move_to map ->
+    let start_from =
+      Project_var.apply_closure_id closure_freshening start_from
+    in
+    let move_to =
+      Project_var.apply_closure_id closure_freshening move_to
+    in
+    assert(not (Closure_id.Map.mem start_from map));
+    Closure_id.Map.add start_from move_to map)
+    move Closure_id.Map.empty
+
 let freshen_projection (projection : Projection.t) ~freshening
       ~closure_freshening : Projection.t =
   match projection with
-  | Project_var { closure; closure_id; var; } ->
+  | Project_var project_var ->
     Project_var {
-      closure = apply_variable freshening closure;
-      closure_id = Project_var.apply_closure_id closure_freshening closure_id;
-      var = Project_var.apply_var_within_closure closure_freshening var;
-    }
+      var = freshen_project_var project_var.var ~closure_freshening;
+      closure = apply_variable freshening project_var.closure;
+  }
   | Project_closure { set_of_closures; closure_id; } ->
     Project_closure {
       set_of_closures = apply_variable freshening set_of_closures;
-      closure_id = Project_var.apply_closure_id closure_freshening closure_id;
+      closure_id = Project_var.apply_closure_ids closure_freshening closure_id;
     }
-  | Move_within_set_of_closures { closure; start_from; move_to; } ->
+  | Move_within_set_of_closures { closure; move } ->
     Move_within_set_of_closures {
       closure = apply_variable freshening closure;
-      start_from = Project_var.apply_closure_id closure_freshening start_from;
-      move_to = Project_var.apply_closure_id closure_freshening move_to;
+      move = freshen_move_within_set_of_closures ~closure_freshening move;
     }
   | Field (field_index, var) ->
     Field (field_index, apply_variable freshening var)
