@@ -367,8 +367,8 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
       | None ->
         mark_curr curr
       end
-    | Move_within_set_of_closures ({ closure; start_from; move_to; }) -> begin
-        match Closure_id.Set.get_singleton start_from with
+    | Move_within_set_of_closures ({ closure; move }) -> begin
+        match Closure_id.Map.get_singleton move with
       (* CR-someday mshinwell: We should be able to deem these projections
          (same for the cases below) as constant when from another
          compilation unit, but there isn't code to handle this yet.  (Note
@@ -377,13 +377,9 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
          closures.) *)
         | None ->
           mark_curr curr
-        | Some start_from ->
+        | Some (start_from, move_to) ->
           if Closure_id.in_compilation_unit start_from compilation_unit then begin
-            assert (
-              match Closure_id.Set.get_singleton move_to with
-              | None -> false
-              | Some move_to ->
-                Closure_id.in_compilation_unit move_to compilation_unit);
+            assert (Closure_id.in_compilation_unit move_to compilation_unit);
             mark_var closure curr
           end else begin
             mark_curr curr

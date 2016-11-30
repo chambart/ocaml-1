@@ -155,6 +155,11 @@ val freshen_project_var
   -> closure_freshening:Project_var.t
   -> Var_within_closure.t Closure_id.Map.t
 
+val freshen_move_within_set_of_closures
+   : Closure_id.t Closure_id.Map.t
+  -> closure_freshening:Project_var.t
+  -> Closure_id.t Closure_id.Map.t
+
 (** N.B. This does not freshen the domain of the supplied map, only the
     range. *)
 (* CR-someday mshinwell: consider fixing that *)

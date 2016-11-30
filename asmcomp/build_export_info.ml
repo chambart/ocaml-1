@@ -295,13 +295,12 @@ and descr_of_named (env : Env.t) (named : Flambda.named)
          [Inline_and_simplify], we might end up here. *)
       Value_unknown
     end
-  | Move_within_set_of_closures { closure; start_from; move_to; } ->
+  | Move_within_set_of_closures { closure; move; } ->
     begin match Env.get_descr env (Env.find_approx env closure) with
     | Some (Value_closure { set_of_closures; closure_id; }) -> begin
-        match Closure_id.Set.get_singleton start_from,
-              Closure_id.Set.get_singleton move_to with
-        | None, _ | _, None -> Value_unknown
-        | Some start_from, Some move_to ->
+        match Closure_id.Map.get_singleton move with
+        | None -> Value_unknown
+        | Some (start_from, move_to) ->
             assert (Closure_id.equal closure_id start_from);
             let descr : Export_info.descr =
               Value_closure { closure_id = move_to; set_of_closures; }

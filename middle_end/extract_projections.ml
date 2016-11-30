@@ -69,15 +69,13 @@ let known_valid_projections ~env ~projections ~which_variables =
               _value_set_of_closures) ->
           (* We could check that [move.move_to] is in [value_set_of_closures],
              but this is unnecessary, since [Closure_id]s are unique. *)
-          (* begin *)
-          (*   match Closure_id.Map.get_singleton value_closure.potential_closure with *)
-          (*   | None -> *)
-          (*     failwith "TODO known_valid_projections"; *)
-          (*   | Some (closure_id, _) *)
-          (* end *)
-          Closure_id.Set.equal
-            (Closure_id.Set.singleton value_closure)
-            move.start_from
+          begin
+            match Closure_id.Map.get_singleton move.move with
+            | None ->
+              false
+            | Some (start_from, _) ->
+              Closure_id.equal value_closure start_from
+          end
         | Wrong -> false
         end
       | Field (field_index, _) ->

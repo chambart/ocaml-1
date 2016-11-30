@@ -25,8 +25,7 @@ type project_closure = {
 
 type move_within_set_of_closures = {
   closure : Variable.t;
-  start_from : Closure_id.Set.t;
-  move_to : Closure_id.Set.t;
+  move : Closure_id.t Closure_id.Map.t;
 }
 
 type project_var = {
@@ -46,17 +45,14 @@ let compare_project_var
     Closure_id.Map.compare Var_within_closure.compare var1 var2
 
 let compare_move_within_set_of_closures
-      ({ closure = closure1; start_from = start_from1; move_to = move_to1; }
+      ({ closure = closure1; move = move1; }
         : move_within_set_of_closures)
-      ({ closure = closure2; start_from = start_from2; move_to = move_to2; }
+      ({ closure = closure2; move = move2; }
         : move_within_set_of_closures) =
   let c = Variable.compare closure1 closure2 in
   if c <> 0 then c
   else
-    let c = Closure_id.Set.compare start_from1 start_from2 in
-    if c <> 0 then c
-    else
-      Closure_id.Set.compare move_to1 move_to2
+    Closure_id.Map.compare Closure_id.compare move1 move2
 
 let compare_project_closure
       ({ set_of_closures = set_of_closures1; closure_id = closure_id1; }
@@ -76,9 +72,8 @@ let print_project_closure ppf (project_closure : project_closure) =
 let print_move_within_set_of_closures ppf
       (move_within_set_of_closures : move_within_set_of_closures) =
   Format.fprintf ppf
-    "@[<2>(move_within_set_of_closures@ %a <-- %a@ (closure = %a))@]"
-    Closure_id.Set.print move_within_set_of_closures.move_to
-    Closure_id.Set.print move_within_set_of_closures.start_from
+    "@[<2>(move_within_set_of_closures@ %a@ (closure = %a))@]"
+    (Closure_id.Map.print Closure_id.print) move_within_set_of_closures.move
     Variable.print move_within_set_of_closures.closure
 
 let print_project_var ppf (project_var : project_var) =

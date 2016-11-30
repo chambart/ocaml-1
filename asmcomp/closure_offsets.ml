@@ -122,9 +122,11 @@ let compute_reexported_offsets program
       match named with
       | Project_closure { closure_id; _ } ->
         Closure_id.Set.iter used_closure_id closure_id
-      | Move_within_set_of_closures { start_from; move_to; _ } ->
-        Closure_id.Set.iter used_closure_id start_from;
-        Closure_id.Set.iter used_closure_id move_to
+      | Move_within_set_of_closures { closure = _; move; } ->
+        Closure_id.Map.iter (fun start_from move_to ->
+          used_closure_id start_from;
+          used_closure_id move_to)
+          move
       | Project_var { var; _ } ->
         Closure_id.Map.iter (fun closure_id var ->
             used_closure_id closure_id;

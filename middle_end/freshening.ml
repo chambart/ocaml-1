@@ -415,6 +415,19 @@ let freshen_project_var (var:_ Closure_id.Map.t)
     Closure_id.Map.add closure_id var map)
     var Closure_id.Map.empty
 
+let freshen_move_within_set_of_closures (move:_ Closure_id.Map.t)
+      ~closure_freshening : _ Closure_id.Map.t =
+  Closure_id.Map.fold (fun start_from move_to map ->
+    let start_from =
+      Project_var.apply_closure_id closure_freshening start_from
+    in
+    let move_to =
+      Project_var.apply_closure_id closure_freshening move_to
+    in
+    assert(not (Closure_id.Map.mem start_from map));
+    Closure_id.Map.add start_from move_to map)
+    move Closure_id.Map.empty
+
 let freshen_projection (projection : Projection.t) ~freshening
       ~closure_freshening : Projection.t =
   match projection with
@@ -429,11 +442,10 @@ let freshen_projection (projection : Projection.t) ~freshening
       set_of_closures = apply_variable freshening set_of_closures;
       closure_id = Project_var.apply_closure_ids closure_freshening closure_id;
     }
-  | Move_within_set_of_closures { closure; start_from; move_to; } ->
+  | Move_within_set_of_closures { closure; move } ->
     Move_within_set_of_closures {
       closure = apply_variable freshening closure;
-      start_from = Project_var.apply_closure_ids closure_freshening start_from;
-      move_to = Project_var.apply_closure_ids closure_freshening move_to;
+      move = freshen_move_within_set_of_closures ~closure_freshening move;
     }
   | Field (field_index, var) ->
     Field (field_index, apply_variable freshening var)

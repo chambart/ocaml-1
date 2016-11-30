@@ -168,9 +168,8 @@ let inline_by_copying_function_body ~env ~r
         Flambda.create_let another_closure_in_the_same_set
           (Move_within_set_of_closures {
             closure = lhs_of_application;
-            start_from = Closure_id.Set.singleton closure_id_being_applied;
-            move_to =
-              Closure_id.Set.singleton
+            move =
+              Closure_id.Map.singleton closure_id_being_applied
                 (Closure_id.wrap another_closure_in_the_same_set);
           })
           expr

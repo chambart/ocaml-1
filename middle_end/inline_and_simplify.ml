@@ -294,15 +294,13 @@ let simplify_move_within_set_of_closures env r
     | Unresolved sym ->
       Move_within_set_of_closures {
           closure;
-          start_from = move_within_set_of_closures.start_from;
-          move_to = move_within_set_of_closures.move_to;
+          move = move_within_set_of_closures.move;
         },
         ret r (A.value_unresolved sym)
     | Unknown ->
       Move_within_set_of_closures {
           closure;
-          start_from = move_within_set_of_closures.start_from;
-          move_to = move_within_set_of_closures.move_to;
+          move = move_within_set_of_closures.move;
         },
         ret r (A.value_unknown Other)
     | Unknown_because_of_unresolved_symbol sym ->
@@ -310,8 +308,7 @@ let simplify_move_within_set_of_closures env r
          is missing). *)
       Move_within_set_of_closures {
           closure;
-          start_from = move_within_set_of_closures.start_from;
-          move_to = move_within_set_of_closures.move_to;
+          move = move_within_set_of_closures.move;
         },
         ret r (A.value_unknown (Unresolved_symbol sym))
     | Ok (value_closures, set_of_closures_var, set_of_closures_symbol) -> begin
@@ -319,18 +316,15 @@ let simplify_move_within_set_of_closures env r
         | None ->
           failwith "todo98732"
         | Some (_closure_id, value_set_of_closures) ->
-      let freshen =
-        (* CR-soon mshinwell: potentially misleading name---not freshening with
-           new names, but with previously fresh names *)
-        A.freshen_and_check_closure_id value_set_of_closures
+      let move =
+        Freshening.freshen_move_within_set_of_closures
+          move_within_set_of_closures.move
+          ~closure_freshening:value_set_of_closures.freshening
       in
-      let move_to = freshen move_within_set_of_closures.move_to in
-      let start_from = freshen move_within_set_of_closures.start_from in
       let projection : Projection.t =
         Move_within_set_of_closures {
           closure;
-          start_from;
-          move_to;
+          move;
         }
       in
       match E.find_projection env ~projection with
@@ -340,15 +334,18 @@ let simplify_move_within_set_of_closures env r
           Expr (Var var), ret r var_approx)
       | None ->
         let not_reference_recursive_function_directly () : Flambda.named * R.t =
-          match
-            Closure_id.Set.get_singleton start_from,
-            Closure_id.Set.get_singleton move_to with
-          | Some start_from, Some move_to when
+          match Closure_id.Map.get_singleton move with
+          | Some (start_from, move_to) when
               Closure_id.equal start_from move_to ->
             (* Moving from one closure to itself is a no-op.  We can return an
                [Var] since we already have a variable bound to the closure. *)
             Expr (Var closure), ret r closure_approx
           | _ ->
+            let move_to =
+              Closure_id.Map.fold
+                (fun _ move_to set -> Closure_id.Set.add move_to set)
+                move Closure_id.Set.empty
+            in
             match set_of_closures_var with
             | Some set_of_closures_var when E.mem env set_of_closures_var ->
               (* A variable bound to the set of closures is in scope,
@@ -393,16 +390,15 @@ let simplify_move_within_set_of_closures env r
                 (* The set of closures is not available in scope, and we
                    have no other information by which to simplify the move. *)
                 let move_within : Flambda.move_within_set_of_closures =
-                  { closure; start_from; move_to; }
+                  { closure; move }
                 in
                 let approx = A.value_closure value_set_of_closures move_to in
                 Move_within_set_of_closures move_within, ret r approx
         in
-        match Closure_id.Set.get_singleton move_to with
+        match Closure_id.Map.get_singleton move with
         | None ->
-          assert false
-          (* not_reference_recursive_function_directly () *)
-        | Some move_to ->
+          not_reference_recursive_function_directly ()
+        | Some (_, move_to) ->
           match reference_recursive_function_directly env move_to with
           | Some (flam, approx) -> flam, ret r approx
           | None -> not_reference_recursive_function_directly ()
@@ -780,8 +776,9 @@ and simplify_apply env r ~(apply : Flambda.apply) : Flambda.t * R.t =
               in
               let move_to_surrogate : Projection.move_within_set_of_closures =
                 { closure = lhs_of_application;
-                  start_from = Closure_id.Set.singleton closure_id_being_applied;
-                  move_to = Closure_id.Set.singleton surrogate;
+                  move =
+                    Closure_id.Map.singleton closure_id_being_applied
+                      surrogate;
                 }
               in
               let approx_for_surrogate =

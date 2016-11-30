@@ -96,16 +96,16 @@ let assign_symbols_and_collect_constant_definitions
             Variable.Tbl.add var_to_definition_tbl fun_var
               project_closure)
           funs
-      | Move_within_set_of_closures ({ closure = _; start_from = _; move_to; }
-                                     as move) -> begin
-          match Closure_id.Set.get_singleton move_to with
+      | Move_within_set_of_closures ({ closure = _; move; }
+                                     as projection) -> begin
+          match Closure_id.Map.get_singleton move with
           | None ->
             Misc.fatal_errorf "A constant move_within_set_of_closure use an\
                                inconstant closure_id %a"
-              Closure_id.Set.print move_to
-          | Some move_to ->
+              (Closure_id.Map.print Closure_id.print) move
+          | Some (_, move_to) ->
             assign_existing_symbol (closure_symbol ~backend move_to);
-            record_definition (AA.Move_within_set_of_closures move)
+            record_definition (AA.Move_within_set_of_closures projection)
         end
       | Project_closure ({ closure_id } as project_closure) ->
         let closure_id = closure_id_singleton closure_id in
@@ -501,11 +501,11 @@ let translate_definition_and_resolve_alias inconstants
         Format.eprintf "var: %a@." Variable.print v;
         assert false
     end
-  | Move_within_set_of_closures { closure; move_to } -> begin
-      match Closure_id.Set.get_singleton move_to with
+  | Move_within_set_of_closures { closure; move } -> begin
+      match Closure_id.Map.get_singleton move with
       | None ->
         assert false
-      | Some move_to ->
+      | Some (_, move_to) ->
         let set_of_closure_symbol =
           find_original_set_of_closure
             aliases

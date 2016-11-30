@@ -30,10 +30,7 @@ type project_closure = {
     [start_from]. *)
 type move_within_set_of_closures = {
   closure : Variable.t;  (** must yield a closure *)
-  start_from : Closure_id.Set.t;
-  (* CR pchambart: There probably need a link between the start and the end *)
-  move_to : Closure_id.Set.t;
-  (* TODO: start_from_to_move_to: Closure_id.t Closure_id.Map.t *)
+  move : Closure_id.t Closure_id.Map.t;
 }
 
 (** The selection from a closure of a variable bound by said closure.

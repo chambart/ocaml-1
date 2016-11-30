@@ -209,8 +209,7 @@ and same_project_closure (s1 : Flambda.project_closure)
 and same_move_within_set_of_closures (m1 : Flambda.move_within_set_of_closures)
       (m2 : Flambda.move_within_set_of_closures) =
   Variable.equal m1.closure m2.closure
-    && Closure_id.Set.equal m1.start_from m2.start_from
-    && Closure_id.Set.equal m1.move_to m2.move_to
+    && Closure_id.Map.equal Closure_id.equal m1.move m2.move
 
 and samebinding (v1, n1) (v2, n2) =
   Variable.equal v1 v2 && same_named n1 n2

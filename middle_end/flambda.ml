@@ -640,7 +640,7 @@ and variables_usage_named ?ignore_uses_in_project_var
     | None -> free_variable closure
     | Some () -> ()
     end
-  | Move_within_set_of_closures { closure; start_from = _; move_to = _ } ->
+  | Move_within_set_of_closures { closure; move = _ } ->
     free_variable closure
   | Prim (_, args, _) -> List.iter free_variable args
   | Expr flam ->

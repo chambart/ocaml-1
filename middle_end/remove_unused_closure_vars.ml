@@ -33,13 +33,11 @@ let remove_unused_closure_variables ~remove_direct_call_surrogates program =
           Var_within_closure.Tbl.add used var ();
           Closure_id.Tbl.add used_fun closure_id ())
           var
-      | Move_within_set_of_closures { closure = _; start_from; move_to } ->
-        Closure_id.Set.iter (fun start_from ->
-          Closure_id.Tbl.add used_fun start_from ())
-          start_from;
-        Closure_id.Set.iter (fun move_to ->
+      | Move_within_set_of_closures { closure = _; move } ->
+        Closure_id.Map.iter (fun start_from move_to ->
+          Closure_id.Tbl.add used_fun start_from ();
           Closure_id.Tbl.add used_fun move_to ())
-          move_to;
+          move
       | Symbol _ | Const _ | Set_of_closures _ | Prim _ | Expr _
       | Allocated_const _ | Read_mutable _ | Read_symbol_field _ -> ()
     in
