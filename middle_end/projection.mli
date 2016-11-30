@@ -21,7 +21,10 @@
     detailed documentation below on [set_of_closures]. *)
 type project_closure = {
   set_of_closures : Variable.t; (** must yield a set of closures *)
-  closure_id : Closure_id.t;
+  closure_id : Closure_id.Set.t;
+  (** For each possible value of set_of_closures, get a different
+      closure from the set. The set is implicit as there can be only
+      one set defining a closure_id *)
 }
 
 (** The selection of one closure given another closure in the same set of
@@ -30,8 +33,9 @@ type project_closure = {
     [start_from]. *)
 type move_within_set_of_closures = {
   closure : Variable.t;  (** must yield a closure *)
-  start_from : Closure_id.t;
-  move_to : Closure_id.t;
+  move : Closure_id.t Closure_id.Map.t;
+  (** For each possible value of closures, get a different closure
+      from the set. *)
 }
 
 (** The selection from a closure of a variable bound by said closure.
@@ -39,8 +43,9 @@ type move_within_set_of_closures = {
     detailed documentation below on [set_of_closures]. *)
 type project_var = {
   closure : Variable.t;  (** must yield a closure *)
-  closure_id : Closure_id.t;
-  var : Var_within_closure.t;
+  var : Var_within_closure.t Closure_id.Map.t;
+  (** For each possible value of closure, get a different field of the
+      closure. *)
 }
 
 val print_project_closure
