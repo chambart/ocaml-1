@@ -63,6 +63,8 @@ let safe_string = %%SAFE_STRING%%
 
 let afl_instrument = %%AFL_INSTRUMENT%%
 
+let no_naked_pointers = %%NO_NAKED_POINTERS%%
+
 let exec_magic_number = "Caml1999X011"
 and cmi_magic_number = "Caml1999I021"
 and cmo_magic_number = "Caml1999O011"

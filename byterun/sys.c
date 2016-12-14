@@ -506,6 +506,16 @@ CAMLprim value caml_sys_const_backend_type(value unit)
 {
   return Val_int(1); /* Bytecode backed */
 }
+
+CAMLprim value caml_sys_const_no_naked_pointers(value unit)
+{
+#ifdef NO_NAKED_POINTERS
+  return Val_int(1);
+#else
+  return Val_int(0);
+#endif
+}
+
 CAMLprim value caml_sys_get_config(value unit)
 {
   CAMLparam0 ();   /* unit is unused */

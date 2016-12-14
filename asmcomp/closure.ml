@@ -474,6 +474,7 @@ let simplif_prim_pure fpc p (args, approxs) dbg =
         | Ostype_cygwin -> make_const_bool (Sys.os_type = "Cygwin")
         | Backend_type ->
             make_const_ptr 0 (* tag 0 is the same as Native here *)
+        | No_naked_pointer -> make_const_bool Config.no_naked_pointers
       end
   (* Catch-all *)
   | _ ->

@@ -445,6 +445,7 @@ utils/config.ml: utils/config.mlp config/Makefile
 	    -e 's|%%PROFILING%%|$(PROFILING)|' \
 	    -e 's|%%SAFE_STRING%%|$(SAFE_STRING)|' \
 	    -e 's|%%AFL_INSTRUMENT%%|$(AFL_INSTRUMENT)|' \
+	    -e 's|%%NO_NAKED_POINTERS%%|$(NO_NAKED_POINTERS)|' \
 	    utils/config.mlp > utils/config.ml
 
 partialclean::

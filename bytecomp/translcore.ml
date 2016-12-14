@@ -193,6 +193,7 @@ let primitives_table = create_hashtable 57 [
   "%ostype_unix", Pctconst Ostype_unix;
   "%ostype_win32", Pctconst Ostype_win32;
   "%ostype_cygwin", Pctconst Ostype_cygwin;
+  "%no_naked_pointers", Pctconst No_naked_pointers;
   "%negint", Pnegint;
   "%succint", Poffsetint 1;
   "%predint", Poffsetint(-1);

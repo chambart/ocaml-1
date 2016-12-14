@@ -1931,6 +1931,7 @@ and transl_prim_1 env p arg dbg =
         | Ostype_cygwin -> const_of_bool (Sys.os_type = "Cygwin")
         | Backend_type ->
             tag_int (Cconst_int 0) dbg (* tag 0 is the same as Native here *)
+        | No_naked_pointer -> const_of_bool Config.no_naked_pointers
       end
   | Poffsetint n ->
       if no_overflow_lsl n 1 then

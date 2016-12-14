@@ -26,6 +26,7 @@ type compile_time_constant =
   | Ostype_win32
   | Ostype_cygwin
   | Backend_type
+  | No_naked_pointers
 
 type loc_kind =
   | Loc_FILE
