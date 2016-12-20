@@ -35,7 +35,7 @@ and instruction_desc =
   | Lop of operation
   | Lreloadretaddr
   | Lreturn
-  | Llabel of label
+  | Llabel of { label : label; continuation : int option }
   | Lbranch of label
   | Lcondbranch of test * label
   | Lcondbranch3 of label option * label option * label option
@@ -146,16 +146,16 @@ let copy_instr d i n =
 let get_label n =
   match n.desc with
   | Lbranch lbl -> (lbl, n)
-  | Llabel lbl -> (lbl, n)
+  | Llabel { label } -> (label, n)
   | Lend -> (-1, n)
   | _ ->
     let lbl = Cmm.new_label () in
-    (lbl, cons_instr (Llabel lbl) n)
+    (lbl, cons_instr (Llabel { label = lbl; continuation = None }) n)
 
 (* Check the fallthrough label *)
 let check_label n = match n.desc with
   | Lbranch lbl -> lbl
-  | Llabel lbl -> lbl
+  | Llabel { label } -> label
   | _ -> -1
 
 (* Discard all instructions up to the next label.
@@ -185,7 +185,7 @@ let add_branch lbl n =
   if lbl >= 0 then
     let n1 = discard_dead_code n in
     match n1.desc with
-    | Llabel lbl1 when lbl1 = lbl -> n1
+    | Llabel { label = lbl1 } when lbl1 = lbl -> n1
     | _ -> cons_instr (Lbranch lbl) n1
   else
     discard_dead_code n
@@ -310,7 +310,7 @@ let rec linear i n =
       let n2 =
         linear body (cons_instr (Lbranch lbl_head) n1)
       in
-      cons_instr (Llabel lbl_head) n2
+      cons_instr (Llabel { label = lbl_head; continuation = None }) n2
   | Icatch(_rec_flag, is_exn_handler, handlers, body) ->
       (* CR mshinwell: Change the type to make this statically checked *)
       assert (not is_exn_handler || List.length handlers = 1);
@@ -331,14 +331,16 @@ let rec linear i n =
       in
       exit_label := exit_label_add @ !exit_label;
       let n2 =
-        List.fold_left2 (fun n (_nfail, trap_stack, handler) lbl_handler ->
+        List.fold_left2 (fun n (nfail, trap_stack, handler) lbl_handler ->
             match handler.Mach.desc with
             | Iend -> n
             | _ ->
               let trap_depth = List.length trap_stack in
               let n = adjust_trap_depth ~before:trap_depth ~after:n in
               let handler = linear handler n in
-              cons_instr (Llabel lbl_handler) handler)
+              cons_instr
+                (Llabel { label = lbl_handler; continuation = Some nfail })
+                handler)
           n1 handlers labels_at_entry_to_handlers
       in
       let n2 = adjust_trap_depth ~before:n1.trap_depth ~after:n2 in

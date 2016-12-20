@@ -60,7 +60,7 @@ let check_instruction (insn : Linearize.instruction) ~state =
       Misc.fatal_error "Trap depth must be zero at Lreturn"
     end;
     state
-  | Llabel label | Lbranch label | Lcondbranch (_, label) ->
+  | Llabel { label } | Lbranch label | Lcondbranch (_, label) ->
     record_trap_depth_at_label ~state ~insn ~label
   | Lcondbranch3 (label1, label2, label3) ->
     let state = record_trap_depth_at_label_opt ~state ~insn ~label:label1 in

@@ -682,7 +682,7 @@ let emit_instr i =
         output_epilogue begin fun () ->
           `	bx	lr\n`; 1
         end
-    | Llabel lbl ->
+    | Llabel { label = lbl } ->
         `{emit_label lbl}:\n`; 0
     | Lbranch lbl ->
         `	b	{emit_label lbl}\n`; 1
@@ -750,7 +750,7 @@ let emit_instr i =
             let rec label i =
               match i.desc with
                 Lend -> new_label()
-              | Llabel lbl when lbl = tramtbl.(j) -> lbl
+              | Llabel { label = lbl } -> when lbl = tramtbl.(j) -> lbl
               | _ -> label i.next in
             tramtbl.(j) <- label i.next;
             `	.short	({emit_label tramtbl.(j)}-.)/2+{emit_int j}\n`

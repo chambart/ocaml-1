@@ -529,7 +529,7 @@ let rec emit_instr i dslot =
           `	nop\n`
         else
           `	add	%sp, {emit_int n}, %sp\n`
-    | Llabel lbl ->
+    | Llabel { label = lbl } ->
         `{emit_label lbl}:\n`
     | Lbranch lbl ->
         `	b	{emit_label lbl}\n`;

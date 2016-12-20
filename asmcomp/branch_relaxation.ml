@@ -23,7 +23,7 @@ module Make (T : Branch_relaxation_intf.S) = struct
     let rec fill_map pc instr =
       match instr.desc with
       | Lend -> (pc, map)
-      | Llabel lbl -> Hashtbl.add map lbl pc; fill_map pc instr.next
+      | Llabel { label = lbl } -> Hashtbl.add map lbl pc; fill_map pc instr.next
       | op -> fill_map (pc + T.instr_size op) instr.next
     in
     fill_map 0 code
@@ -103,7 +103,8 @@ module Make (T : Branch_relaxation_intf.S) = struct
             let lbl2 = Cmm.new_label() in
             let cont =
               instr_cons (Lbranch lbl) [||] [||]
-                (instr_cons (Llabel lbl2) [||] [||] instr.next)
+                (instr_cons (Llabel { label = lbl2; continuation = None })
+                   [||] [||] instr.next)
             in
             instr.desc <- Lcondbranch (invert_test test, lbl2);
             instr.next <- cont;

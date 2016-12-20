@@ -38,8 +38,10 @@ let instr ppf i =
       fprintf ppf "reload retaddr"
   | Lreturn ->
       fprintf ppf "return %a" regs i.arg
-  | Llabel lbl ->
+  | Llabel { label = lbl; continuation = None } ->
       fprintf ppf "%a:" label lbl
+  | Llabel { label = lbl; continuation = Some cont } ->
+      fprintf ppf "%a: (k%i)" label lbl cont
   | Lbranch lbl ->
       fprintf ppf "goto %a" label lbl
   | Lcondbranch(tst, lbl) ->

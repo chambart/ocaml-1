@@ -532,7 +532,7 @@ let emit_instr i =
         let n = frame_size() in
         emit_stack_adjust (-n);
         `	br	%r14\n`
-    | Llabel lbl ->
+    | Llabel { label = lbl } ->
         `{emit_label lbl}:\n`
     | Lbranch lbl ->
         `	brcl	15,{emit_label lbl}\n`

@@ -801,7 +801,7 @@ let emit_instr fallthrough i =
       output_epilogue begin fun () ->
         I.ret ()
       end
-  | Llabel lbl ->
+  | Llabel { label = lbl } ->
       emit_Llabel fallthrough lbl
   | Lbranch lbl ->
       I.jmp (label lbl)
