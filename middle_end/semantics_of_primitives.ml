@@ -70,7 +70,8 @@ let for_primitive (prim : Lambda.primitive) =
   | Psubfloat
   | Pmulfloat
   | Pdivfloat
-  | Pfloatcomp _ -> No_effects, No_coeffects
+  | Pfloatcomp _
+  | Punbox_float | Pbox_float -> No_effects, No_coeffects
   | Pstringlength | Pbyteslength
   | Parraylength _ ->
     No_effects, Has_coeffects  (* That old chestnut: [Obj.truncate]. *)

@@ -943,6 +943,38 @@ let rec close fenv cenv = function
         let (ubody, approx) = close fenv_body cenv body in
         (Uletrec(udefs, ubody), approx)
       end
+  | Lprim((Pnegfloat | Pabsfloat | Paddfloat |
+           Psubfloat | Pmulfloat | Pdivfloat) as p,
+          args, loc) ->
+      let dbg = Debuginfo.from_location loc in
+      let ulam, approx =
+        simplif_prim !Clflags.float_const_prop
+                     p (close_list_unbox_float_approx dbg fenv cenv args) dbg
+      in
+      Uprim(Pbox_float, [ulam], dbg), approx
+  | Lprim((Pfloatcomp _ | Pintoffloat) as p, args, loc) ->
+      let dbg = Debuginfo.from_location loc in
+      simplif_prim !Clflags.float_const_prop
+                   p (close_list_unbox_float_approx dbg fenv cenv args) dbg
+  | Lprim(
+      (Pbigarrayset(_, _, (Pbigarray_float32 | Pbigarray_float64), _)) as p,
+      args, loc) ->
+      let dbg = Debuginfo.from_location loc in
+      let (argidx, argnewval) = split_last args in
+      let uargidx, approxs = close_list_approx fenv cenv argidx in
+      let uargnewval, approx = close_unbox_float fenv cenv argnewval dbg in
+      let uargs = uargidx @ [uargnewval] in
+      let approxs = approxs @ [approx] in
+      simplif_prim !Clflags.float_const_prop p (uargs, approxs) dbg
+  | Lprim((Pfloatofint |
+           Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64), _)) as p,
+          args, loc) ->
+      let dbg = Debuginfo.from_location loc in
+      let ulam, approx =
+        simplif_prim !Clflags.float_const_prop
+                     p (close_list_approx fenv cenv args) dbg
+      in
+      Uprim(Pbox_float, [ulam], dbg), approx
   | Lprim(Pdirapply,[funct;arg], loc)
   | Lprim(Prevapply,[arg;funct], loc) ->
       close fenv cenv (Lapply{ap_should_be_tailcall=false;
@@ -1061,6 +1093,17 @@ let rec close fenv cenv = function
       close fenv cenv lam
   | Lifused _ ->
       assert false
+
+and close_unbox_float fenv cenv lam dbg =
+  let ulam, approx = close fenv cenv lam in
+  Uprim(Punbox_float, [ulam], dbg), approx
+
+and close_list_unbox_float_approx dbg fenv cenv = function
+    [] -> ([], [])
+  | lam :: rem ->
+      let (ulam, approx) = close_unbox_float fenv cenv lam dbg in
+      let (ulams, approxs) = close_list_unbox_float_approx dbg fenv cenv rem in
+      (ulam :: ulams, approx :: approxs)
 
 and close_list fenv cenv = function
     [] -> []

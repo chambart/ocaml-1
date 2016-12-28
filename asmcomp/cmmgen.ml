@@ -1495,6 +1495,7 @@ let rec is_unboxed_number ~strict env e =
   | Uprim(p, _, dbg) ->
       begin match simplif_primitive p with
         | Pccall p -> unboxed_number_kind_of_unbox dbg p.prim_native_repr_res
+        | Pbox_float -> Boxed (Boxed_float dbg, false)
         | Pfloatfield _
         | Pfloatofint
         | Pnegfloat
@@ -1503,8 +1504,10 @@ let rec is_unboxed_number ~strict env e =
         | Psubfloat
         | Pmulfloat
         | Pdivfloat
+          -> No_unboxing
         | Parrayrefu Pfloatarray
-        | Parrayrefs Pfloatarray -> Boxed (Boxed_float dbg, false)
+        | Parrayrefs Pfloatarray
+          -> Boxed (Boxed_float dbg, false)
         | Pbintofint bi
         | Pcvtbint(_, bi)
         | Pnegbint bi
@@ -1521,7 +1524,7 @@ let rec is_unboxed_number ~strict env e =
         | Pasrbint bi
         | Pbbswap bi -> Boxed (Boxed_integer (bi, dbg), false)
         | Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64), _) ->
-            Boxed (Boxed_float dbg, false)
+            No_unboxing
         | Pbigarrayref(_, _, Pbigarray_int32, _) ->
             Boxed (Boxed_integer (Pint32, dbg), false)
         | Pbigarrayref(_, _, Pbigarray_int64, _) ->
@@ -1684,7 +1687,7 @@ let rec transl env e =
             bigarray_get unsafe elt_kind layout
               (transl env arg1) (List.map (transl env) argl) dbg in
           begin match elt_kind with
-            Pbigarray_float32 | Pbigarray_float64 -> box_float dbg elt
+            Pbigarray_float32 | Pbigarray_float64 -> elt
           | Pbigarray_complex32 | Pbigarray_complex64 -> elt
           | Pbigarray_int32 -> box_int dbg Pint32 elt
           | Pbigarray_int64 -> box_int dbg Pint64 elt
@@ -1699,7 +1702,7 @@ let rec transl env e =
             (List.map (transl env) argidx)
             (match elt_kind with
               Pbigarray_float32 | Pbigarray_float64 ->
-                transl_unbox_float dbg env argnewval
+                transl env argnewval
             | Pbigarray_complex32 | Pbigarray_complex64 -> transl env argnewval
             | Pbigarray_int32 -> transl_unbox_int dbg env Pint32 argnewval
             | Pbigarray_int64 -> transl_unbox_int dbg env Pint64 argnewval
@@ -1950,14 +1953,18 @@ and transl_prim_1 env p arg dbg =
               [arg; add_const (Cop(Cload Word_int, [arg], dbg)) (n lsl 1) dbg],
               dbg)))
   (* Floating-point operations *)
+  | Pbox_float ->
+      box_float dbg (transl env arg)
+  | Punbox_float ->
+      transl_unbox_float dbg env arg
   | Pfloatofint ->
-      box_float dbg (Cop(Cfloatofint, [untag_int(transl env arg) dbg], dbg))
+      Cop(Cfloatofint, [untag_int(transl env arg) dbg], dbg)
   | Pintoffloat ->
-     tag_int(Cop(Cintoffloat, [transl_unbox_float dbg env arg], dbg)) dbg
+     tag_int(Cop(Cintoffloat, [transl env arg], dbg)) dbg
   | Pnegfloat ->
-      box_float dbg (Cop(Cnegf, [transl_unbox_float dbg env arg], dbg))
+      Cop(Cnegf, [transl env arg], dbg)
   | Pabsfloat ->
-      box_float dbg (Cop(Cabsf, [transl_unbox_float dbg env arg], dbg))
+      Cop(Cabsf, [transl env arg], dbg)
   (* String operations *)
   | Pstringlength | Pbyteslength ->
       tag_int(string_length (transl env arg) dbg) dbg
@@ -2039,7 +2046,7 @@ and transl_prim_2 env p arg1 arg2 dbg =
         Cop(Cstore (Double_u, init),
             [if n = 0 then ptr
                        else Cop(Cadda, [ptr; Cconst_int(n * size_float)], dbg);
-                   transl_unbox_float dbg env arg2], dbg))
+                   transl env arg2], dbg))
 
   (* Boolean operations *)
   | Psequand ->
@@ -2102,24 +2109,24 @@ and transl_prim_2 env p arg1 arg2 dbg =
       transl_isout (transl env arg1) (transl env arg2) dbg
   (* Float operations *)
   | Paddfloat ->
-      box_float dbg (Cop(Caddf,
-                    [transl_unbox_float dbg env arg1; transl_unbox_float dbg env arg2],
-                    dbg))
+      Cop(Caddf,
+          [transl env arg1; transl env arg2],
+          dbg)
   | Psubfloat ->
-      box_float dbg (Cop(Csubf,
-                    [transl_unbox_float dbg env arg1; transl_unbox_float dbg env arg2],
-                    dbg))
+      Cop(Csubf,
+          [transl env arg1; transl env arg2],
+          dbg)
   | Pmulfloat ->
-      box_float dbg (Cop(Cmulf,
-                    [transl_unbox_float dbg env arg1; transl_unbox_float dbg env arg2],
-                    dbg))
+      Cop(Cmulf,
+          [transl env arg1; transl env arg2],
+          dbg)
   | Pdivfloat ->
-      box_float dbg (Cop(Cdivf,
-                    [transl_unbox_float dbg env arg1; transl_unbox_float dbg env arg2],
-                    dbg))
+      Cop(Cdivf,
+          [transl env arg1; transl env arg2],
+          dbg)
   | Pfloatcomp cmp ->
       tag_int(Cop(Ccmpf(transl_comparison cmp),
-                  [transl_unbox_float dbg env arg1; transl_unbox_float dbg env arg2],
+                  [transl env arg1; transl env arg2],
                   dbg)) dbg
 
   (* String operations *)

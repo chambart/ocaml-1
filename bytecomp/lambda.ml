@@ -149,6 +149,8 @@ type primitive =
   | Pint_as_pointer
   (* Inhibition of optimisation *)
   | Popaque
+  | Punbox_float
+  | Pbox_float
 
 and comparison =
     Ceq | Cneq | Clt | Cgt | Cle | Cge
