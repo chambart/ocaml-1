@@ -975,6 +975,28 @@ let rec close fenv cenv = function
                      p (close_list_approx fenv cenv args) dbg
       in
       Uprim(Pbox_float, [ulam], dbg), approx
+  | Lprim(Pccall descr as p, args, loc) ->
+      let dbg = Debuginfo.from_location loc in
+      let args =
+        List.map2 (fun arg (repr:Primitive.native_repr) ->
+          match repr with
+          | Unboxed_float ->
+              close_unbox_float fenv cenv arg dbg
+          | Untagged_int | Unboxed_integer _ | Same_as_ocaml_repr ->
+              close fenv cenv arg)
+          args descr.prim_native_repr_args
+      in
+      let args, approxs = List.split args in
+      let expr, approx =
+        simplif_prim !Clflags.float_const_prop p (args, approxs) dbg
+      in
+      let expr = match descr.prim_native_repr_res with
+        | Unboxed_float ->
+            Uprim (Pbox_float, [expr], dbg)
+        | Same_as_ocaml_repr | Unboxed_integer _ | Untagged_int ->
+            expr
+      in
+      expr, approx
   | Lprim(Pdirapply,[funct;arg], loc)
   | Lprim(Prevapply,[arg;funct], loc) ->
       close fenv cenv (Lapply{ap_should_be_tailcall=false;
