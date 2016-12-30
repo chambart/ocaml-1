@@ -1451,7 +1451,7 @@ type unboxed_number_kind =
 
 let unboxed_number_kind_of_unbox dbg = function
   | Same_as_ocaml_repr -> No_unboxing
-  | Unboxed_float -> Boxed (Boxed_float dbg, false)
+  | Unboxed_float -> No_unboxing
   | Unboxed_integer bi -> Boxed (Boxed_integer (bi, dbg), false)
   | Untagged_int -> No_unboxing
 
@@ -1865,7 +1865,7 @@ and transl_ccall env prim args dbg =
   let transl_arg native_repr arg =
     match native_repr with
     | Same_as_ocaml_repr -> transl env arg
-    | Unboxed_float -> transl_unbox_float dbg env arg
+    | Unboxed_float -> transl env arg
     | Unboxed_integer bi -> transl_unbox_int dbg env bi arg
     | Untagged_int -> untag_int (transl env arg) dbg
   in
@@ -1882,7 +1882,7 @@ and transl_ccall env prim args dbg =
   let typ_res, wrap_result =
     match prim.prim_native_repr_res with
     | Same_as_ocaml_repr -> (typ_val, fun x -> x)
-    | Unboxed_float -> (typ_float, box_float dbg)
+    | Unboxed_float -> (typ_float, fun x -> x)
     | Unboxed_integer Pint64 when size_int = 4 ->
         ([|Int; Int|], box_int dbg Pint64)
     | Unboxed_integer bi -> (typ_int, box_int dbg bi)

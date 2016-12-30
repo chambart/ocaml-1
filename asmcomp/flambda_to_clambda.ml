@@ -193,6 +193,11 @@ let subst_var env var : Clambda.ulambda =
         Variable.print var
 
 let subst_vars env vars = List.map (subst_var env) vars
+let subst_var_unbox_float dbg env var : Clambda.ulambda =
+  Uprim (Punbox_float, [subst_var env var], dbg)
+
+let subst_vars_unbox_float dbg env vars =
+  List.map (subst_var_unbox_float dbg env) vars
 
 let build_uoffset ulam offset : Clambda.ulambda =
   if offset = 0 then ulam
@@ -401,6 +406,41 @@ and to_clambda_named t env var (named : Flambda.named) : Clambda.ulambda =
       ], dbg)
   | Prim (Popaque, args, dbg) ->
     Uprim (Pidentity, subst_vars env args, dbg)
+  | Prim ((Pnegfloat | Pabsfloat | Paddfloat |
+           Psubfloat | Pmulfloat | Pdivfloat) as p, args, dbg) ->
+    Uprim (Pbox_float,
+           [Clambda.Uprim (p, subst_vars_unbox_float dbg env args, dbg)],
+           dbg)
+  | Prim ((Pfloatcomp _ | Pintoffloat) as p, args, dbg) ->
+    Uprim (p, subst_vars_unbox_float dbg env args, dbg)
+  | Prim ((Pbigarrayset(_, _, (Pbigarray_float32 | Pbigarray_float64), _)) as p,
+          args, dbg) ->
+    let (argidx, argnewval) = Misc.split_last args in
+    let argidx = subst_vars env argidx in
+    let argnewval = subst_var_unbox_float dbg env argnewval in
+    let args = argidx @ [argnewval] in
+    Uprim (p, args, dbg)
+  | Prim ((Pfloatofint |
+           Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64), _)) as p,
+          args, dbg) ->
+    Uprim (Pbox_float, [Clambda.Uprim (p, subst_vars env args, dbg)], dbg)
+  | Prim (Pccall descr as p, args, dbg) ->
+    let args =
+      List.map2 (fun arg (repr:Primitive.native_repr) ->
+        match repr with
+        | Unboxed_float ->
+          subst_var_unbox_float dbg env arg
+        | Untagged_int | Unboxed_integer _ | Same_as_ocaml_repr ->
+          subst_var env arg)
+        args descr.prim_native_repr_args
+    in
+    let expr : Clambda.ulambda = Uprim (p, args, dbg) in
+    begin match descr.prim_native_repr_res with
+    | Unboxed_float ->
+      Uprim (Pbox_float, [expr], dbg)
+    | Same_as_ocaml_repr | Unboxed_integer _ | Untagged_int ->
+      expr
+    end
   | Prim (p, args, dbg) ->
     Uprim (p, subst_vars env args, dbg)
   | Expr expr -> to_clambda t env expr
