@@ -1699,12 +1699,15 @@ let rec transl env e =
       | (Pmakearray _, []) ->
           transl_structured_constant (Uconst_block(0, []))
       | (Pmakearray (kind, _), args) -> transl_make_array dbg env kind args
-      | (Pbigarrayref(unsafe, _num_dims, elt_kind, layout, Unboxed), arg1 :: argl) ->
+      | (Pbigarrayref(unsafe, _num_dims, elt_kind, layout, boxing), arg1 :: argl) ->
           let elt =
             bigarray_get unsafe elt_kind layout
               (transl env arg1) (List.map (transl env) argl) dbg in
           begin match elt_kind with
-            Pbigarray_float32 | Pbigarray_float64 -> elt
+            Pbigarray_float32 | Pbigarray_float64 ->
+              (match boxing with
+               | Boxed -> box_float dbg elt
+               | Unboxed -> elt)
           | Pbigarray_complex32 | Pbigarray_complex64 -> elt
           | Pbigarray_int32 -> box_int dbg Pint32 elt
           | Pbigarray_int64 -> box_int dbg Pint64 elt
@@ -1712,14 +1715,16 @@ let rec transl env e =
           | Pbigarray_caml_int -> force_tag_int elt dbg
           | _ -> tag_int elt dbg
           end
-      | (Pbigarrayset(unsafe, _num_dims, elt_kind, layout, Unboxed), arg1 :: argl) ->
+      | (Pbigarrayset(unsafe, _num_dims, elt_kind, layout, boxing), arg1 :: argl) ->
           let (argidx, argnewval) = split_last argl in
           return_unit(bigarray_set unsafe elt_kind layout
             (transl env arg1)
             (List.map (transl env) argidx)
             (match elt_kind with
               Pbigarray_float32 | Pbigarray_float64 ->
-                transl env argnewval
+                 (match boxing with
+                  | Boxed -> transl_unbox_float dbg env argnewval
+                  | Unboxed -> transl env argnewval)
             | Pbigarray_complex32 | Pbigarray_complex64 -> transl env argnewval
             | Pbigarray_int32 -> transl_unbox_int dbg env Pint32 argnewval
             | Pbigarray_int64 -> transl_unbox_int dbg env Pint64 argnewval

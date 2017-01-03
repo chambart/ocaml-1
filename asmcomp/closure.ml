@@ -958,7 +958,9 @@ let rec close fenv cenv = function
       simplif_prim !Clflags.float_const_prop
         (unboxed_prim p) (close_list_unbox_float_approx dbg fenv cenv args) dbg
   | Lprim(
-      (Pbigarrayset(_, _, (Pbigarray_float32 | Pbigarray_float64), _, Boxed))
+      (Pbigarrayset(_, _, (Pbigarray_float32 | Pbigarray_float64),
+                    (Pbigarray_c_layout | Pbigarray_fortran_layout),
+                    Boxed))
         as p,
       args, loc) ->
       let dbg = Debuginfo.from_location loc in
@@ -969,7 +971,9 @@ let rec close fenv cenv = function
       let approxs = approxs @ [approx] in
       simplif_prim !Clflags.float_const_prop p (uargs, approxs) dbg
   | Lprim((Pfloatofint Boxed |
-           Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64), _, Boxed))
+           Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64),
+                        (Pbigarray_c_layout | Pbigarray_fortran_layout),
+                        Boxed))
             as p,
           args, loc) ->
       let dbg = Debuginfo.from_location loc in

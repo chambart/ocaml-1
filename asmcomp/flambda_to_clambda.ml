@@ -416,7 +416,8 @@ and to_clambda_named t env var (named : Flambda.named) : Clambda.ulambda =
   | Prim ((Pfloatcomp (_, Boxed) | Pintoffloat Boxed) as p, args, dbg) ->
     Uprim (Lambda.unboxed_prim p, subst_vars_unbox_float dbg env args, dbg)
   | Prim ((Pbigarrayset(_, _, (Pbigarray_float32 | Pbigarray_float64),
-                        _, Boxed)) as p,
+                        (Pbigarray_c_layout | Pbigarray_fortran_layout),
+                        Boxed)) as p,
           args, dbg) ->
     let (argidx, argnewval) = Misc.split_last args in
     let argidx = subst_vars env argidx in
@@ -425,7 +426,8 @@ and to_clambda_named t env var (named : Flambda.named) : Clambda.ulambda =
     Uprim (Lambda.unboxed_prim p, args, dbg)
   | Prim ((Pfloatofint Boxed |
            Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64),
-                        _, Boxed)) as p,
+                        (Pbigarray_c_layout | Pbigarray_fortran_layout),
+                        Boxed)) as p,
           args, dbg) ->
     Uprim (Pbox_float, [Clambda.Uprim (Lambda.unboxed_prim p,
                                        subst_vars env args, dbg)], dbg)

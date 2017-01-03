@@ -665,10 +665,12 @@ let unboxed_prim = function
   | Pintoffloat Boxed -> Pintoffloat Unboxed
   | Pfloatofint Boxed -> Pfloatofint Unboxed
   | Pbigarrayset(unsafe, dim, (Pbigarray_float32 | Pbigarray_float64 as kind),
-                 layout, Boxed) ->
+                 (Pbigarray_c_layout | Pbigarray_fortran_layout as layout),
+                 Boxed) ->
       Pbigarrayset(unsafe, dim, kind, layout, Unboxed)
   | Pbigarrayref(unsafe, dim, (Pbigarray_float32 | Pbigarray_float64 as kind),
-                 layout, Boxed) ->
+                 (Pbigarray_c_layout | Pbigarray_fortran_layout as layout),
+                 Boxed) ->
       Pbigarrayref(unsafe, dim, kind, layout, Unboxed)
   | Pccall descr -> Pccall_unboxed descr
   | _ ->
