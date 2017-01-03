@@ -406,24 +406,29 @@ and to_clambda_named t env var (named : Flambda.named) : Clambda.ulambda =
       ], dbg)
   | Prim (Popaque, args, dbg) ->
     Uprim (Pidentity, subst_vars env args, dbg)
-  | Prim ((Pnegfloat | Pabsfloat | Paddfloat |
-           Psubfloat | Pmulfloat | Pdivfloat) as p, args, dbg) ->
+  | Prim ((Pnegfloat Boxed | Pabsfloat Boxed | Paddfloat Boxed |
+           Psubfloat Boxed | Pmulfloat Boxed | Pdivfloat Boxed) as p,
+          args, dbg) ->
     Uprim (Pbox_float,
-           [Clambda.Uprim (p, subst_vars_unbox_float dbg env args, dbg)],
+           [Clambda.Uprim (Lambda.unboxed_prim p,
+                           subst_vars_unbox_float dbg env args, dbg)],
            dbg)
-  | Prim ((Pfloatcomp _ | Pintoffloat) as p, args, dbg) ->
-    Uprim (p, subst_vars_unbox_float dbg env args, dbg)
-  | Prim ((Pbigarrayset(_, _, (Pbigarray_float32 | Pbigarray_float64), _)) as p,
+  | Prim ((Pfloatcomp (_, Boxed) | Pintoffloat Boxed) as p, args, dbg) ->
+    Uprim (Lambda.unboxed_prim p, subst_vars_unbox_float dbg env args, dbg)
+  | Prim ((Pbigarrayset(_, _, (Pbigarray_float32 | Pbigarray_float64),
+                        _, Boxed)) as p,
           args, dbg) ->
     let (argidx, argnewval) = Misc.split_last args in
     let argidx = subst_vars env argidx in
     let argnewval = subst_var_unbox_float dbg env argnewval in
     let args = argidx @ [argnewval] in
-    Uprim (p, args, dbg)
-  | Prim ((Pfloatofint |
-           Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64), _)) as p,
+    Uprim (Lambda.unboxed_prim p, args, dbg)
+  | Prim ((Pfloatofint Boxed |
+           Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64),
+                        _, Boxed)) as p,
           args, dbg) ->
-    Uprim (Pbox_float, [Clambda.Uprim (p, subst_vars env args, dbg)], dbg)
+    Uprim (Pbox_float, [Clambda.Uprim (Lambda.unboxed_prim p,
+                                       subst_vars env args, dbg)], dbg)
   | Prim (Pccall descr as p, args, dbg) ->
     let args =
       List.map2 (fun arg (repr:Primitive.native_repr) ->
@@ -434,7 +439,7 @@ and to_clambda_named t env var (named : Flambda.named) : Clambda.ulambda =
           subst_var env arg)
         args descr.prim_native_repr_args
     in
-    let expr : Clambda.ulambda = Uprim (p, args, dbg) in
+    let expr : Clambda.ulambda = Uprim (Lambda.unboxed_prim p, args, dbg) in
     begin match descr.prim_native_repr_res with
     | Unboxed_float ->
       Uprim (Pbox_float, [expr], dbg)

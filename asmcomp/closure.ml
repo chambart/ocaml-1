@@ -131,8 +131,8 @@ let prim_size prim args =
   | Parrayrefs kind -> if kind = Pgenarray then 18 else 8
   | Parraysets kind -> if kind = Pgenarray then 22 else 10
   | Pbittest -> 3
-  | Pbigarrayref(_, ndims, _, _) -> 4 + ndims * 6
-  | Pbigarrayset(_, ndims, _, _) -> 4 + ndims * 6
+  | Pbigarrayref(_, ndims, _, _, _) -> 4 + ndims * 6
+  | Pbigarrayset(_, ndims, _, _, _) -> 4 + ndims * 6
   | _ -> 2 (* arithmetic and comparisons *)
 
 (* Very raw approximation of switch cost *)
@@ -248,7 +248,7 @@ let simplif_arith_prim_pure fpc p (args, approxs) dbg =
       | Pnot -> make_const_bool (n1 = 0)
       | Pnegint -> make_const_int (- n1)
       | Poffsetint n -> make_const_int (n + n1)
-      | Pfloatofint when fpc -> make_const_float (float_of_int n1)
+      | Pfloatofint Unboxed when fpc -> make_const_float (float_of_int n1)
       | Pbintofint Pnativeint -> make_const_natint (Nativeint.of_int n1)
       | Pbintofint Pint32 -> make_const_int32 (Int32.of_int n1)
       | Pbintofint Pint64 -> make_const_int64 (Int64.of_int n1)
@@ -282,20 +282,20 @@ let simplif_arith_prim_pure fpc p (args, approxs) dbg =
   (* float *)
   | [Value_const(Uconst_ref(_, Some (Uconst_float n1)))] when fpc ->
       begin match p with
-      | Pintoffloat -> make_const_int (int_of_float n1)
-      | Pnegfloat -> make_const_float (-. n1)
-      | Pabsfloat -> make_const_float (abs_float n1)
+      | Pintoffloat Unboxed -> make_const_int (int_of_float n1)
+      | Pnegfloat Unboxed -> make_const_float (-. n1)
+      | Pabsfloat Unboxed -> make_const_float (abs_float n1)
       | _ -> default
       end
   (* float, float *)
   | [Value_const(Uconst_ref(_, Some (Uconst_float n1)));
      Value_const(Uconst_ref(_, Some (Uconst_float n2)))] when fpc ->
       begin match p with
-      | Paddfloat -> make_const_float (n1 +. n2)
-      | Psubfloat -> make_const_float (n1 -. n2)
-      | Pmulfloat -> make_const_float (n1 *. n2)
-      | Pdivfloat -> make_const_float (n1 /. n2)
-      | Pfloatcomp c  -> make_comparison c n1 n2
+      | Paddfloat Unboxed -> make_const_float (n1 +. n2)
+      | Psubfloat Unboxed -> make_const_float (n1 -. n2)
+      | Pmulfloat Unboxed -> make_const_float (n1 *. n2)
+      | Pdivfloat Unboxed -> make_const_float (n1 /. n2)
+      | Pfloatcomp (c, Unboxed) -> make_comparison c n1 n2
       | _ -> default
       end
   (* nativeint *)
@@ -943,21 +943,23 @@ let rec close fenv cenv = function
         let (ubody, approx) = close fenv_body cenv body in
         (Uletrec(udefs, ubody), approx)
       end
-  | Lprim((Pnegfloat | Pabsfloat | Paddfloat |
-           Psubfloat | Pmulfloat | Pdivfloat) as p,
+  | Lprim((Pnegfloat Boxed | Pabsfloat Boxed | Paddfloat Boxed |
+           Psubfloat Boxed | Pmulfloat Boxed | Pdivfloat Boxed) as p,
           args, loc) ->
       let dbg = Debuginfo.from_location loc in
       let ulam, approx =
         simplif_prim !Clflags.float_const_prop
-                     p (close_list_unbox_float_approx dbg fenv cenv args) dbg
+          (unboxed_prim p)
+          (close_list_unbox_float_approx dbg fenv cenv args) dbg
       in
       Uprim(Pbox_float, [ulam], dbg), approx
-  | Lprim((Pfloatcomp _ | Pintoffloat) as p, args, loc) ->
+  | Lprim((Pfloatcomp (_, Boxed) | Pintoffloat Boxed) as p, args, loc) ->
       let dbg = Debuginfo.from_location loc in
       simplif_prim !Clflags.float_const_prop
-                   p (close_list_unbox_float_approx dbg fenv cenv args) dbg
+        (unboxed_prim p) (close_list_unbox_float_approx dbg fenv cenv args) dbg
   | Lprim(
-      (Pbigarrayset(_, _, (Pbigarray_float32 | Pbigarray_float64), _)) as p,
+      (Pbigarrayset(_, _, (Pbigarray_float32 | Pbigarray_float64), _, Boxed))
+        as p,
       args, loc) ->
       let dbg = Debuginfo.from_location loc in
       let (argidx, argnewval) = split_last args in
@@ -966,13 +968,14 @@ let rec close fenv cenv = function
       let uargs = uargidx @ [uargnewval] in
       let approxs = approxs @ [approx] in
       simplif_prim !Clflags.float_const_prop p (uargs, approxs) dbg
-  | Lprim((Pfloatofint |
-           Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64), _)) as p,
+  | Lprim((Pfloatofint Boxed |
+           Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64), _, Boxed))
+            as p,
           args, loc) ->
       let dbg = Debuginfo.from_location loc in
       let ulam, approx =
         simplif_prim !Clflags.float_const_prop
-                     p (close_list_approx fenv cenv args) dbg
+          (unboxed_prim p) (close_list_approx fenv cenv args) dbg
       in
       Uprim(Pbox_float, [ulam], dbg), approx
   | Lprim(Pccall descr as p, args, loc) ->
@@ -988,7 +991,8 @@ let rec close fenv cenv = function
       in
       let args, approxs = List.split args in
       let expr, approx =
-        simplif_prim !Clflags.float_const_prop p (args, approxs) dbg
+        simplif_prim !Clflags.float_const_prop
+          (unboxed_prim p) (args, approxs) dbg
       in
       let expr = match descr.prim_native_repr_res with
         | Unboxed_float ->

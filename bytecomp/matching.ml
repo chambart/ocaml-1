@@ -2263,7 +2263,7 @@ let combine_constant loc arg cst partial ctx def
     | Const_float _ ->
         make_test_sequence loc
           fail
-          (Pfloatcomp Cneq) (Pfloatcomp Clt)
+          (Pfloatcomp (Cneq, Boxed)) (Pfloatcomp (Clt, Boxed))
           arg const_lambda_list
     | Const_int32 _ ->
         make_test_sequence loc
