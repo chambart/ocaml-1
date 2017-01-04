@@ -269,7 +269,7 @@ type lambda =
 
 and lfunction =
   { kind: function_kind;
-    params: Ident.t list;
+    params: (Ident.t * value_kind) list;
     body: lambda;
     attr: function_attribute; (* specified with [@inline] attribute *)
     loc : Location.t; }

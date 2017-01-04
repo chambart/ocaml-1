@@ -508,6 +508,7 @@ let rec comp_expr env exp sz cont =
   | Lfunction{params; body} -> (* assume kind = Curried *)
       let lbl = new_label() in
       let fv = IdentSet.elements(free_variables exp) in
+      let params, _ = List.split params in
       let to_compile =
         { params = params; body = body; label = lbl;
           free_vars = fv; num_defs = 1; rec_vars = []; rec_pos = 0 } in
@@ -530,6 +531,7 @@ let rec comp_expr env exp sz cont =
             [] -> []
           | (_id, Lfunction{params; body}) :: rem ->
               let lbl = new_label() in
+              let params, _ = List.split params in
               let to_compile =
                 { params = params; body = body; label = lbl; free_vars = fv;
                   num_defs = ndecl; rec_vars = rec_idents; rec_pos = pos} in

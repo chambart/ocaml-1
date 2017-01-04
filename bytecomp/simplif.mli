@@ -26,7 +26,7 @@ val split_default_wrapper
    : ?create_wrapper_body:(lambda -> lambda)
   -> id:Ident.t
   -> kind:function_kind
-  -> params:Ident.t list
+  -> params:(Ident.t * Lambda.value_kind) list
   -> body:lambda
   -> attr:function_attribute
   -> wrapper_attr:function_attribute

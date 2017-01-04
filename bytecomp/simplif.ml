@@ -302,7 +302,7 @@ let simplify_exits lam =
 *)
 
 let beta_reduce params body args =
-  List.fold_left2 (fun l param arg -> Llet(Strict, Pgenval, param, arg, l))
+  List.fold_left2 (fun l (param, kind) arg -> Llet(Strict, kind, param, arg, l))
                   body params args
 
 (* Simplification of lets *)
@@ -633,10 +633,10 @@ and list_emit_tail_infos is_tail =
    function's body. *)
 
 let split_default_wrapper ?(create_wrapper_body = fun lam -> lam)
-      ~id:fun_id ~kind ~params ~body ~attr ~wrapper_attr ~loc () =
+      ~id:fun_id ~kind ~(params:(Ident.t * value_kind) list) ~body ~attr ~wrapper_attr ~loc () =
   let rec aux map = function
     | Llet(Strict, k, id, (Lifthenelse(Lvar optparam, _, _) as def), rest) when
-        Ident.name optparam = "*opt*" && List.mem optparam params
+        Ident.name optparam = "*opt*" && List.mem_assoc optparam params
           && not (List.mem_assoc optparam map)
       ->
         let wrapper_body, inner = aux ((optparam, id) :: map) rest in
@@ -650,7 +650,7 @@ let split_default_wrapper ?(create_wrapper_body = fun lam -> lam)
 
         let inner_id = Ident.create (Ident.name fun_id ^ "_inner") in
         let map_param p = try List.assoc p map with Not_found -> p in
-        let args = List.map (fun p -> Lvar (map_param p)) params in
+        let args = List.map (fun (p, _) -> Lvar (map_param p)) params in
         let wrapper_body =
           Lapply {
             ap_func = Lvar inner_id;
@@ -661,7 +661,7 @@ let split_default_wrapper ?(create_wrapper_body = fun lam -> lam)
             ap_specialised = Default_specialise;
           }
         in
-        let inner_params = List.map map_param params in
+        let inner_params = List.map map_param (List.map fst params) in
         let new_ids = List.map Ident.rename inner_params in
         let subst = List.fold_left2
             (fun s id new_id ->
@@ -669,8 +669,9 @@ let split_default_wrapper ?(create_wrapper_body = fun lam -> lam)
             Ident.empty inner_params new_ids
         in
         let body = Lambda.subst_lambda subst body in
+        let params = List.map (fun p -> p, Pgenval) new_ids in
         let inner_fun =
-          Lfunction { kind = Curried; params = new_ids; body; attr; loc; }
+          Lfunction { kind = Curried; params; body; attr; loc; }
         in
         (wrapper_body, (inner_id, inner_fun))
   in

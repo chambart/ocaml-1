@@ -109,7 +109,7 @@ module Function_decls = struct
       { let_rec_ident;
         closure_bound_var;
         kind;
-        params;
+        params = List.map fst params;
         body;
         free_idents_of_body = Lambda.free_variables body;
         inline;

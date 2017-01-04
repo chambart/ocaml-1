@@ -863,7 +863,7 @@ let rec close fenv cenv = function
         let (new_fun, approx) = close fenv cenv
           (Lfunction{
                kind = Curried;
-               params = final_args;
+               params = List.map (fun p -> p, Pgenval) final_args;
                body = Lapply{ap_should_be_tailcall=false;
                              ap_loc=loc;
                              ap_func=funct;
@@ -1230,6 +1230,7 @@ and close_functions fenv cenv fun_defs =
         uncurried_defs clos_offsets cenv_fv in
     let (ubody, approx) = close fenv_rec cenv_body body in
     if !useless_env && occurs_var env_param ubody then raise NotClosed;
+    let params, _ = List.split params in
     let fun_params = if !useless_env then params else params @ [env_param] in
     let typed_params = List.map (fun id -> id, Val) fun_params in
     let f =

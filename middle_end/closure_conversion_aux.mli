@@ -56,7 +56,7 @@ module Function_decls : sig
        : let_rec_ident:Ident.t option
       -> closure_bound_var:Variable.t
       -> kind:Lambda.function_kind
-      -> params:Ident.t list
+      -> params:(Ident.t * Lambda.value_kind) list
       -> body:Lambda.lambda
       -> inline:Lambda.inline_attribute
       -> specialise:Lambda.specialise_attribute

@@ -249,7 +249,7 @@ type lambda =
 
 and lfunction =
   { kind: function_kind;
-    params: Ident.t list;
+    params: (Ident.t * value_kind) list;
     body: lambda;
     attr: function_attribute; (* specified with [@inline] attribute *)
     loc: Location.t; }
@@ -464,7 +464,7 @@ let free_ids get l =
     fv := List.fold_right IdentSet.add (get l) !fv;
     match l with
       Lfunction{params} ->
-        List.iter (fun param -> fv := IdentSet.remove param !fv) params
+        List.iter (fun (param, _) -> fv := IdentSet.remove param !fv) params
     | Llet(_str, _k, id, _arg, _body) ->
         fv := IdentSet.remove id !fv
     | Lletrec(decl, _body) ->
