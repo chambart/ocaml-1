@@ -1191,9 +1191,10 @@ and transl_function loc untuplify_fn repr partial (param:Ident.t) cases =
       c_rhs={exp_desc = Texp_function { arg_label = _; param = param'; cases;
         partial = partial'; }} as exp}]
     when Parmatch.fluid pat ->
+      let kind = value_kind pat.pat_env pat.pat_type in
       let ((_, params), body) =
         transl_function exp.exp_loc false repr partial' param' cases in
-      ((Curried, (param, Pgenval) :: params),
+      ((Curried, (param, kind) :: params),
        Matching.for_function loc None (Lvar param) [pat, body] partial)
   | {c_lhs={pat_desc = Tpat_tuple pl}} :: _ when untuplify_fn ->
       begin try
@@ -1213,7 +1214,12 @@ and transl_function loc untuplify_fn repr partial (param:Ident.t) cases =
          Matching.for_function loc repr (Lvar param)
            (transl_cases cases) partial)
       end
-  | _ ->
+  | {c_lhs=pat} :: _ ->
+      let kind = value_kind pat.pat_env pat.pat_type in
+      ((Curried, [param, kind]),
+       Matching.for_function loc repr (Lvar param)
+         (transl_cases cases) partial)
+  | [] ->
       ((Curried, [param, Pgenval]),
        Matching.for_function loc repr (Lvar param)
          (transl_cases cases) partial)
