@@ -2740,8 +2740,9 @@ let transl_function f =
       transl empty_env body in
   let translate_type (id, (typ:Clambda.function_argument_type)) =
     match typ with
-    | Val -> id, typ_val
-    | Float -> id, typ_float
+    | Val
+    | Float Boxed -> id, typ_val
+    | Float Unboxed -> id, typ_float
   in
   Cfunction {fun_name = f.label;
              fun_args = List.map translate_type f.params;

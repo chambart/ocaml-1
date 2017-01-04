@@ -1230,14 +1230,21 @@ and close_functions fenv cenv fun_defs =
         uncurried_defs clos_offsets cenv_fv in
     let (ubody, approx) = close fenv_rec cenv_body body in
     if !useless_env && occurs_var env_param ubody then raise NotClosed;
-    let params, _ = List.split params in
-    let fun_params = if !useless_env then params else params @ [env_param] in
-    let typed_params = List.map (fun id -> id, Val) fun_params in
+    let params =
+      List.map (fun (id, kind) ->
+          let typ =
+            match kind with
+            | Pfloatval -> Float Boxed
+            | _ -> Val in
+          id, typ)
+        params
+    in
+    let fun_params = if !useless_env then params else params @ [env_param, Val] in
     let f =
       {
         label  = fundesc.fun_label;
         arity  = fundesc.fun_arity;
-        params = typed_params;
+        params = fun_params;
         body   = ubody;
         dbg;
       }
@@ -1246,7 +1253,7 @@ and close_functions fenv cenv fun_defs =
        their wrapper functions) to be inlined *)
     let n =
       List.fold_left
-        (fun n id -> n + if Ident.name id = "*opt*" then 8 else 1)
+        (fun n (id, _) -> n + if Ident.name id = "*opt*" then 8 else 1)
         0
         fun_params
     in
@@ -1263,7 +1270,7 @@ and close_functions fenv cenv fun_defs =
       | Unroll _ -> assert false
     in
     if lambda_smaller ubody threshold
-    then fundesc.fun_inline <- Some(fun_params, ubody);
+    then fundesc.fun_inline <- Some(List.map fst fun_params, ubody);
 
     (f, (id, env_pos, Value_closure(fundesc, approx))) in
   (* Translate all function definitions. *)

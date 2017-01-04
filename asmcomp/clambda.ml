@@ -23,7 +23,7 @@ type function_label = string
 
 type function_argument_type =
   | Val
-  | Float
+  | Float of Lambda.boxed
 
 type ustructured_constant =
   | Uconst_float of float

@@ -34,7 +34,8 @@ let value_kind =
 
 let function_argument_type ppf = function
   | Val -> ()
-  | Float -> fprintf ppf ":float"
+  | Float Lambda.Boxed -> fprintf ppf ":float"
+  | Float Lambda.Unboxed -> fprintf ppf ":float_unboxed"
 
 let rec structured_constant ppf = function
   | Uconst_float x -> fprintf ppf "%F" x
