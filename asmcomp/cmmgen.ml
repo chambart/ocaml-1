@@ -2738,8 +2738,13 @@ let transl_function f =
       Afl_instrument.instrument_function (transl empty_env body)
     else
       transl empty_env body in
+  let translate_type (id, (typ:Clambda.function_argument_type)) =
+    match typ with
+    | Val -> id, typ_val
+    | Float -> id, typ_float
+  in
   Cfunction {fun_name = f.label;
-             fun_args = List.map (fun id -> (id, typ_val)) f.params;
+             fun_args = List.map translate_type f.params;
              fun_body = cmm_body;
              fun_fast = !Clflags.optimize_for_speed;
              fun_dbg  = f.dbg; }

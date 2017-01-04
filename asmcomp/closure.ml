@@ -1231,11 +1231,12 @@ and close_functions fenv cenv fun_defs =
     let (ubody, approx) = close fenv_rec cenv_body body in
     if !useless_env && occurs_var env_param ubody then raise NotClosed;
     let fun_params = if !useless_env then params else params @ [env_param] in
+    let typed_params = List.map (fun id -> id, Val) fun_params in
     let f =
       {
         label  = fundesc.fun_label;
         arity  = fundesc.fun_arity;
-        params = fun_params;
+        params = typed_params;
         body   = ubody;
         dbg;
       }

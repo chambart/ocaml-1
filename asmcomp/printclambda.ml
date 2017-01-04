@@ -32,6 +32,10 @@ let value_kind =
   | Pboxedintval Pint32 -> ":int32"
   | Pboxedintval Pint64 -> ":int64"
 
+let function_argument_type ppf = function
+  | Val -> ()
+  | Float -> fprintf ppf ":float"
+
 let rec structured_constant ppf = function
   | Uconst_float x -> fprintf ppf "%F" x
   | Uconst_int32 x -> fprintf ppf "%ldl" x
@@ -49,11 +53,12 @@ let rec structured_constant ppf = function
       fprintf ppf ")"
   | Uconst_string s -> fprintf ppf "%S" s
   | Uconst_closure(clos, sym, fv) ->
-      let idents ppf =
-        List.iter (fprintf ppf "@ %a" Ident.print)in
+      let args ppf =
+        List.iter (fun (id,typ) -> fprintf ppf "@ %a%a"
+          Ident.print id function_argument_type typ) in
       let one_fun ppf f =
         fprintf ppf "(fun@ %s@ %d@ @[<2>%a@]@ @[<2>%a@])"
-          f.label f.arity idents f.params lam f.body in
+          f.label f.arity args f.params lam f.body in
       let funs ppf =
         List.iter (fprintf ppf "@ %a" one_fun) in
       let sconsts ppf scl =
@@ -81,11 +86,12 @@ and lam ppf = function
         List.iter (fun l -> fprintf ppf "@ %a" lam l) largs in
       fprintf ppf "@[<2>(apply@ %a%a)@]" lam lfun lams largs
   | Uclosure(clos, fv) ->
-      let idents ppf =
-        List.iter (fprintf ppf "@ %a" Ident.print)in
+      let args ppf =
+        List.iter (fun (id,typ) -> fprintf ppf "@ %a%a"
+          Ident.print id function_argument_type typ) in
       let one_fun ppf f =
         fprintf ppf "@[<2>(fun@ %s@ %d @[<2>%a@]@ @[<2>%a@]@])"
-          f.label f.arity idents f.params lam f.body in
+          f.label f.arity args f.params lam f.body in
       let funs ppf =
         List.iter (fprintf ppf "@ %a" one_fun) in
       let lams ppf =

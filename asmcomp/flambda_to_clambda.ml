@@ -563,7 +563,7 @@ and to_clambda_set_of_closures t env
     in
     { label = Compilenv.function_label closure_id;
       arity = Flambda_utils.function_arity function_decl;
-      params = params @ [env_var];
+      params = List.map (fun id -> id, Clambda.Val) (params @ [env_var]);
       body = to_clambda t env_body function_decl.body;
       dbg = function_decl.dbg;
     }
@@ -597,7 +597,7 @@ and to_clambda_closed_set_of_closures t env symbol
     let env_body, params =
       List.fold_right (fun var (env, params) ->
           let id, env = Env.add_fresh_ident env var in
-          env, id :: params)
+          env, (id, Clambda.Val) :: params)
         function_decl.params (env, [])
     in
     { label = Compilenv.function_label (Closure_id.wrap id);

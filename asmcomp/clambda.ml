@@ -21,6 +21,10 @@ open Lambda
 
 type function_label = string
 
+type function_argument_type =
+  | Val
+  | Float
+
 type ustructured_constant =
   | Uconst_float of float
   | Uconst_int32 of int32
@@ -62,7 +66,7 @@ and ulambda =
 and ufunction = {
   label  : function_label;
   arity  : int;
-  params : Ident.t list;
+  params : (Ident.t * function_argument_type) list;
   body   : ulambda;
   dbg    : Debuginfo.t
 }

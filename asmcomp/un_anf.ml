@@ -39,6 +39,7 @@ let ignore_primitive (_ : Lambda.primitive) = ()
 let ignore_string (_ : string) = ()
 let ignore_int_array (_ : int array) = ()
 let ignore_ident_list (_ : Ident.t list) = ()
+let ignore_ident_type_list (_ : (Ident.t * Clambda.function_argument_type) list) = ()
 let ignore_direction_flag (_ : Asttypes.direction_flag) = ()
 let ignore_meth_kind (_ : Lambda.meth_kind) = ()
 
@@ -49,7 +50,7 @@ let ignore_meth_kind (_ : Lambda.meth_kind) = ()
 let closure_environment_ident (ufunction:Clambda.ufunction) =
   (* The argument after the arity is the environment *)
   if List.length ufunction.params = ufunction.arity + 1 then
-    let env_var = List.nth ufunction.params ufunction.arity in
+    let env_var, _ = List.nth ufunction.params ufunction.arity in
     assert(Ident.name env_var = "env");
     Some env_var
   else
@@ -94,7 +95,7 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
                Ident.Set.add env_var !environment_idents);
           ignore_function_label label;
           ignore_int arity;
-          ignore_ident_list params;
+          ignore_ident_type_list params;
           loop body;
           ignore_debuginfo dbg)
         functions
@@ -256,7 +257,7 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
       List.iter (fun { Clambda. label; arity; params; body; dbg; } ->
           ignore_function_label label;
           ignore_int arity;
-          ignore_ident_list params;
+          ignore_ident_type_list params;
           let_stack := [];
           loop body;
           let_stack := [];
