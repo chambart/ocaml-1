@@ -301,7 +301,9 @@ module Project_var = struct
     | Active subst ->
       let subst_func_decl _fun_id (func_decl : Flambda.function_declaration)
             subst =
-        let params, subst = active_add_variables' subst func_decl.params in
+        let params, typs = List.split func_decl.params in
+        let params, subst = active_add_variables' subst params in
+        let params = List.combine params typs in
         (* Since all parameters are distinct, even between functions, we can
            just use a single substitution. *)
         let body =

@@ -90,13 +90,13 @@ let copy_of_function's_body_with_freshened_params env
      original [params] may still be referenced; for (b) we cannot do it
      either since the freshening may already be renaming the parameters for
      the first inlining of the function. *)
-  if E.does_not_bind env params
-    && E.does_not_freshen env params
+  if E.does_not_bind env (List.map fst params)
+    && E.does_not_freshen env (List.map fst params)
   then
-    params, function_decl.body
+    List.map fst params, function_decl.body
   else
-    let freshened_params = List.map (fun var -> Variable.rename var) params in
-    let subst = Variable.Map.of_list (List.combine params freshened_params) in
+    let freshened_params = List.map (fun (var, _typ) -> Variable.rename var) params in
+    let subst = Variable.Map.of_list (List.combine (List.map fst params) freshened_params) in
     let body = Flambda_utils.toplevel_substitution subst function_decl.body in
     freshened_params, body
 
@@ -204,7 +204,7 @@ let inline_by_copying_function_declaration ~env ~r
   let specialised_args_set = Variable.Map.keys specialised_args in
   let worth_specialising_args, specialisable_args, args, args_decl =
     which_function_parameters_can_we_specialise
-      ~params:function_decl.params ~args ~args_approxs
+      ~params:(List.map fst function_decl.params) ~args ~args_approxs
       ~invariant_params
       ~specialised_args:specialised_args_set
   in

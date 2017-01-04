@@ -807,17 +807,17 @@ and simplify_partial_application env r ~lhs_of_application
   | Default_specialise -> ()
   end;
   let freshened_params =
-    List.map (fun id -> Variable.rename id) function_decl.Flambda.params
+    List.map (fun (id, typ) -> Variable.rename id, typ) function_decl.Flambda.params
   in
   let applied_args, remaining_args =
-    Misc.Stdlib.List.map2_prefix (fun arg id' -> id', arg)
+    Misc.Stdlib.List.map2_prefix (fun arg (id', _typ) -> id', arg)
       args freshened_params
   in
   let wrapper_accepting_remaining_args =
     let body : Flambda.t =
       Apply {
         func = lhs_of_application;
-        args = freshened_params;
+        args = List.map fst freshened_params;
         kind = Direct closure_id_being_applied;
         dbg;
         inline = Default_inline;

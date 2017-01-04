@@ -332,7 +332,7 @@ let specialise env r ~lhs_of_application
   let has_no_useful_approxes =
     lazy
       (List.for_all2
-         (fun id approx ->
+         (fun (id, _typ) approx ->
             not ((A.useful approx)
                  && Variable.Map.mem id (Lazy.force invariant_params)))
          function_decl.params args_approxs)

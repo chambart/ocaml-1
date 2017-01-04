@@ -235,6 +235,10 @@ let to_clambda_const env (const : Flambda.constant_defining_value_block_field)
   | Const (Char c) -> Uconst_int (Char.code c)
   | Const (Const_pointer i) -> Uconst_ptr i
 
+let to_clambda_param_type : Flambda.param_type -> Clambda.function_argument_type = function
+  | Val -> Val
+  | Float b -> Float b
+
 let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
   match flam with
   | Var var -> subst_var env var
@@ -556,14 +560,14 @@ and to_clambda_set_of_closures t env
       List.fold_left (add_env_function fun_offset) env all_functions
     in
     let env_body, params =
-      List.fold_right (fun var (env, params) ->
+      List.fold_right (fun (var, typ) (env, params) ->
           let id, env = Env.add_fresh_ident env var in
-          env, id :: params)
+          env, (id, to_clambda_param_type typ) :: params)
         function_decl.params (env, [])
     in
     { label = Compilenv.function_label closure_id;
       arity = Flambda_utils.function_arity function_decl;
-      params = List.map (fun id -> id, Clambda.Val) (params @ [env_var]);
+      params = params @ [env_var, Clambda.Val];
       body = to_clambda t env_body function_decl.body;
       dbg = function_decl.dbg;
     }
@@ -595,9 +599,9 @@ and to_clambda_closed_set_of_closures t env symbol
         functions
     in
     let env_body, params =
-      List.fold_right (fun var (env, params) ->
+      List.fold_right (fun (var, typ) (env, params) ->
           let id, env = Env.add_fresh_ident env var in
-          env, (id, Clambda.Val) :: params)
+          env, (id, to_clambda_param_type typ) :: params)
         function_decl.params (env, [])
     in
     { label = Compilenv.function_label (Closure_id.wrap id);

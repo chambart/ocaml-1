@@ -88,7 +88,7 @@ let tupled_function_call_stub original_params unboxed_version
   let tuple_param =
     Variable.rename ~append:"tupled_stub_param" unboxed_version
   in
-  let params = List.map (fun p -> Variable.rename p) original_params in
+  let params = List.map (fun (p, _typ) -> Variable.rename p) original_params in
   let call : Flambda.t =
     Apply ({
         func = unboxed_version;
@@ -109,7 +109,7 @@ let tupled_function_call_stub original_params unboxed_version
         pos + 1, Flambda.create_let param lam body)
       (0, call) params
   in
-  Flambda.create_function_declaration ~params:[tuple_param]
+  Flambda.create_function_declaration ~params:[tuple_param, Val]
     ~body ~stub:true ~dbg:Debuginfo.none ~inline:Default_inline
     ~specialise:Default_specialise ~is_a_functor:false
 
@@ -569,7 +569,7 @@ and close_functions t external_env function_declarations : Flambda.named =
        This induces a renaming on [Function_decl.free_idents]; the results of
        that renaming are stored in [free_variables]. *)
     let closure_env =
-      List.fold_right (fun id env ->
+      List.fold_right (fun (id, _kind) env ->
           Env.add_var env id (Variable.create_with_same_name_as_ident id))
         params closure_env_without_parameters
     in
@@ -582,7 +582,17 @@ and close_functions t external_env function_declarations : Flambda.named =
       | None -> false, body
       | Some wrapper_body -> true, wrapper_body
     in
-    let params = List.map (Env.find_var closure_env) params in
+    let params =
+      List.map (fun (id, kind) ->
+        let var = Env.find_var closure_env id in
+        let typ : Flambda.param_type =
+          match kind with
+          | Lambda.Pfloatval -> Float Boxed
+          | _ -> Val
+        in
+        var, typ)
+        params
+    in
     let closure_bound_var = Function_decl.closure_bound_var decl in
     let body = close t closure_env body in
     let fun_decl =

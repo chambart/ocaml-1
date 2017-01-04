@@ -22,7 +22,7 @@ let () = Pass_wrapper.register ~pass_name
 let rewrite_one_function_decl ~(function_decl : Flambda.function_declaration)
       ~back_free_vars ~specialised_args =
   let params_for_equal_free_vars =
-    List.fold_left (fun subst param ->
+    List.fold_left (fun subst (param, _typ) ->
         match Variable.Map.find param specialised_args with
         | exception Not_found ->
           (* param is not specialised *)

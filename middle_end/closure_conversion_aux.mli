@@ -67,7 +67,7 @@ module Function_decls : sig
     val let_rec_ident : t -> Ident.t
     val closure_bound_var : t -> Variable.t
     val kind : t -> Lambda.function_kind
-    val params : t -> Ident.t list
+    val params : t -> (Ident.t * Lambda.value_kind) list
     val body : t -> Lambda.lambda
     val inline : t -> Lambda.inline_attribute
     val specialise : t -> Lambda.specialise_attribute

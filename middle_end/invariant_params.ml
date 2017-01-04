@@ -161,7 +161,7 @@ let analyse_functions ~backend ~param_to_param
   let function_variable_alias = function_variable_alias ~backend decls in
   let param_indexes_by_fun_vars =
     Variable.Map.map (fun (decl : Flambda.function_declaration) ->
-        Array.of_list decl.params)
+        Array.of_list (List.map fst decl.params))
       decls.funs
   in
   let find_callee_arg ~callee ~callee_pos =
@@ -200,7 +200,7 @@ let analyse_functions ~backend ~param_to_param
         let new_relation =
           (* We only track dataflow for parameters of functions, not
              arbitrary variables. *)
-          if List.mem caller_arg params then
+          if List.mem_assoc caller_arg params then
             param_to_param ~caller ~caller_arg ~callee ~callee_arg !relation
           else begin
             used_variable caller_arg;
@@ -252,7 +252,7 @@ let analyse_functions ~backend ~param_to_param
   Variable.Map.iter
     (fun func_var ({ params } : Flambda.function_declaration) ->
        List.iter
-         (fun param ->
+         (fun (param, _typ) ->
             if Variable.Tbl.mem used_variables param then
               relation :=
                 param_to_anywhere ~caller:func_var ~caller_arg:param !relation;
@@ -306,7 +306,7 @@ let invariant_params_in_recursion (decls : Flambda.function_declarations)
   let param_to_param ~caller ~caller_arg ~callee ~callee_arg relation =
     implies relation (caller, caller_arg) (callee, callee_arg)
   in
-  let anything_to_param ~callee ~callee_arg relation =
+  let anything_to_param ~callee ~(callee_arg:Variable.t) relation =
     top relation (callee, callee_arg)
   in
   let param_to_anywhere ~caller:_ ~caller_arg:_ relation = relation in
@@ -329,7 +329,7 @@ let invariant_params_in_recursion (decls : Flambda.function_declarations)
   in
   let params = Variable.Map.fold (fun _
         ({ params } : Flambda.function_declaration) set ->
-      Variable.Set.union (Variable.Set.of_list params) set)
+      Variable.Set.union (Variable.Set.of_list (List.map fst params)) set)
     decls.funs Variable.Set.empty
   in
   let unchanging = Variable.Set.diff params not_unchanging in
@@ -400,7 +400,7 @@ let unused_arguments (decls : Flambda.function_declarations) ~backend =
     Variable.Map.fold
       (fun fun_var decl acc ->
          List.fold_left
-           (fun acc param ->
+           (fun acc (param, _typ) ->
               match Variable.Pair.Map.find (fun_var, param) relation with
               | exception Not_found -> Variable.Set.add param acc
               | Implication _ -> Variable.Set.add param acc

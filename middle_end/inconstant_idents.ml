@@ -433,7 +433,7 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
         register_implication ~in_nc:(Closure function_decls.set_of_closures_id)
           ~implies_in_nc:[Var fun_id];
         (* function parameters are in NC unless specialised *)
-        List.iter (fun param ->
+        List.iter (fun (param, _typ) ->
             match Variable.Map.find param specialised_args with
             | exception Not_found -> mark_curr [Var param]
             | outer_var ->

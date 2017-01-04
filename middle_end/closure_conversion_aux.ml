@@ -90,7 +90,7 @@ module Function_decls = struct
       let_rec_ident : Ident.t;
       closure_bound_var : Variable.t;
       kind : Lambda.function_kind;
-      params : Ident.t list;
+      params : (Ident.t * Lambda.value_kind) list;
       body : Lambda.lambda;
       free_idents_of_body : IdentSet.t;
       inline : Lambda.inline_attribute;
@@ -109,7 +109,7 @@ module Function_decls = struct
       { let_rec_ident;
         closure_bound_var;
         kind;
-        params = List.map fst params;
+        params;
         body;
         free_idents_of_body = Lambda.free_variables body;
         inline;
@@ -159,7 +159,7 @@ module Function_decls = struct
 
   (* All parameters of functions in [ts]. *)
   let all_params function_decls =
-    List.concat (List.map Function_decl.params function_decls)
+    List.map fst (List.concat (List.map Function_decl.params function_decls))
 
   let set_diff (from : IdentSet.t) (idents : Ident.t list) =
     List.fold_right IdentSet.remove idents from

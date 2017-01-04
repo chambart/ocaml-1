@@ -34,6 +34,10 @@ type const =
      boxed (typically a variant type with both constant and non-constant
      constructors). *)
 
+type param_type =
+  | Val
+  | Float of Lambda.boxed
+
 (** The application of a function to a list of arguments. *)
 type apply = {
   (* CR-soon mshinwell: rename func -> callee, and
@@ -300,7 +304,7 @@ and function_declarations = private {
 }
 
 and function_declaration = private {
-  params : Variable.t list;
+  params : (Variable.t * param_type) list;
   body : t;
   (* CR-soon mshinwell: inconsistent naming free_variables/free_vars here and
      above *)
@@ -546,7 +550,7 @@ end
 (** Create a function declaration.  This calculates the free variables and
     symbols occurring in the specified [body]. *)
 val create_function_declaration
-   : params:Variable.t list
+   : params:(Variable.t * param_type) list
   -> body:t
   -> stub:bool
   -> dbg:Debuginfo.t

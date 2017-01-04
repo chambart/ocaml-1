@@ -44,7 +44,7 @@ let function_arity (f : Flambda.function_declaration) = List.length f.params
 let variables_bound_by_the_closure cf
       (decls : Flambda.function_declarations) =
   let func = find_declaration cf decls in
-  let params = Variable.Set.of_list func.params in
+  let params = Variable.Set.of_list (List.map fst func.params) in
   let functions = Variable.Map.keys decls.funs in
   Variable.Set.diff
     (Variable.Set.diff func.free_variables params)
@@ -78,6 +78,8 @@ let compare_const (c1 : Flambda.const) (c2 : Flambda.const) =
   | _, Int _ -> 1
   | Char _, _ -> -1
   | _, Char _ -> 1
+
+let compare_param_type (t1 : Flambda.param_type) t2 = compare t1 t2
 
 let rec same (l1 : Flambda.t) (l2 : Flambda.t) =
   l1 == l2 || (* it is ok for the string case: if they are physically the same,
@@ -191,7 +193,8 @@ and same_named (named1 : Flambda.named) (named2 : Flambda.named) =
 
 and sameclosure (c1 : Flambda.function_declaration)
       (c2 : Flambda.function_declaration) =
-  Misc.Stdlib.List.equal Variable.equal c1.params c2.params
+  Misc.Stdlib.List.equal (fun (v1,t1) (v2,t2) ->
+    Variable.equal v1 v2 && compare_param_type t1 t2 = 0) c1.params c2.params
     && same c1.body c2.body
 
 and same_set_of_closures (c1 : Flambda.set_of_closures)
@@ -320,7 +323,7 @@ let toplevel_substitution_named sb named =
 
 let make_closure_declaration ~id ~body ~params ~stub : Flambda.t =
   let free_variables = Flambda.free_variables body in
-  let param_set = Variable.Set.of_list params in
+  let param_set = Variable.Set.of_list (List.map fst params) in
   if not (Variable.Set.subset param_set free_variables) then begin
     Misc.fatal_error "Flambda_utils.make_closure_declaration"
   end;
@@ -335,7 +338,8 @@ let make_closure_declaration ~id ~body ~params ~stub : Flambda.t =
   let body = toplevel_substitution sb body in
   let subst id = Variable.Map.find id sb in
   let function_declaration =
-    Flambda.create_function_declaration ~params:(List.map subst params)
+    Flambda.create_function_declaration
+      ~params:(List.map (fun (var, typ) -> subst var, typ) params)
       ~body ~stub ~dbg:Debuginfo.none ~inline:Default_inline
       ~specialise:Default_specialise ~is_a_functor:false
   in
@@ -803,7 +807,7 @@ let closures_required_by_entry_point ~(entry_point : Closure_id.t) ~backend
 
 let all_functions_parameters (function_decls : Flambda.function_declarations) =
   Variable.Map.fold (fun _ ({ params } : Flambda.function_declaration) set ->
-      Variable.Set.union set (Variable.Set.of_list params))
+      Variable.Set.union set (Variable.Set.of_list (List.map fst params)))
     function_decls.funs Variable.Set.empty
 
 let all_free_symbols (function_decls : Flambda.function_declarations) =
@@ -855,7 +859,7 @@ let parameters_specialised_to_the_same_variable
         specialised_args)
   in
   Variable.Map.map (fun ({ params; _ } : Flambda.function_declaration) ->
-      List.map (fun param ->
+      List.map (fun (param, _) ->
           match Variable.Map.find param specialised_args with
           | exception Not_found -> Not_specialised
           | { var; _ } ->
