@@ -196,6 +196,7 @@ val value_char : char -> t
 val value_float : float -> t
 val value_unboxed_float : float -> t
 val value_any_float : t
+val value_any_unboxed_float : t
 val value_mutable_float_array : size:int -> t
 val value_immutable_float_array : t array -> t
 val value_string : int -> string option -> t
@@ -242,6 +243,7 @@ val make_const_char_named : char -> Flambda.named * t
 val make_const_ptr_named : int -> Flambda.named * t
 val make_const_bool_named : bool -> Flambda.named * t
 val make_const_float_named : float -> Flambda.named * t
+val make_const_unboxed_float_named : float -> Flambda.named * t
 val make_const_boxed_int_named : 'i boxed_int -> 'i -> Flambda.named * t
 
 (** Augment an approximation with a given variable (see comment above).

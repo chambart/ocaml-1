@@ -46,6 +46,11 @@ let const_float_expr expr f =
     let (new_expr, approx) = A.make_const_float_named f in
     new_expr, approx, C.Benefit.remove_code_named expr C.Benefit.zero
   else expr, A.value_float f, C.Benefit.zero
+let const_unboxed_float_expr expr f =
+  if Effect_analysis.no_effects_named expr then
+    let (new_expr, approx) = A.make_const_unboxed_float_named f in
+    new_expr, approx, C.Benefit.remove_code_named expr C.Benefit.zero
+  else expr, A.value_unboxed_float f, C.Benefit.zero
 let const_boxed_int_expr expr t i =
   if Effect_analysis.no_effects_named expr then
     let (new_expr, approx) = A.make_const_boxed_int_named t i in

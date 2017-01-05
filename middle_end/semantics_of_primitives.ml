@@ -158,20 +158,32 @@ let for_primitive (prim : Lambda.primitive) =
 
 type return_type =
   | Float
+  | Unboxed_float
   | Other
 
 let return_type_of_primitive (prim:Lambda.primitive) =
+  (* CR: pchambart add bigarray ref primitive *)
   match prim with
-  | Pfloatofint _
-  | Pnegfloat _
-  | Pabsfloat _
-  | Paddfloat _
-  | Psubfloat _
-  | Pmulfloat _
-  | Pdivfloat _
+  | Pbox_float
+  | Pfloatofint Boxed
+  | Pnegfloat Boxed
+  | Pabsfloat Boxed
+  | Paddfloat Boxed
+  | Psubfloat Boxed
+  | Pmulfloat Boxed
+  | Pdivfloat Boxed
   | Pfloatfield _
   | Parrayrefu Pfloatarray
   | Parrayrefs Pfloatarray ->
     Float
+  | Punbox_float
+  | Pfloatofint Unboxed
+  | Pnegfloat Unboxed
+  | Pabsfloat Unboxed
+  | Paddfloat Unboxed
+  | Psubfloat Unboxed
+  | Pmulfloat Unboxed
+  | Pdivfloat Unboxed ->
+    Unboxed_float
   | _ ->
     Other

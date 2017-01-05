@@ -52,6 +52,11 @@ val const_float_expr
   -> float
   -> Flambda.named * Simple_value_approx.t * Inlining_cost.Benefit.t
 
+val const_unboxed_float_expr
+   : Flambda.named
+  -> float
+  -> Flambda.named * Simple_value_approx.t * Inlining_cost.Benefit.t
+
 val const_boxed_int_expr
    : Flambda.named
   -> 'a Simple_value_approx.boxed_int

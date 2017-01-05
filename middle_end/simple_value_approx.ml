@@ -209,6 +209,7 @@ let value_constptr i = approx (Value_constptr i)
 let value_float f = approx (Value_float (Some f))
 let value_unboxed_float f = approx (Value_unboxed_float (Some f))
 let value_any_float = approx (Value_float None)
+let value_any_unboxed_float = approx (Value_unboxed_float None)
 let value_boxed_int bi i = approx (Value_boxed_int (bi,i))
 
 let value_closure ?closure_var ?set_of_closures_var ?set_of_closures_symbol

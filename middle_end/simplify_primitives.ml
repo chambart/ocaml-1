@@ -104,6 +104,7 @@ let primitive (p : Lambda.primitive) (args, approxs) expr dbg ~size_int
       | Pbswap16 -> S.const_int_expr expr (S.swap16 x)
       | Poffsetint y -> S.const_int_expr expr (x + y)
       | Pfloatofint Boxed when fpc -> S.const_float_expr expr (float_of_int x)
+      | Pfloatofint Unboxed when fpc -> S.const_unboxed_float_expr expr (float_of_int x)
       | Pbintofint Pnativeint ->
         S.const_boxed_int_expr expr Nativeint (Nativeint.of_int x)
       | Pbintofint Pint32 -> S.const_boxed_int_expr expr Int32 (Int32.of_int x)
@@ -162,6 +163,15 @@ let primitive (p : Lambda.primitive) (args, approxs) expr dbg ~size_int
       | Pintoffloat Boxed -> S.const_int_expr expr (int_of_float x)
       | Pnegfloat Boxed -> S.const_float_expr expr (-. x)
       | Pabsfloat Boxed -> S.const_float_expr expr (abs_float x)
+      | Punbox_float -> S.const_unboxed_float_expr expr x
+      | _ -> expr, A.value_unknown Other, C.Benefit.zero
+      end
+    | [Value_unboxed_float (Some x)] when fpc ->
+      begin match p with
+      | Pintoffloat Unboxed -> S.const_int_expr expr (int_of_float x)
+      | Pnegfloat Unboxed -> S.const_unboxed_float_expr expr (-. x)
+      | Pabsfloat Unboxed -> S.const_unboxed_float_expr expr (abs_float x)
+      | Pbox_float -> S.const_unboxed_float_expr expr x
       | _ -> expr, A.value_unknown Other, C.Benefit.zero
       end
     | [Value_float (Some n1); Value_float (Some n2)] when fpc ->
@@ -171,6 +181,15 @@ let primitive (p : Lambda.primitive) (args, approxs) expr dbg ~size_int
       | Pmulfloat Boxed -> S.const_float_expr expr (n1 *. n2)
       | Pdivfloat Boxed -> S.const_float_expr expr (n1 /. n2)
       | Pfloatcomp (c, Boxed) -> S.const_comparison_expr expr c n1 n2
+      | _ -> expr, A.value_unknown Other, C.Benefit.zero
+      end
+    | [Value_unboxed_float (Some n1); Value_unboxed_float (Some n2)] when fpc ->
+      begin match p with
+      | Paddfloat Unboxed -> S.const_unboxed_float_expr expr (n1 +. n2)
+      | Psubfloat Unboxed -> S.const_unboxed_float_expr expr (n1 -. n2)
+      | Pmulfloat Unboxed -> S.const_unboxed_float_expr expr (n1 *. n2)
+      | Pdivfloat Unboxed -> S.const_unboxed_float_expr expr (n1 /. n2)
+      | Pfloatcomp (c, Unboxed) -> S.const_comparison_expr expr c n1 n2
       | _ -> expr, A.value_unknown Other, C.Benefit.zero
       end
     | [A.Value_boxed_int(A.Nativeint, n)] ->
@@ -244,5 +263,7 @@ let primitive (p : Lambda.primitive) (args, approxs) expr dbg ~size_int
       match Semantics_of_primitives.return_type_of_primitive p with
       | Float ->
         expr, A.value_any_float, C.Benefit.zero
+      | Unboxed_float ->
+        expr, A.value_any_unboxed_float, C.Benefit.zero
       | Other ->
         expr, A.value_unknown Other, C.Benefit.zero
