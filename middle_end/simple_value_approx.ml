@@ -44,8 +44,8 @@ and descr =
   | Value_int of int
   | Value_char of char
   | Value_constptr of int
-  | Value_float of float option
-  | Value_unboxed_float of float option
+  | Value_float of float_descr
+  | Value_unboxed_float of float_descr
   | Value_boxed_int : 'a boxed_int * 'a -> descr
   | Value_set_of_closures of value_set_of_closures
   | Value_closure of value_closure
@@ -56,6 +56,11 @@ and descr =
   | Value_extern of Export_id.t
   | Value_symbol of Symbol.t
   | Value_unresolved of Symbol.t (* No description was found for this symbol *)
+
+and float_descr =
+  | Const of float
+  | Converted of t
+  | Unknown
 
 and value_closure = {
   set_of_closures : t;
@@ -114,10 +119,12 @@ let rec print_descr ppf = function
     print_value_set_of_closures ppf set_of_closures
   | Value_unresolved sym ->
     Format.fprintf ppf "(unresolved %a)" Symbol.print sym
-  | Value_float (Some f) -> Format.pp_print_float ppf f
-  | Value_float None -> Format.pp_print_string ppf "float"
-  | Value_unboxed_float (Some f) -> Format.fprintf ppf "%fu" f
-  | Value_unboxed_float None -> Format.pp_print_string ppf "floatu"
+  | Value_float (Const f) -> Format.pp_print_float ppf f
+  | Value_float Unknown -> Format.pp_print_string ppf "float"
+  | Value_float (Converted v) -> Format.fprintf ppf "box_float(@[<1>%a@])" print v
+  | Value_unboxed_float (Const f) -> Format.fprintf ppf "%fu" f
+  | Value_unboxed_float Unknown -> Format.pp_print_string ppf "floatu"
+  | Value_unboxed_float (Converted v) -> Format.fprintf ppf "unbox_float(@[<1>%a@])" print v
   | Value_string { contents; size } -> begin
       match contents with
       | None ->
@@ -173,7 +180,7 @@ let augment_with_kind t (kind:Lambda.value_kind) =
     | Value_float _ ->
       t
     | Value_unknown _ | Value_unresolved _ ->
-      { t with descr = Value_float None }
+      { t with descr = Value_float Unknown }
     | Value_unboxed_float _
     | Value_block _
     | Value_int _
@@ -206,11 +213,14 @@ let value_unknown reason = approx (Value_unknown reason)
 let value_int i = approx (Value_int i)
 let value_char i = approx (Value_char i)
 let value_constptr i = approx (Value_constptr i)
-let value_float f = approx (Value_float (Some f))
-let value_unboxed_float f = approx (Value_unboxed_float (Some f))
-let value_any_float = approx (Value_float None)
-let value_any_unboxed_float = approx (Value_unboxed_float None)
+let value_float f = approx (Value_float (Const f))
+let value_unboxed_float f = approx (Value_unboxed_float (Const f))
+let value_any_float = approx (Value_float Unknown)
+let value_any_unboxed_float = approx (Value_unboxed_float Unknown)
 let value_boxed_int bi i = approx (Value_boxed_int (bi,i))
+
+let value_float_converted f = approx (Value_float (Converted f))
+let value_unboxed_float_converted f = approx (Value_unboxed_float (Converted f))
 
 let value_closure ?closure_var ?set_of_closures_var ?set_of_closures_symbol
       value_set_of_closures closure_id =
@@ -366,10 +376,10 @@ let simplify t (lam : Flambda.t) : simplification_result =
     | Value_constptr n ->
       let const, approx = make_const_ptr n in
       const, Replaced_term, approx
-    | Value_float (Some f) ->
+    | Value_float (Const f) ->
       let const, approx = make_const_float f in
       const, Replaced_term, approx
-    | Value_unboxed_float (Some f) ->
+    | Value_unboxed_float (Const f) ->
       let const, approx = make_const_unboxed_float f in
       const, Replaced_term, approx
     | Value_boxed_int (t, i) ->
@@ -377,7 +387,7 @@ let simplify t (lam : Flambda.t) : simplification_result =
       const, Replaced_term, approx
     | Value_symbol sym ->
       U.name_expr (Symbol sym) ~name:"symbol", Replaced_term, t
-    | Value_string _ | Value_float_array _ | Value_float None | Value_unboxed_float None
+    | Value_string _ | Value_float_array _ | Value_float _ | Value_unboxed_float _
     | Value_block _ | Value_set_of_closures _ | Value_closure _
     | Value_unknown _ | Value_bottom | Value_extern _ | Value_unresolved _ ->
       lam, Nothing_done, t
@@ -396,10 +406,10 @@ let simplify_named t (named : Flambda.named) : simplification_result_named =
     | Value_constptr n ->
       let const, approx = make_const_ptr_named n in
       const, Replaced_term, approx
-    | Value_float (Some f) ->
+    | Value_float (Const f) ->
       let const, approx = make_const_float_named f in
       const, Replaced_term, approx
-    | Value_unboxed_float (Some f) ->
+    | Value_unboxed_float (Const f) ->
       let const, approx = make_const_unboxed_float_named f in
       const, Replaced_term, approx
     | Value_boxed_int (t, i) ->
@@ -407,7 +417,7 @@ let simplify_named t (named : Flambda.named) : simplification_result_named =
       const, Replaced_term, approx
     | Value_symbol sym ->
       Symbol sym, Replaced_term, t
-    | Value_string _ | Value_float_array _ | Value_float None | Value_unboxed_float None
+    | Value_string _ | Value_float_array _ | Value_float _ | Value_unboxed_float _
     | Value_block _ | Value_set_of_closures _ | Value_closure _
     | Value_unknown _ | Value_bottom | Value_extern _ | Value_unresolved _ ->
       named, Nothing_done, t
@@ -421,11 +431,11 @@ let simplify_var t : (Flambda.named * t) option =
   | Value_int n -> Some (make_const_int_named n)
   | Value_char n -> Some (make_const_char_named n)
   | Value_constptr n -> Some (make_const_ptr_named n)
-  | Value_float (Some f) -> Some (make_const_float_named f)
-  | Value_unboxed_float (Some f) -> Some (make_const_unboxed_float_named f)
+  | Value_float (Const f) -> Some (make_const_float_named f)
+  | Value_unboxed_float (Const f) -> Some (make_const_unboxed_float_named f)
   | Value_boxed_int (t, i) -> Some (make_const_boxed_int_named t i)
   | Value_symbol sym -> Some (Symbol sym, t)
-  | Value_string _ | Value_float_array _ | Value_float None | Value_unboxed_float None
+  | Value_string _ | Value_float_array _ | Value_float _ | Value_unboxed_float _
   | Value_block _ | Value_set_of_closures _ | Value_closure _
   | Value_unknown _ | Value_bottom | Value_extern _
   | Value_unresolved _ ->
@@ -540,6 +550,62 @@ let get_field t ~field_index:i : get_field_result =
     Unreachable
   | Value_set_of_closures _ | Value_closure _
     (* This is used by [CamlinternalMod]. *)
+  | Value_symbol _ | Value_extern _ ->
+    (* These should have been resolved. *)
+    Ok (value_unknown Other)
+  | Value_unknown reason ->
+    Ok (value_unknown reason)
+  | Value_unresolved sym ->
+    (* We don't know anything, but we must remember that it comes
+       from another compilation unit in case it contains a closure. *)
+    Ok (value_unresolved sym)
+
+type unbox_float_result =
+  | Ok of t
+  | Unreachable
+
+let unbox_float t : unbox_float_result =
+  match t.descr with
+  | Value_float (Const f) ->
+    Ok (value_unboxed_float f)
+  | Value_float Unknown ->
+    Ok (value_unboxed_float_converted t)
+  | Value_float (Converted t) ->
+    Ok t
+  | Value_block _
+  | Value_bottom | Value_int _ | Value_char _ | Value_constptr _
+  | Value_float_array _
+  | Value_string _ | Value_unboxed_float _ | Value_boxed_int _
+  | Value_set_of_closures _ | Value_closure _ ->
+    Unreachable
+  | Value_symbol _ | Value_extern _ ->
+    (* These should have been resolved. *)
+    Ok (value_unknown Other)
+  | Value_unknown reason ->
+    Ok (value_unknown reason)
+  | Value_unresolved sym ->
+    (* We don't know anything, but we must remember that it comes
+       from another compilation unit in case it contains a closure. *)
+    Ok (value_unresolved sym)
+
+type box_float_result =
+  | Ok of t
+  | Unreachable
+
+let box_float t : box_float_result =
+  match t.descr with
+  | Value_unboxed_float (Const f) ->
+    Ok (value_float f)
+  | Value_unboxed_float Unknown ->
+    Ok (value_float_converted t)
+  | Value_unboxed_float (Converted t) ->
+    Ok t
+  | Value_block _
+  | Value_bottom | Value_int _ | Value_char _ | Value_constptr _
+  | Value_float_array _
+  | Value_string _ | Value_float _ | Value_boxed_int _
+  | Value_set_of_closures _ | Value_closure _ ->
+    Unreachable
   | Value_symbol _ | Value_extern _ ->
     (* These should have been resolved. *)
     Ok (value_unknown Other)
@@ -778,7 +844,8 @@ let approx_for_bound_var value_set_of_closures var =
 
 let check_approx_for_float t : float option =
   match t.descr with
-  | Value_float f -> f
+  | Value_float (Const f) -> Some f
+  | Value_float _ -> None
   | Value_unboxed_float _
   | Value_unresolved _
   | Value_unknown _ | Value_string _ | Value_float_array _
@@ -793,11 +860,11 @@ let float_array_as_constant (t:value_float_array) : float list option =
   | Contents contents ->
     Array.fold_right (fun elt acc ->
       match acc, elt.descr with
-      | Some acc, Value_float (Some f) ->
+      | Some acc, Value_float (Const f) ->
         Some (f :: acc)
       | None, _
       | Some _,
-        (Value_float None | Value_unboxed_float _ | Value_unresolved _
+        (Value_float _ | Value_unboxed_float _ | Value_unresolved _
         | Value_unknown _ | Value_string _ | Value_float_array _
         | Value_bottom | Value_block _ | Value_int _ | Value_char _
         | Value_constptr _ | Value_set_of_closures _ | Value_closure _

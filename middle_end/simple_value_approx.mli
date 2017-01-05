@@ -121,8 +121,8 @@ and descr = private
   | Value_int of int
   | Value_char of char
   | Value_constptr of int
-  | Value_float of float option
-  | Value_unboxed_float of float option
+  | Value_float of float_descr
+  | Value_unboxed_float of float_descr
   | Value_boxed_int : 'a boxed_int * 'a -> descr
   | Value_set_of_closures of value_set_of_closures
   | Value_closure of value_closure
@@ -133,6 +133,11 @@ and descr = private
   | Value_extern of Export_id.t
   | Value_symbol of Symbol.t
   | Value_unresolved of Symbol.t (* No description was found for this symbol *)
+
+and float_descr =
+  | Const of float
+  | Converted of t
+  | Unknown
 
 and value_closure = {
   set_of_closures : t;
@@ -337,6 +342,18 @@ type get_field_result =
     N.B. Not all cases of unreachable code are returned as [Unreachable].
 *)
 val get_field : t -> field_index:int -> get_field_result
+
+type unbox_float_result =
+  | Ok of t
+  | Unreachable
+
+val unbox_float : t -> unbox_float_result
+
+type box_float_result =
+  | Ok of t
+  | Unreachable
+
+val box_float : t -> box_float_result
 
 type checked_approx_for_block =
   | Wrong

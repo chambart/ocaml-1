@@ -1023,6 +1023,18 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
             simplify_named_using_approx_and_env env r tree approx
           end
         end
+      | Punbox_float, [_arg], [arg_approx] ->
+        begin match A.unbox_float arg_approx with
+        | Unreachable -> (Flambda.Expr Proved_unreachable, r)
+        | Ok approx ->
+          simplify_named_using_approx_and_env env r tree approx
+        end
+      | Pbox_float, [_arg], [arg_approx] ->
+        begin match A.box_float arg_approx with
+        | Unreachable -> (Flambda.Expr Proved_unreachable, r)
+        | Ok approx ->
+          simplify_named_using_approx_and_env env r tree approx
+        end
       | Pfield _, _, _ -> Misc.fatal_error "Pfield arity error"
       | (Parraysetu kind | Parraysets kind),
         [_block; _field; _value],

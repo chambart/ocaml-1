@@ -158,7 +158,7 @@ let primitive (p : Lambda.primitive) (args, approxs) expr dbg ~size_int
         end
       | _ -> expr, A.value_unknown Other, C.Benefit.zero
       end
-    | [Value_float (Some x)] when fpc ->
+    | [Value_float (Const x)] when fpc ->
       begin match p with
       | Pintoffloat Boxed -> S.const_int_expr expr (int_of_float x)
       | Pnegfloat Boxed -> S.const_float_expr expr (-. x)
@@ -166,7 +166,7 @@ let primitive (p : Lambda.primitive) (args, approxs) expr dbg ~size_int
       | Punbox_float -> S.const_unboxed_float_expr expr x
       | _ -> expr, A.value_unknown Other, C.Benefit.zero
       end
-    | [Value_unboxed_float (Some x)] when fpc ->
+    | [Value_unboxed_float (Const x)] when fpc ->
       begin match p with
       | Pintoffloat Unboxed -> S.const_int_expr expr (int_of_float x)
       | Pnegfloat Unboxed -> S.const_unboxed_float_expr expr (-. x)
@@ -174,7 +174,7 @@ let primitive (p : Lambda.primitive) (args, approxs) expr dbg ~size_int
       | Pbox_float -> S.const_float_expr expr x
       | _ -> expr, A.value_unknown Other, C.Benefit.zero
       end
-    | [Value_float (Some n1); Value_float (Some n2)] when fpc ->
+    | [Value_float (Const n1); Value_float (Const n2)] when fpc ->
       begin match p with
       | Paddfloat Boxed -> S.const_float_expr expr (n1 +. n2)
       | Psubfloat Boxed -> S.const_float_expr expr (n1 -. n2)
@@ -183,7 +183,7 @@ let primitive (p : Lambda.primitive) (args, approxs) expr dbg ~size_int
       | Pfloatcomp (c, Boxed) -> S.const_comparison_expr expr c n1 n2
       | _ -> expr, A.value_unknown Other, C.Benefit.zero
       end
-    | [Value_unboxed_float (Some n1); Value_unboxed_float (Some n2)] when fpc ->
+    | [Value_unboxed_float (Const n1); Value_unboxed_float (Const n2)] when fpc ->
       begin match p with
       | Paddfloat Unboxed -> S.const_unboxed_float_expr expr (n1 +. n2)
       | Psubfloat Unboxed -> S.const_unboxed_float_expr expr (n1 -. n2)

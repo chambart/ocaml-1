@@ -261,7 +261,7 @@ module Benefit = struct
   let remove_code_helper_named b (named : Flambda.named) =
     match named with
     | Set_of_closures _
-    | Prim ((Pmakearray _ | Pmakeblock _ | Pduprecord _), _, _) ->
+    | Prim ((Pmakearray _ | Pmakeblock _ | Pduprecord _ | Pbox_float), _, _) ->
       b := remove_alloc !b
       (* CR-soon pchambart: should we consider that boxed integer and float
          operations are allocations ? *)
