@@ -670,9 +670,48 @@ and close_let_bound_expression t ?let_rec_ident let_bound_var env
         ~name:(Variable.unique_name let_bound_var)))
   | lam -> Expr (close t env lam)
 
+let unbox loc lam =
+  Lambda.Lprim (Punbox_float, [lam], loc)
+
+let box loc lam =
+  Lambda.Lprim (Pbox_float, [lam], loc)
+
+let prepare_lambda lam =
+  (* TODO: finish primitives  *)
+  let aux (lam:Lambda.lambda) : Lambda.lambda = match lam with
+    | Lprim ((Pnegfloat Boxed | Pabsfloat Boxed | Paddfloat Boxed |
+              Psubfloat Boxed | Pmulfloat Boxed | Pdivfloat Boxed) as p,
+             [arg1; arg2], loc) ->
+      box loc
+        (Lambda.Lprim
+           (Lambda.unboxed_prim p,
+            [unbox loc arg1;
+             unbox loc arg2],
+            loc))
+    | Lprim((Pfloatcomp (_, Boxed) | Pintoffloat Boxed) as p, args, loc) ->
+      Lambda.Lprim
+        (Lambda.unboxed_prim p,
+         List.map (unbox loc) args,
+         loc)
+    | Lprim((Pfloatofint Boxed |
+             Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64),
+                          (Pbigarray_c_layout | Pbigarray_fortran_layout),
+                          Boxed))
+            as p,
+            args, loc) ->
+      box loc
+        (Lambda.Lprim
+           (Lambda.unboxed_prim p,
+            args,
+            loc))
+    | lam -> lam
+  in
+  Lambda.map aux lam
+
 let lambda_to_flambda ~backend ~module_ident ~size ~filename lam
       : Flambda.program =
   let lam = add_default_argument_wrappers lam in
+  let lam = prepare_lambda lam in
   let module Backend = (val backend : Backend_intf.S) in
   let compilation_unit = Compilation_unit.get_current_exn () in
   let t =
