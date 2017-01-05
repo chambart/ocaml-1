@@ -34,6 +34,9 @@ type const =
      boxed (typically a variant type with both constant and non-constant
      constructors). *)
 
+type unboxed_const =
+  | Float of float
+
 type param_type =
   | Val
   | Float of Lambda.boxed
@@ -121,6 +124,7 @@ type t =
 and named =
   | Symbol of Symbol.t
   | Const of const
+  | Unboxed_const of unboxed_const
   | Allocated_const of Allocated_const.t
   | Read_mutable of Mutable_variable.t
   | Read_symbol_field of Symbol.t * int

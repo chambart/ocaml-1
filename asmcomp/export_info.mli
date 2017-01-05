@@ -44,6 +44,7 @@ type descr =
   | Value_char of char
   | Value_constptr of int
   | Value_float of float
+  | Value_unboxed_float of float
   | Value_float_array of value_float_array
   | Value_boxed_int : 'a Simple_value_approx.boxed_int * 'a -> descr
   | Value_string of value_string

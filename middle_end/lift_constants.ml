@@ -105,6 +105,8 @@ let assign_symbols_and_collect_constant_definitions
         assign_symbol ();
         record_definition (AA.Allocated_const (
           Duplicate_array (kind, mutability, arg)))
+      | Unboxed_const _ ->
+        Misc.fatal_error "Unboxed const cannot be lifted constants"
       | Prim _ ->
         Misc.fatal_errorf "Primitive not expected to be constant: @.%a@."
           Flambda.print_named named
@@ -996,7 +998,7 @@ let lift_constants (program : Flambda.program) ~backend =
             Set_of_closures new_set_of_closures
         | (Project_var project_var) as original ->
           rewrite_project_var var_to_block_field_tbl project_var ~original
-        | (Symbol _ | Const _ | Allocated_const _ | Project_closure _
+        | (Symbol _ | Unboxed_const _ | Const _ | Allocated_const _ | Project_closure _
         | Move_within_set_of_closures _ | Prim _ | Expr _
         | Read_mutable _ | Read_symbol_field _) as named -> named)
       expr

@@ -41,6 +41,7 @@ type descr =
   | Value_char of char
   | Value_constptr of int
   | Value_float of float
+  | Value_unboxed_float of float
   | Value_float_array of value_float_array
   | Value_boxed_int : 'a Simple_value_approx.boxed_int * 'a -> descr
   | Value_string of value_string
@@ -111,6 +112,8 @@ let equal_descr (d1:descr) (d2:descr) : bool =
     i1 = i2
   | Value_float f1, Value_float f2 ->
     f1 = f2
+  | Value_unboxed_float f1, Value_unboxed_float f2 ->
+    f1 = f2
   | Value_float_array s1, Value_float_array s2 ->
     s1 = s2
   | Value_boxed_int (t1, v1), Value_boxed_int (t2, v2) ->
@@ -123,11 +126,11 @@ let equal_descr (d1:descr) (d2:descr) : bool =
   | Value_set_of_closures s1, Value_set_of_closures s2 ->
     equal_set_of_closures s1 s2
   | ( Value_block (_, _) | Value_mutable_block (_, _) | Value_int _
-    | Value_char _ | Value_constptr _ | Value_float _ | Value_float_array _
+    | Value_char _ | Value_constptr _ | Value_float _ | Value_unboxed_float _ | Value_float_array _
     | Value_boxed_int _ | Value_string _ | Value_closure _
     | Value_set_of_closures _ ),
     ( Value_block (_, _) | Value_mutable_block (_, _) | Value_int _
-    | Value_char _ | Value_constptr _ | Value_float _ | Value_float_array _
+    | Value_char _ | Value_constptr _ | Value_float _ | Value_unboxed_float _ | Value_float_array _
     | Value_boxed_int _ | Value_string _ | Value_closure _
     | Value_set_of_closures _ ) ->
     false
@@ -278,6 +281,7 @@ let print_approx ppf ((t,root_symbols) : t * Symbol.t list) =
         Format.fprintf ppf "string %i %S" size s
       end
     | Value_float f -> Format.pp_print_float ppf f
+    | Value_unboxed_float f -> Format.fprintf ppf "%fu" f
     | Value_float_array float_array ->
       Format.fprintf ppf "float_array%s %i"
         (match float_array.contents with

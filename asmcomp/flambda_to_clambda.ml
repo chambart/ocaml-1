@@ -357,6 +357,11 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
 and to_clambda_named t env var (named : Flambda.named) : Clambda.ulambda =
   match named with
   | Symbol sym -> to_clambda_symbol env sym
+  | Unboxed_const (Float f) ->
+      let lbl =
+        Compilenv.new_structured_constant (Uconst_float f) ~shared:true
+      in
+      Uprim (Punbox_float, [Clambda.Uconst (Uconst_ref (lbl, Some (Clambda.Uconst_float f)))], Debuginfo.none)
   | Const (Const_pointer n) -> Uconst (Uconst_ptr n)
   | Const (Int n) -> Uconst (Uconst_int n)
   | Const (Char c) -> Uconst (Uconst_int (Char.code c))

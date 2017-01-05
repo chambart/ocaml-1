@@ -303,7 +303,7 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
     match named with
     | Set_of_closures (set_of_closures) ->
       mark_loop_set_of_closures ~toplevel curr set_of_closures
-    | Const _ | Allocated_const _ -> ()
+    | Unboxed_const _ | Const _ | Allocated_const _ -> ()
     | Read_mutable _ -> mark_curr curr
     | Symbol symbol -> begin
         let current_unit = Compilation_unit.get_current_exn () in

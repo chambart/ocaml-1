@@ -33,7 +33,7 @@ let variables_not_used_as_local_reference (tree:Flambda.t) =
       (* block is not prevented to be used as a local reference, but v is *)
       set := Variable.Set.add v !set
     | Prim(_, _, _)
-    | Symbol _ |Const _ | Allocated_const _ | Read_mutable _
+    | Symbol _ | Unboxed_const _ | Const _ | Allocated_const _ | Read_mutable _
     | Read_symbol_field _ | Project_closure _
     | Move_within_set_of_closures _ | Project_var _ ->
       set := Variable.Set.union !set (Flambda.free_variables_named flam)
@@ -190,7 +190,7 @@ let eliminate_ref_of_expr flam =
          | None -> Expr Proved_unreachable
          | Some (being_assigned,_) ->
            Expr (Assign { being_assigned; new_value }))
-      | Prim _ | Symbol _ | Const _ | Allocated_const _ | Read_mutable _
+      | Prim _ | Symbol _ | Unboxed_const _ | Const _ | Allocated_const _ | Read_mutable _
       | Read_symbol_field _ | Set_of_closures _ | Project_closure _
       | Move_within_set_of_closures _ | Project_var _ | Expr _ ->
         named

@@ -42,6 +42,7 @@ let ignore_static_exception (_ : Static_exception.t) = ()
 let ignore_direction_flag (_ : Asttypes.direction_flag) = ()
 let ignore_primitive ( _ : Lambda.primitive) = ()
 let ignore_const (_ : Flambda.const) = ()
+let ignore_unboxed_const (_ : Flambda.unboxed_const) = ()
 let ignore_allocated_const (_ : Allocated_const.t) = ()
 let ignore_set_of_closures_id (_ : Set_of_closures_id.t) = ()
 let ignore_set_of_closures_origin (_ : Set_of_closures_origin.t) = ()
@@ -234,6 +235,7 @@ let variable_and_symbol_invariants (program : Flambda.program) =
   and loop_named env (named : Flambda.named) =
     match named with
     | Symbol symbol -> check_symbol_is_bound env symbol
+    | Unboxed_const const -> ignore_unboxed_const const
     | Const const -> ignore_const const
     | Allocated_const const -> ignore_allocated_const const
     | Read_mutable mut_var ->
@@ -560,7 +562,7 @@ let used_closure_ids (program:Flambda.program) =
       used := Closure_id.Set.add move_to !used
     | Project_var { closure = _; closure_id; var = _ } ->
       used := Closure_id.Set.add closure_id !used
-    | Set_of_closures _ | Symbol _ | Const _ | Allocated_const _
+    | Set_of_closures _ | Symbol _ | Unboxed_const _ | Const _ | Allocated_const _
     | Prim _ | Expr _ | Read_mutable _ | Read_symbol_field _ -> ()
   in
   (* CR-someday pchambart: check closure_ids of constant_defining_values'

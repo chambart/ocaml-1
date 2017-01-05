@@ -25,6 +25,9 @@ type const =
   | Char of char
   | Const_pointer of int
 
+type unboxed_const =
+  | Float of float
+
 type param_type =
   | Val
   | Float of Lambda.boxed
@@ -81,6 +84,7 @@ type t =
 and named =
   | Symbol of Symbol.t
   | Const of const
+  | Unboxed_const of unboxed_const
   | Allocated_const of Allocated_const.t
   | Read_mutable of Mutable_variable.t
   | Read_symbol_field of Symbol.t * int
@@ -341,6 +345,7 @@ and print_named ppf (named : named) =
   match named with
   | Symbol (symbol) -> Symbol.print ppf symbol
   | Const (cst) -> fprintf ppf "Const(%a)" print_const cst
+  | Unboxed_const (cst) -> fprintf ppf "Unboxed_const(%a)" print_unboxed_const cst
   | Allocated_const (cst) -> fprintf ppf "Aconst(%a)" Allocated_const.print cst
   | Read_mutable mut_var ->
     fprintf ppf "Read_mut(%a)" Mutable_variable.print mut_var
@@ -431,6 +436,10 @@ and print_const ppf (c : const) =
   | Int n -> fprintf ppf "%i" n
   | Char c -> fprintf ppf "%C" c
   | Const_pointer n -> fprintf ppf "%ia" n
+
+and print_unboxed_const ppf (c : unboxed_const) =
+  match c with
+  | Float f -> fprintf ppf "%f" f
 
 let print_function_declarations ppf (fd : function_declarations) =
   let funs ppf =
@@ -620,7 +629,7 @@ and variables_usage_named ?ignore_uses_in_project_var
   let free = ref Variable.Set.empty in
   let free_variable fv = free := Variable.Set.add fv !free in
   begin match named with
-  | Symbol _ | Const _ | Allocated_const _ | Read_mutable _
+  | Symbol _ | Unboxed_const _ | Const _ | Allocated_const _ | Read_mutable _
   | Read_symbol_field _ -> ()
   | Set_of_closures { free_vars; specialised_args; _ } ->
     (* Sets of closures are, well, closed---except for the free variable and
@@ -804,7 +813,7 @@ let iter_general ~toplevel f f_named maybe_named =
   and aux_named (named : named) =
     f_named named;
     match named with
-    | Symbol _ | Const _ | Allocated_const _ | Read_mutable _
+    | Symbol _ | Unboxed_const _ | Const _ | Allocated_const _ | Read_mutable _
     | Read_symbol_field _
     | Project_closure _ | Project_var _ | Move_within_set_of_closures _
     | Prim _ -> ()

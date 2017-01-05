@@ -173,6 +173,10 @@ let descr_of_constant (c : Flambda.const) : Export_info.descr =
   | Char c -> Value_char c
   | Const_pointer i -> Value_constptr i
 
+let descr_of_unboxed_constant (c : Flambda.unboxed_const) : Export_info.descr =
+  match c with
+  | Float f -> Value_unboxed_float f
+
 let descr_of_allocated_constant (c : Allocated_const.t) : Export_info.descr =
   match c with
   | Float f -> Value_float f
@@ -247,6 +251,8 @@ and descr_of_named (env : Env.t) (named : Flambda.named)
     | Some (Value_block (_, fields)) when Array.length fields > i -> fields.(i)
     | _ -> Value_unknown
     end
+  | Unboxed_const const ->
+    Value_id (Env.new_descr env (descr_of_unboxed_constant const))
   | Const const ->
     Value_id (Env.new_descr env (descr_of_constant const))
   | Allocated_const const ->

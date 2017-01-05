@@ -194,7 +194,7 @@ let iter_all_toplevel_immutable_let_and_let_rec_bindings t ~f =
 let iter_on_sets_of_closures f t =
   iter_named (function
       | Set_of_closures clos -> f clos
-      | Symbol _ | Const _ | Allocated_const _ | Read_mutable _
+      | Symbol _ | Unboxed_const _ | Const _ | Allocated_const _ | Read_mutable _
       | Read_symbol_field _
       | Project_closure _ | Move_within_set_of_closures _ | Project_var _
       | Prim _ | Expr _ -> ())
@@ -394,7 +394,7 @@ let map_general ~toplevel f f_named tree =
   and aux_named (id : Variable.t) (named : Flambda.named) =
     let named : Flambda.named =
       match named with
-      | Symbol _ | Const _ | Allocated_const _ | Read_mutable _
+      | Symbol _ | Unboxed_const _ | Const _ | Allocated_const _ | Read_mutable _
       | Project_closure _ | Move_within_set_of_closures _ | Project_var _
       | Prim _ | Read_symbol_field _ -> named
       | Set_of_closures ({ function_decls; free_vars; specialised_args;
@@ -482,7 +482,7 @@ let map_symbols tree ~f =
           named
         else
           Read_symbol_field (new_sym, field)
-      | (Const _ | Allocated_const _ | Set_of_closures _ | Read_mutable _
+      | (Unboxed_const _ | Const _ | Allocated_const _ | Set_of_closures _ | Read_mutable _
       | Project_closure _ | Move_within_set_of_closures _ | Project_var _
       | Prim _ | Expr _) as named -> named)
     tree
@@ -526,7 +526,7 @@ let map_toplevel_sets_of_closures tree ~f =
           named
         else
           Set_of_closures new_set_of_closures
-      | (Symbol _ | Const _ | Allocated_const _ | Read_mutable _
+      | (Symbol _ | Unboxed_const _ | Const _ | Allocated_const _ | Read_mutable _
       | Read_symbol_field _
       | Project_closure _ | Move_within_set_of_closures _ | Project_var _
       | Prim _ | Expr _) as named -> named)
@@ -552,7 +552,7 @@ let map_sets_of_closures tree ~f =
           named
         else
           Set_of_closures new_set_of_closures
-      | (Symbol _ | Const _ | Allocated_const _ | Project_closure _
+      | (Symbol _ | Unboxed_const _ | Const _ | Allocated_const _ | Project_closure _
       | Move_within_set_of_closures _ | Project_var _
       | Prim _ | Expr _ | Read_mutable _
       | Read_symbol_field _) as named -> named)
@@ -565,7 +565,7 @@ let map_project_var_to_expr_opt tree ~f =
         | None -> named
         | Some expr -> Expr expr
         end
-      | (Symbol _ | Const _ | Allocated_const _
+      | (Symbol _ | Unboxed_const _ | Const _ | Allocated_const _
       | Set_of_closures _ | Project_closure _ | Move_within_set_of_closures _
       | Prim _ | Expr _ | Read_mutable _ | Read_symbol_field _)
           as named -> named)
@@ -578,7 +578,7 @@ let map_project_var_to_named_opt tree ~f =
         | None -> named
         | Some named -> named
         end
-      | (Symbol _ | Const _ | Allocated_const _
+      | (Symbol _ | Unboxed_const _ | Const _ | Allocated_const _
       | Set_of_closures _ | Project_closure _ | Move_within_set_of_closures _
       | Prim _ | Expr _ | Read_mutable _ | Read_symbol_field _)
           as named -> named)

@@ -119,7 +119,7 @@ let lambda_smaller' lam ~than:threshold =
     if !size > threshold then raise Exit;
     match named with
     | Symbol _ | Read_mutable _ -> ()
-    | Const _ | Allocated_const _ -> incr size
+    | Unboxed_const _ | Const _ | Allocated_const _ -> incr size
     | Read_symbol_field _ -> incr size
     | Set_of_closures ({ function_decls = ffuns }) ->
       Variable.Map.iter (fun _ (ffun : Flambda.function_declaration) ->
@@ -268,7 +268,7 @@ module Benefit = struct
     | Prim _ | Project_closure _ | Project_var _
     | Move_within_set_of_closures _
     | Read_symbol_field _ -> b := remove_prim !b
-    | Symbol _ | Read_mutable _ | Allocated_const _ | Const _ | Expr _ -> ()
+    | Symbol _ | Read_mutable _ | Allocated_const _ | Unboxed_const _ | Const _ | Expr _ -> ()
 
   let remove_code lam b =
     let b = ref b in

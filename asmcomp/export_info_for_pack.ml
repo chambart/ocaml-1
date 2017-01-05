@@ -70,6 +70,7 @@ let import_descr_for_pack units pack (descr : Export_info.descr)
   | Value_constptr _
   | Value_string _
   | Value_float _
+  | Value_unboxed_float _
   | Value_float_array _
   | Export_info.Value_boxed_int _
   | Value_mutable_block _ as desc -> desc

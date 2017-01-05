@@ -128,7 +128,7 @@ let compute_reexported_offsets program
       | Project_var { closure_id; var; _ } ->
         used_closure_id closure_id;
         used_var_within_closure var
-      | Symbol _ | Const _ | Allocated_const _ | Read_mutable _
+      | Symbol _ | Unboxed_const _ | Const _ | Allocated_const _ | Read_mutable _
       | Read_symbol_field _ | Set_of_closures _ | Prim _ | Expr _ -> ());
   Flambda_iterators.iter_constant_defining_values_on_program program
     ~f:(fun (const : Flambda.constant_defining_value) ->

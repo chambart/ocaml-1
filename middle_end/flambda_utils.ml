@@ -79,7 +79,19 @@ let compare_const (c1 : Flambda.const) (c2 : Flambda.const) =
   | Char _, _ -> -1
   | _, Char _ -> 1
 
-let compare_param_type (t1 : Flambda.param_type) t2 = compare t1 t2
+let compare_unboxed_const (c1 : Flambda.unboxed_const) (c2 : Flambda.unboxed_const) =
+  match c1, c2 with
+  | Float f1, Float f2 -> compare f1 f2
+
+let compare_param_type (t1 : Flambda.param_type) (t2 : Flambda.param_type) =
+  match t1, t2 with
+  | Val, Val -> 0
+  | Float Boxed, Float Boxed -> 0
+  | Float Unboxed, Float Unboxed -> 0
+  | Val, _ -> -1
+  | _, Val -> -1
+  | Float Boxed, _ -> -1
+  | _, Float Boxed -> 1
 
 let rec same (l1 : Flambda.t) (l2 : Flambda.t) =
   l1 == l2 || (* it is ok for the string case: if they are physically the same,
@@ -163,6 +175,8 @@ and same_named (named1 : Flambda.named) (named2 : Flambda.named) =
   match named1, named2 with
   | Symbol s1 , Symbol s2  -> Symbol.equal s1 s2
   | Symbol _, _ | _, Symbol _ -> false
+  | Unboxed_const c1, Unboxed_const c2 -> compare_unboxed_const c1 c2 = 0
+  | Unboxed_const _, _ | _, Unboxed_const _ -> false
   | Const c1, Const c2 -> compare_const c1 c2 = 0
   | Const _, _ | _, Const _ -> false
   | Allocated_const c1, Allocated_const c2 ->
@@ -274,7 +288,7 @@ let toplevel_substitution sb tree =
   in
   let aux_named (named : Flambda.named) : Flambda.named =
     match named with
-    | Symbol _ | Const _ | Expr _ -> named
+    | Symbol _ | Unboxed_const _ | Const _ | Expr _ -> named
     | Allocated_const _ | Read_mutable _ -> named
     | Read_symbol_field _ -> named
     | Set_of_closures set_of_closures ->
@@ -569,7 +583,7 @@ let substitute_read_symbol_field_for_variables
         to_substitute
     in
     match named with
-    | Symbol _ | Const _ | Expr _ -> named
+    | Symbol _ | Unboxed_const _ | Const _ | Expr _ -> named
     | Allocated_const _ | Read_mutable _ -> named
     | Read_symbol_field _ -> named
     | Set_of_closures set_of_closures ->

@@ -51,7 +51,7 @@ let rec no_effects (flam : Flambda.t) =
 
 and no_effects_named (named : Flambda.named) =
   match named with
-  | Symbol _ | Const _ | Allocated_const _ | Read_mutable _
+  | Symbol _ | Unboxed_const _ | Const _ | Allocated_const _ | Read_mutable _
   | Read_symbol_field _
   | Set_of_closures _ | Project_closure _ | Project_var _
   | Move_within_set_of_closures _ -> true

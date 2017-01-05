@@ -45,6 +45,7 @@ and descr =
   | Value_char of char
   | Value_constptr of int
   | Value_float of float option
+  | Value_unboxed_float of float option
   | Value_boxed_int : 'a boxed_int * 'a -> descr
   | Value_set_of_closures of value_set_of_closures
   | Value_closure of value_closure
@@ -115,6 +116,8 @@ let rec print_descr ppf = function
     Format.fprintf ppf "(unresolved %a)" Symbol.print sym
   | Value_float (Some f) -> Format.pp_print_float ppf f
   | Value_float None -> Format.pp_print_string ppf "float"
+  | Value_unboxed_float (Some f) -> Format.fprintf ppf "%fu" f
+  | Value_unboxed_float None -> Format.pp_print_string ppf "floatu"
   | Value_string { contents; size } -> begin
       match contents with
       | None ->
@@ -171,6 +174,7 @@ let augment_with_kind t (kind:Lambda.value_kind) =
       t
     | Value_unknown _ | Value_unresolved _ ->
       { t with descr = Value_float None }
+    | Value_unboxed_float _
     | Value_block _
     | Value_int _
     | Value_char _
@@ -203,6 +207,7 @@ let value_int i = approx (Value_int i)
 let value_char i = approx (Value_char i)
 let value_constptr i = approx (Value_constptr i)
 let value_float f = approx (Value_float (Some f))
+let value_unboxed_float f = approx (Value_unboxed_float (Some f))
 let value_any_float = approx (Value_float None)
 let value_boxed_int bi i = approx (Value_boxed_int (bi,i))
 
@@ -324,6 +329,11 @@ let make_const_float_named f : Flambda.named * t =
 let make_const_float f =
   name_expr_fst (make_const_float_named f) ~name:"const_float"
 
+let make_const_unboxed_float_named f : Flambda.named * t =
+  Unboxed_const (Float f), value_unboxed_float f
+let make_const_unboxed_float f =
+  name_expr_fst (make_const_unboxed_float_named f) ~name:"const_unboxed_float"
+
 let make_const_boxed_int_named (type bi) (t:bi boxed_int) (i:bi)
       : Flambda.named * t =
   let c : Allocated_const.t =
@@ -358,12 +368,15 @@ let simplify t (lam : Flambda.t) : simplification_result =
     | Value_float (Some f) ->
       let const, approx = make_const_float f in
       const, Replaced_term, approx
+    | Value_unboxed_float (Some f) ->
+      let const, approx = make_const_unboxed_float f in
+      const, Replaced_term, approx
     | Value_boxed_int (t, i) ->
       let const, approx = make_const_boxed_int t i in
       const, Replaced_term, approx
     | Value_symbol sym ->
       U.name_expr (Symbol sym) ~name:"symbol", Replaced_term, t
-    | Value_string _ | Value_float_array _ | Value_float None
+    | Value_string _ | Value_float_array _ | Value_float None | Value_unboxed_float None
     | Value_block _ | Value_set_of_closures _ | Value_closure _
     | Value_unknown _ | Value_bottom | Value_extern _ | Value_unresolved _ ->
       lam, Nothing_done, t
@@ -385,12 +398,15 @@ let simplify_named t (named : Flambda.named) : simplification_result_named =
     | Value_float (Some f) ->
       let const, approx = make_const_float_named f in
       const, Replaced_term, approx
+    | Value_unboxed_float (Some f) ->
+      let const, approx = make_const_unboxed_float_named f in
+      const, Replaced_term, approx
     | Value_boxed_int (t, i) ->
       let const, approx = make_const_boxed_int_named t i in
       const, Replaced_term, approx
     | Value_symbol sym ->
       Symbol sym, Replaced_term, t
-    | Value_string _ | Value_float_array _ | Value_float None
+    | Value_string _ | Value_float_array _ | Value_float None | Value_unboxed_float None
     | Value_block _ | Value_set_of_closures _ | Value_closure _
     | Value_unknown _ | Value_bottom | Value_extern _ | Value_unresolved _ ->
       named, Nothing_done, t
@@ -405,9 +421,10 @@ let simplify_var t : (Flambda.named * t) option =
   | Value_char n -> Some (make_const_char_named n)
   | Value_constptr n -> Some (make_const_ptr_named n)
   | Value_float (Some f) -> Some (make_const_float_named f)
+  | Value_unboxed_float (Some f) -> Some (make_const_unboxed_float_named f)
   | Value_boxed_int (t, i) -> Some (make_const_boxed_int_named t i)
   | Value_symbol sym -> Some (Symbol sym, t)
-  | Value_string _ | Value_float_array _ | Value_float None
+  | Value_string _ | Value_float_array _ | Value_float None | Value_unboxed_float None
   | Value_block _ | Value_set_of_closures _ | Value_closure _
   | Value_unknown _ | Value_bottom | Value_extern _
   | Value_unresolved _ ->
@@ -465,14 +482,14 @@ let known t =
   | Value_string _ | Value_float_array _
   | Value_bottom | Value_block _ | Value_int _ | Value_char _
   | Value_constptr _ | Value_set_of_closures _ | Value_closure _
-  | Value_extern _ | Value_float _ | Value_boxed_int _ | Value_symbol _ -> true
+  | Value_extern _ | Value_float _ | Value_unboxed_float _ | Value_boxed_int _ | Value_symbol _ -> true
 
 let useful t =
   match t.descr with
   | Value_unresolved _ | Value_unknown _ | Value_bottom -> false
   | Value_string _ | Value_float_array _ | Value_block _ | Value_int _
   | Value_char _ | Value_constptr _ | Value_set_of_closures _
-  | Value_float _ | Value_boxed_int _ | Value_closure _ | Value_extern _
+  | Value_float _ | Value_unboxed_float _ | Value_boxed_int _ | Value_closure _ | Value_extern _
   | Value_symbol _ -> true
 
 let all_not_useful ts = List.for_all (fun t -> not (useful t)) ts
@@ -481,7 +498,7 @@ let is_definitely_immutable t =
   match t.descr with
   | Value_string { contents = Some _ }
   | Value_block _ | Value_int _ | Value_char _ | Value_constptr _
-  | Value_set_of_closures _ | Value_float _ | Value_boxed_int _
+  | Value_set_of_closures _ | Value_float _ | Value_unboxed_float _ | Value_boxed_int _
   | Value_closure _ -> true
   | Value_string { contents = None } | Value_float_array _
   | Value_unresolved _ | Value_unknown _ | Value_bottom -> false
@@ -517,7 +534,7 @@ let get_field t ~field_index:i : get_field_result =
        change this, although it's probably not Pfield that is used to
        do the projection. *)
     Ok (value_unknown Other)
-  | Value_string _ | Value_float _ | Value_boxed_int _ ->
+  | Value_string _ | Value_float _ | Value_unboxed_float _ | Value_boxed_int _ ->
     (* The user is doing something unsafe. *)
     Unreachable
   | Value_set_of_closures _ | Value_closure _
@@ -543,7 +560,7 @@ let check_approx_for_block t =
   | Value_bottom
   | Value_int _ | Value_char _ | Value_constptr _
   | Value_float_array _
-  | Value_string _ | Value_float _ | Value_boxed_int _
+  | Value_string _ | Value_float _ | Value_unboxed_float _ | Value_boxed_int _
   | Value_set_of_closures _ | Value_closure _
   | Value_symbol _ | Value_extern _
   | Value_unknown _
@@ -592,6 +609,8 @@ let rec meet_descr ~really_import_approx d1 d2 = match d1, d2 with
   | Value_extern e1, Value_extern e2 when Export_id.equal e1 e2 ->
       d1
   | Value_float i, Value_float j when i = j ->
+      d1
+  | Value_unboxed_float i, Value_unboxed_float j when i = j ->
       d1
   | Value_boxed_int (bi1, i1), Value_boxed_int (bi2, i2) when
       equal_boxed_int bi1 i1 bi2 i2 ->
@@ -676,7 +695,7 @@ let check_approx_for_set_of_closures t : checked_approx_for_set_of_closures =
        to the set now out of scope. *)
     Ok (t.var, value_set_of_closures)
   | Value_closure _ | Value_block _ | Value_int _ | Value_char _
-  | Value_constptr _ | Value_float _ | Value_boxed_int _ | Value_unknown _
+  | Value_constptr _ | Value_float _ | Value_unboxed_float _ | Value_boxed_int _ | Value_unknown _
   | Value_bottom | Value_extern _ | Value_string _ | Value_float_array _
   | Value_symbol _ ->
     Wrong
@@ -714,7 +733,7 @@ let check_approx_for_closure_allowing_unresolved t
           symbol, value_set_of_closures)
     | Value_unresolved _
     | Value_closure _ | Value_block _ | Value_int _ | Value_char _
-    | Value_constptr _ | Value_float _ | Value_boxed_int _ | Value_unknown _
+    | Value_constptr _ | Value_float _ | Value_unboxed_float _ | Value_boxed_int _ | Value_unknown _
     | Value_bottom | Value_extern _ | Value_string _ | Value_float_array _
     | Value_symbol _ ->
       Wrong
@@ -723,7 +742,7 @@ let check_approx_for_closure_allowing_unresolved t
     Unknown_because_of_unresolved_symbol symbol
   | Value_unresolved symbol -> Unresolved symbol
   | Value_set_of_closures _ | Value_block _ | Value_int _ | Value_char _
-  | Value_constptr _ | Value_float _ | Value_boxed_int _
+  | Value_constptr _ | Value_float _ | Value_unboxed_float _ | Value_boxed_int _
   | Value_bottom | Value_extern _ | Value_string _ | Value_float_array _
   | Value_symbol _ ->
     Wrong
@@ -759,6 +778,7 @@ let approx_for_bound_var value_set_of_closures var =
 let check_approx_for_float t : float option =
   match t.descr with
   | Value_float f -> f
+  | Value_unboxed_float _
   | Value_unresolved _
   | Value_unknown _ | Value_string _ | Value_float_array _
   | Value_bottom | Value_block _ | Value_int _ | Value_char _
@@ -776,7 +796,7 @@ let float_array_as_constant (t:value_float_array) : float list option =
         Some (f :: acc)
       | None, _
       | Some _,
-        (Value_float None | Value_unresolved _
+        (Value_float None | Value_unboxed_float _ | Value_unresolved _
         | Value_unknown _ | Value_string _ | Value_float_array _
         | Value_bottom | Value_block _ | Value_int _ | Value_char _
         | Value_constptr _ | Value_set_of_closures _ | Value_closure _
@@ -787,7 +807,7 @@ let float_array_as_constant (t:value_float_array) : float list option =
 let check_approx_for_string t : string option =
   match t.descr with
   | Value_string { contents } -> contents
-  | Value_float _
+  | Value_float _ | Value_unboxed_float _
   | Value_unresolved _
   | Value_unknown _ | Value_float_array _
   | Value_bottom | Value_block _ | Value_int _ | Value_char _
@@ -815,7 +835,7 @@ let potentially_taken_const_switch_branch t branch =
     Must_be_taken
   | Value_constptr _ | Value_int _ | Value_char _ ->
     Cannot_be_taken
-  | Value_block _ | Value_float _ | Value_float_array _
+  | Value_block _ | Value_float _ | Value_unboxed_float _ | Value_float_array _
   | Value_string _ | Value_closure _ | Value_set_of_closures _
   | Value_boxed_int _ | Value_bottom ->
     Cannot_be_taken
@@ -842,6 +862,7 @@ let potentially_taken_block_switch_branch t tag =
     Can_be_taken
   | Value_boxed_int _ when tag = Obj.custom_tag ->
     Must_be_taken
+  | Value_unboxed_float _
   | Value_block _ | Value_float _ | Value_set_of_closures _ | Value_closure _
   | Value_string _ | Value_float_array _ | Value_boxed_int _ ->
     Cannot_be_taken

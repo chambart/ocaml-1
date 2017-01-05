@@ -174,6 +174,10 @@ let simplify_const (const : Flambda.const) =
   | Char c -> A.value_char c
   | Const_pointer i -> A.value_constptr i
 
+let simplify_unboxed_const (const : Flambda.unboxed_const) =
+  match const with
+  | Float f -> A.value_unboxed_float f
+
 let approx_for_allocated_const (const : Allocated_const.t) =
   match const with
   | String s -> A.value_string (String.length s) None
@@ -877,6 +881,7 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
        When this comes from another compilation unit, we must load it. *)
     let approx = E.find_or_load_symbol env sym in
     simplify_named_using_approx r tree approx
+  | Unboxed_const cst -> tree, ret r (simplify_unboxed_const cst)
   | Const cst -> tree, ret r (simplify_const cst)
   | Allocated_const cst -> tree, ret r (approx_for_allocated_const cst)
   | Read_mutable mut_var ->
