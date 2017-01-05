@@ -303,7 +303,11 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
     match named with
     | Set_of_closures (set_of_closures) ->
       mark_loop_set_of_closures ~toplevel curr set_of_closures
-    | Unboxed_const _ | Const _ | Allocated_const _ -> ()
+    | Const _ | Allocated_const _ -> ()
+    | Unboxed_const _ ->
+      (* We mark unboxed constant as inconstant as this is not yet
+         implemented (will need to also handle Pbox_float/Punbox_float) *)
+      mark_curr curr
     | Read_mutable _ -> mark_curr curr
     | Symbol symbol -> begin
         let current_unit = Compilation_unit.get_current_exn () in
