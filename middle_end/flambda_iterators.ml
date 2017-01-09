@@ -688,7 +688,7 @@ let map_sets_of_closures_of_program (program : Flambda.program)
       if new_program' == program' && not !done_something then
         program
       else
-        Let_rec_symbol (defs, loop program')
+        Let_rec_symbol (defs, new_program')
     | Initialize_symbol (symbol, tag, fields, program') ->
       let done_something = ref false in
       let fields =
