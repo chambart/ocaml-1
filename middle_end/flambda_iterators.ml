@@ -645,14 +645,20 @@ let map_sets_of_closures_of_program (program : Flambda.program)
           Flambda.update_function_declarations set_of_closures.function_decls
             ~funs
       in
+      let set_of_closures =
+        if !done_something then
+          Flambda.create_set_of_closures ~function_decls
+            ~free_vars:set_of_closures.free_vars
+            ~specialised_args:set_of_closures.specialised_args
+            ~direct_call_surrogates:set_of_closures.direct_call_surrogates
+        else
+          set_of_closures
+      in
       let new_set_of_closures = f set_of_closures in
       if new_set_of_closures == set_of_closures then
         set_of_closures
       else
-        Flambda.create_set_of_closures ~function_decls
-          ~free_vars:set_of_closures.free_vars
-          ~specialised_args:set_of_closures.specialised_args
-          ~direct_call_surrogates:set_of_closures.direct_call_surrogates
+        new_set_of_closures
     in
     match program with
     | Let_symbol (symbol, Set_of_closures set_of_closures, program') ->
