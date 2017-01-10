@@ -27,6 +27,7 @@ val split_default_wrapper
   -> id:Ident.t
   -> kind:function_kind
   -> params:(Ident.t * Lambda.value_kind) list
+  -> return:Lambda.value_kind
   -> body:lambda
   -> attr:function_attribute
   -> wrapper_attr:function_attribute

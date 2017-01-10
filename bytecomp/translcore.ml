@@ -438,7 +438,7 @@ let transl_primitive loc p env ty path =
   match prim with
   | Plazyforce ->
       let parm = Ident.create "prim" in
-      Lfunction{kind = Curried; params = [parm, Pgenval];
+      Lfunction{kind = Curried; params = [parm, Pgenval]; return = Pgenval;
                 body = Matching.inline_lazy_force (Lvar parm) Location.none;
                 loc = loc;
                 attr = default_function_attribute }
@@ -448,7 +448,7 @@ let transl_primitive loc p env ty path =
       | 0 -> lam
       | 1 -> (* TODO: we should issue a warning ? *)
         let param = Ident.create "prim" in
-        Lfunction{kind = Curried; params = [param, Pgenval];
+        Lfunction{kind = Curried; params = [param, Pgenval]; return = Pgenval;
                   attr = default_function_attribute;
                   loc = loc;
                   body = Lprim(Pmakeblock(0, Immutable, None),
@@ -461,7 +461,7 @@ let transl_primitive loc p env ty path =
           (Ident.create "prim", Pgenval) :: make_params (n-1) in
       let params = make_params p.prim_arity in
       let body = Lprim(prim, List.map (fun (id, _) -> Lvar id) params, loc) in
-      Lfunction{ kind = Curried; params;
+      Lfunction{ kind = Curried; params; return = Pgenval;
                  attr = default_function_attribute;
                  loc = loc;
                  body }
@@ -711,13 +711,16 @@ and transl_exp0 e =
         let kind = if public_send then Public else Self in
         let obj = Ident.create "obj" and meth = Ident.create "meth" in
         Lfunction{kind = Curried; params = [obj, Pgenval; meth, Pgenval];
-                  attr = default_function_attribute;
+                  return = Pgenval; attr = default_function_attribute;
                   loc = e.exp_loc;
                   body = Lsend(kind, Lvar meth, Lvar obj, [], e.exp_loc)}
       else if p.prim_name = "%sendcache" then
         let obj = Ident.create "obj" and meth = Ident.create "meth" in
         let cache = Ident.create "cache" and pos = Ident.create "pos" in
-        Lfunction{kind = Curried; params = [obj, Pgenval; meth, Pgenval; cache, Pgenval; pos, Pgenval];
+        Lfunction{kind = Curried;
+                  params = [obj, Pgenval; meth, Pgenval;
+                            cache, Pgenval; pos, Pgenval];
+                  return = Pgenval;
                   attr = default_function_attribute;
                   loc = e.exp_loc;
                   body = Lsend(Cached, Lvar meth, Lvar obj,
@@ -748,7 +751,7 @@ and transl_exp0 e =
       }
       in
       let loc = e.exp_loc in
-      Lfunction{kind; params; body; attr; loc}
+      Lfunction{kind; params; return = Pgenval; body; attr; loc}
   | Texp_apply({ exp_desc = Texp_ident(path, _, {val_kind = Val_prim p});
                 exp_type = prim_type } as funct, oargs)
     when List.length oargs >= p.prim_arity
@@ -1056,6 +1059,7 @@ and transl_exp0 e =
       (* other cases compile to a lazy block holding a function *)
       | _ ->
          let fn = Lfunction {kind = Curried; params = [Ident.create "param", Pgenval];
+                             return = Pgenval;
                              attr = default_function_attribute;
                              loc = e.exp_loc;
                              body = transl_exp e} in
@@ -1162,14 +1166,20 @@ and transl_apply ?(should_be_tailcall=false) ?(inlined = Default_inline)
         let body =
           match build_apply handle ((Lvar id_arg, optional)::args') l with
             Lfunction{kind = Curried; params = ids; body = lam; attr; loc} ->
-              Lfunction{kind = Curried; params = (id_arg, Pgenval)::ids; body = lam; attr;
+              Lfunction{kind = Curried;
+                        params = (id_arg, Pgenval)::ids;
+                        return = Pgenval;
+                        body = lam; attr;
                         loc}
           | Levent(Lfunction{kind = Curried; params = ids;
                              body = lam; attr; loc}, _) ->
-              Lfunction{kind = Curried; params = (id_arg, Pgenval)::ids; body = lam; attr;
+              Lfunction{kind = Curried; params = (id_arg, Pgenval)::ids;
+                        return = Pgenval;
+                        body = lam; attr;
                         loc}
           | lam ->
-              Lfunction{kind = Curried; params = [id_arg, Pgenval]; body = lam;
+              Lfunction{kind = Curried; params = [id_arg, Pgenval];
+                        return = Pgenval; body = lam;
                         attr = default_function_attribute; loc = loc}
         in
         List.fold_left

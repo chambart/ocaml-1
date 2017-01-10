@@ -200,8 +200,8 @@ let simplify_exits lam =
   | Lapply ap ->
       Lapply{ap with ap_func = simplif ap.ap_func;
                      ap_args = List.map simplif ap.ap_args}
-  | Lfunction{kind; params; body = l; attr; loc} ->
-     Lfunction{kind; params; body = simplif l; attr; loc}
+  | Lfunction{kind; params; return; body = l; attr; loc} ->
+     Lfunction{kind; params; return; body = simplif l; attr; loc}
   | Llet(str, kind, v, l1, l2) -> Llet(str, kind, v, simplif l1, simplif l2)
   | Lletrec(bindings, body) ->
       Lletrec(List.map (fun (v, l) -> (v, simplif l)) bindings, simplif body)
@@ -457,13 +457,13 @@ let simplify_lets lam =
       simplif (beta_reduce params body args)
   | Lapply ap -> Lapply {ap with ap_func = simplif ap.ap_func;
                                  ap_args = List.map simplif ap.ap_args}
-  | Lfunction{kind; params; body = l; attr; loc} ->
+  | Lfunction{kind; params; return; body = l; attr; loc} ->
       begin match simplif l with
-        Lfunction{kind=Curried; params=params'; body; attr; loc}
+        Lfunction{kind=Curried; params=params'; return; body; attr; loc}
         when kind = Curried && optimize ->
-          Lfunction{kind; params = params @ params'; body; attr; loc}
+          Lfunction{kind; params = params @ params'; return; body; attr; loc}
       | body ->
-          Lfunction{kind; params; body; attr; loc}
+          Lfunction{kind; params; return; body; attr; loc}
       end
   | Llet(_str, _k, v, Lvar w, l2) when optimize ->
       Hashtbl.add subst v (simplif (Lvar w));
@@ -633,7 +633,8 @@ and list_emit_tail_infos is_tail =
    function's body. *)
 
 let split_default_wrapper ?(create_wrapper_body = fun lam -> lam)
-      ~id:fun_id ~kind ~(params:(Ident.t * value_kind) list) ~body ~attr ~wrapper_attr ~loc () =
+    ~id:fun_id ~kind ~(params:(Ident.t * value_kind) list) ~return
+    ~body ~attr ~wrapper_attr ~loc () =
   let rec aux map = function
     | Llet(Strict, k, id, (Lifthenelse(Lvar optparam, _, _) as def), rest) when
         Ident.name optparam = "*opt*" && List.mem_assoc optparam params
@@ -671,16 +672,17 @@ let split_default_wrapper ?(create_wrapper_body = fun lam -> lam)
         let body = Lambda.subst_lambda subst body in
         let params = List.map (fun p -> p, Pgenval) new_ids in
         let inner_fun =
-          Lfunction { kind = Curried; params; body; attr; loc; }
+          Lfunction { kind = Curried; params; return; body; attr; loc; }
         in
         (wrapper_body, (inner_id, inner_fun))
   in
   try
     let wrapper_body, inner = aux [] body in
-    [(fun_id, Lfunction{kind; params; body = create_wrapper_body wrapper_body;
+    [(fun_id, Lfunction{kind; params; return;
+       body = create_wrapper_body wrapper_body;
        attr = wrapper_attr; loc}); inner]
   with Exit ->
-    [(fun_id, Lfunction{kind; params; body; attr; loc})]
+    [(fun_id, Lfunction{kind; params; return; body; attr; loc})]
 
 module Hooks = Misc.MakeHooks(struct
     type t = lambda

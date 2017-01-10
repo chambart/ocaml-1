@@ -30,10 +30,12 @@ let lfunction params body =
   if params = [] then body else
   match body with
   | Lfunction {kind = Curried; params = params'; body = body'; attr; loc} ->
-      Lfunction {kind = Curried; params = params @ params'; body = body'; attr;
+      Lfunction {kind = Curried; params = params @ params';
+                 return = Pgenval;
+                 body = body'; attr;
                  loc}
   |  _ ->
-      Lfunction {kind = Curried; params;
+      Lfunction {kind = Curried; params; return = Pgenval;
                  body;
                  attr = default_function_attribute;
                  loc = Location.none}
@@ -179,6 +181,7 @@ let rec build_object_init cl_table obj params inh_init obj_init cl =
        let build params rem =
          let param = name_pattern "param" pat in
          Lfunction {kind = Curried; params = (param, Pgenval)::params;
+                    return = Pgenval;
                     attr = default_function_attribute;
                     loc = pat.pat_loc;
                     body = Matching.for_function
@@ -431,6 +434,7 @@ let rec transl_class_rebind obj_init cl vf =
       let build params rem =
         let param = name_pattern "param" pat in
         Lfunction {kind = Curried; params = (param, Pgenval)::params;
+                   return = Pgenval;
                    attr = default_function_attribute;
                    loc = pat.pat_loc;
                    body = Matching.for_function
@@ -748,6 +752,7 @@ let transl_class ids cl_id pub_meths cl vflag =
     let cl_init = llets (Lfunction{kind = Curried;
                                    attr = default_function_attribute;
                                    loc = Location.none;
+                                   return = Pgenval;
                                    params = [cla, Pgenval]; body = cl_init}) in
     Llet(Strict, Pgenval, class_init, cl_init, lam (free_variables cl_init))
   and lbody fv =
@@ -769,6 +774,7 @@ let transl_class ids cl_id pub_meths cl vflag =
           [lambda_unit; Lfunction{kind = Curried;
                                   attr = default_function_attribute;
                                   loc = Location.none;
+                                  return = Pgenval;
                                   params = [cla, Pgenval]; body = cl_init};
            lambda_unit; lenvs],
          Location.none)
@@ -822,6 +828,7 @@ let transl_class ids cl_id pub_meths cl vflag =
   let lclass lam =
     Llet(Strict, Pgenval, class_init,
          Lfunction{kind = Curried; params = [cla, Pgenval];
+                   return = Pgenval;
                    attr = default_function_attribute;
                    loc = Location.none;
                    body = def_ids cla cl_init}, lam)
@@ -843,7 +850,7 @@ let transl_class ids cl_id pub_meths cl vflag =
                       lset cached 0 (Lvar env_init))))
   and lclass_virt () =
     lset cached 0 (Lfunction{kind = Curried; attr = default_function_attribute;
-                             loc = Location.none;
+                             loc = Location.none; return = Pgenval;
                              params = [cla, Pgenval]; body = def_ids cla cl_init})
   in
   llets (

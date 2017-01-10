@@ -864,6 +864,7 @@ let rec close fenv cenv = function
           (Lfunction{
                kind = Curried;
                params = List.map (fun p -> p, Pgenval) final_args;
+               return = Pgenval;
                body = Lapply{ap_should_be_tailcall=false;
                              ap_loc=loc;
                              ap_func=funct;
@@ -1161,8 +1162,8 @@ and close_functions fenv cenv fun_defs =
     List.flatten
       (List.map
          (function
-           | (id, Lfunction{kind; params; body; attr; loc}) ->
-               Simplif.split_default_wrapper ~id ~kind ~params
+           | (id, Lfunction{kind; params; return; body; attr; loc}) ->
+               Simplif.split_default_wrapper ~id ~kind ~params ~return
                  ~body ~attr ~wrapper_attr:attr ~loc ()
            | _ -> assert false
          )
