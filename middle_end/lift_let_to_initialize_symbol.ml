@@ -22,7 +22,8 @@ type ('a, 'b) kind =
 
 let should_copy (named:Flambda.named) =
   match named with
-  | Symbol _ | Read_symbol_field _ | Const _ -> true
+  | Symbol _ | Read_symbol_field _ | Const _
+  | Prim (Punbox_float, _, _) -> true
   | _ -> false
 
 type extracted =
@@ -72,6 +73,7 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
   | Let { var; defining_expr = named; body; _ }
   | Let_rec ([var, named], body)
     when should_copy named ->
+    let named = Flambda_utils.toplevel_substitution_named substitution named in
       accumulate body
         ~substitution
         ~copied_lets:((var, named)::copied_lets)
@@ -161,10 +163,19 @@ let rebuild_expr
     Flambda_utils.toplevel_substitution substitution
       expr_with_read_symbols
   in
-  Variable.Map.fold (fun var declaration body ->
+  let expr_with_copied =
+    Variable.Map.fold (fun var declaration body ->
       let definition = Variable.Map.find var copied_definitions in
       Flambda.create_let declaration definition body)
-    substitution expr_with_read_symbols
+      substitution expr_with_read_symbols
+  in
+
+  (* CR pchambart: really ineficient copied definitions should be
+     introduced before read symbols *)
+
+  Flambda_utils.substitute_read_symbol_field_for_variables
+    extracted_definitions expr_with_copied
+
 
 let rebuild (used_variables:Variable.Set.t) (accumulated:accumulated) =
   let copied_definitions = Variable.Map.of_list accumulated.copied_lets in
