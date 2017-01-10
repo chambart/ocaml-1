@@ -677,6 +677,21 @@ let unboxed_prim = function
       Misc.fatal_error "Lambda.unboxed_prim: no possible unboxing \
                         for the primitive"
 
+let returns_unboxed_value = function
+  | Punbox_float
+  | Pnegfloat Unboxed
+  | Pabsfloat Unboxed
+  | Paddfloat Unboxed
+  | Psubfloat Unboxed
+  | Pmulfloat Unboxed
+  | Pdivfloat Unboxed
+  | Pfloatofint Unboxed
+  | Pbigarrayref(_, _, _, _, Unboxed)
+  | Pccall_unboxed
+      { Primitive.prim_native_repr_res = Primitive.Unboxed_float } ->
+      true
+  | _ ->
+      false
 
 (* To let-bind expressions to variables *)
 

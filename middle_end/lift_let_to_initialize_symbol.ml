@@ -23,12 +23,22 @@ type ('a, 'b) kind =
 let should_copy (named:Flambda.named) =
   match named with
   | Symbol _ | Read_symbol_field _ | Const _
+  | Prim (Pbox_float, _, _)
   | Prim (Punbox_float, _, _) -> true
   | _ -> false
 
+type var_with_type = Variable.t * Flambda.param_type
+
+let named_return_type (named:Flambda.named) : Flambda.param_type =
+  match named with
+  | Prim (prim, _, _) when Lambda.returns_unboxed_value prim ->
+    Float Unboxed
+  | _ ->
+    Val
+
 type extracted =
-  | Expr of Variable.t * Flambda.t
-  | Exprs of Variable.t list * Flambda.t
+  | Expr of var_with_type * Flambda.t
+  | Exprs of var_with_type list * Flambda.t
   | Block of Variable.t * Tag.t * Variable.t list
 
 type accumulated = {
@@ -96,7 +106,8 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
           Flambda_utils.toplevel_substitution substitution
             (Flambda.create_let renamed named (Var renamed))
         in
-        Expr (var, expr)
+        let typ = named_return_type named in
+        Expr ((var, typ), expr)
     in
     accumulate body
       ~substitution
@@ -109,7 +120,8 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
       Flambda_utils.toplevel_substitution def_substitution
         (Let_rec ([renamed, named], Var renamed))
     in
-    let extracted = Expr (var, expr) in
+    let typ = named_return_type named in
+    let extracted = Expr ((var, typ), expr) in
     accumulate body
       ~substitution
       ~copied_lets
@@ -123,15 +135,35 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
         defs ([], substitution)
     in
     let extracted =
+      let fields, box =
+        List.fold_right (fun (new_var, def) (fields, box) ->
+          match named_return_type def with
+          | Val | Float Boxed ->
+            new_var :: fields, box
+          | Float Unboxed ->
+            let boxed_var = Variable.rename new_var in
+            let box body =
+              Flambda.create_let boxed_var
+                (Prim (Pbox_float, [new_var], Debuginfo.none))
+                (box body)
+            in
+            boxed_var :: fields, box)
+          renamed_defs ([],(fun x -> x))
+      in
+      let block =
+        Flambda_utils.name_expr ~name:"lifted_let_rec_block"
+          (Prim (Pmakeblock (0, Immutable, None),
+                 fields,
+                 Debuginfo.none))
+      in
       let expr =
         Flambda_utils.toplevel_substitution def_substitution
-          (Let_rec (renamed_defs,
-                    Flambda_utils.name_expr ~name:"lifted_let_rec_block"
-                      (Prim (Pmakeblock (0, Immutable, None),
-                             List.map fst renamed_defs,
-                             Debuginfo.none))))
+          (Let_rec (renamed_defs, box block))
       in
-      Exprs (List.map fst defs, expr)
+      let defs_with_type =
+        List.map (fun (var, def) -> var, named_return_type def) defs
+      in
+      Exprs (defs_with_type, expr)
     in
     accumulate body
       ~substitution
@@ -144,7 +176,8 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
   }
 
 let rebuild_expr
-      ~(extracted_definitions : (Symbol.t * int list) Variable.Map.t)
+    ~(extracted_definitions :
+        (Symbol.t * int list * Flambda.param_type) Variable.Map.t)
       ~(copied_definitions : Flambda.named Variable.Map.t)
       ~(substitute : bool)
       (expr : Flambda.t) =
@@ -163,11 +196,42 @@ let rebuild_expr
     Flambda_utils.toplevel_substitution substitution
       expr_with_read_symbols
   in
+  let rec introduce_copied declarations substitution body =
+    match declarations with
+    | [] -> body
+    | (var, declaration) :: declarations ->
+      let substitution = Variable.Map.remove var substitution in
+      let definition =
+        try Variable.Map.find var copied_definitions
+        with Not_found ->
+          Misc.fatal_errorf "Missing declaration for variable %a"
+            Variable.print var
+      in
+      let declarations, substitution =
+        Variable.Set.fold (fun var (declarations, substitution) ->
+          if Variable.Map.mem var substitution ||
+             Variable.Map.mem var extracted_definitions then
+            (declarations, substitution)
+          else
+            let renamed = Variable.rename var in
+            (var, renamed) :: declarations,
+            Variable.Map.add var renamed substitution)
+          (Flambda.free_variables_named definition)
+          (declarations, substitution)
+      in
+      let definition =
+        Flambda_utils.toplevel_substitution_named
+          substitution definition
+      in
+      let body = Flambda.create_let declaration definition body in
+      introduce_copied declarations substitution body
+  in
+
   let expr_with_copied =
-    Variable.Map.fold (fun var declaration body ->
-      let definition = Variable.Map.find var copied_definitions in
-      Flambda.create_let declaration definition body)
-      substitution expr_with_read_symbols
+    introduce_copied
+      (Variable.Map.bindings substitution)
+      substitution
+      expr_with_read_symbols
   in
 
   (* CR pchambart: really ineficient copied definitions should be
@@ -182,9 +246,10 @@ let rebuild (used_variables:Variable.Set.t) (accumulated:accumulated) =
   let accumulated_extracted_lets =
     List.map (fun decl ->
         match decl with
-        | Block (var, _, _) | Expr (var, _) ->
+        | Block (var, _, _) | Expr ((var, _), _) ->
           Flambda_utils.make_variable_symbol var, decl
         | Exprs (vars, _) ->
+          let vars = List.map fst vars in
           Flambda_utils.make_variables_symbol vars, decl)
       accumulated.extracted_lets
   in
@@ -203,13 +268,13 @@ let rebuild (used_variables:Variable.Set.t) (accumulated:accumulated) =
     List.fold_left (fun map (symbol, decl) ->
         match decl with
         | Block (var, _tag, _fields) ->
-          Variable.Map.add var (symbol, []) map
-        | Expr (var, _expr) ->
-          Variable.Map.add var (symbol, [0]) map
+          Variable.Map.add var (symbol, [], Flambda.Val) map
+        | Expr ((var, typ), _expr) ->
+          Variable.Map.add var (symbol, [0], typ) map
         | Exprs (vars, _expr) ->
           let map, _ =
-            List.fold_left (fun (map, field) var ->
-                Variable.Map.add var (symbol, [field; 0]) map,
+            List.fold_left (fun (map, field) (var, typ) ->
+                Variable.Map.add var (symbol, [field; 0], typ) map,
                 field + 1)
               (map, 0) vars
           in
@@ -219,10 +284,22 @@ let rebuild (used_variables:Variable.Set.t) (accumulated:accumulated) =
   let extracted =
     List.map (fun (symbol, decl) ->
         match decl with
-        | Expr (var, decl) ->
+        | Expr ((var, typ), decl) ->
           let expr =
             rebuild_expr ~extracted_definitions ~copied_definitions
               ~substitute:true decl
+          in
+          let expr =
+            match typ with
+            | Val | Float Boxed ->
+              expr
+            | Float Unboxed ->
+              let unboxed = Variable.rename var in
+              let boxed = Variable.create "boxed" in
+              Flambda.create_let unboxed (Expr expr)
+                (Flambda.create_let boxed
+                   (Prim (Pbox_float, [unboxed], Debuginfo.none))
+                   (Var boxed))
           in
           if Variable.Set.mem var used_variables then
             Initialisation

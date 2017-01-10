@@ -348,6 +348,8 @@ val default_function_attribute : function_attribute
     Raises if there is no such primitive. *)
 val unboxed_prim : primitive -> primitive
 
+val returns_unboxed_value : primitive -> bool
+
 (***********************)
 (* For static failures *)
 (***********************)

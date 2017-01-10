@@ -163,7 +163,7 @@ val make_variables_symbol : Variable.t list -> Symbol.t
    take a [named] instead of a symbol and be called with
    [Read_symbol_field (symbol, 0)]. *)
 val substitute_read_symbol_field_for_variables
-   : (Symbol.t * int list) Variable.Map.t
+   : (Symbol.t * int list * Flambda.param_type) Variable.Map.t
   -> Flambda.t
   -> Flambda.t
 

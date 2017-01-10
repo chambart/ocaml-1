@@ -557,10 +557,10 @@ let make_variables_symbol vars =
   Symbol.create (Compilation_unit.get_current_exn ()) (Linkage_name.create name)
 
 let substitute_read_symbol_field_for_variables
-    (substitution : (Symbol.t * int list) Variable.Map.t)
+    (substitution : (Symbol.t * int list * Flambda.param_type) Variable.Map.t)
     (expr : Flambda.t) =
   let bind var fresh_var (expr:Flambda.t) : Flambda.t =
-    let symbol, path = Variable.Map.find var substitution in
+    let symbol, path, typ = Variable.Map.find var substitution in
     let rec make_named (path:int list) : Flambda.named =
       match path with
       | [] -> Symbol symbol
@@ -574,7 +574,20 @@ let substitute_read_symbol_field_for_variables
                  (Prim (Pfield h, [block], Debuginfo.none))
                  (Var field)))
     in
-    Flambda.create_let fresh_var (make_named path) expr
+    let named : Flambda.named =
+      match typ with
+      | Val | Float Boxed ->
+        make_named path
+      | Float Unboxed ->
+        let block = Variable.create "symbol_field_block" in
+        let unboxed = Variable.create "unboxed" in
+        Expr (
+          Flambda.create_let block (make_named path)
+            (Flambda.create_let unboxed
+               (Prim (Punbox_float, [block], Debuginfo.none))
+               (Var unboxed)))
+    in
+    Flambda.create_let fresh_var named expr
   in
   let substitute_named bindings (named:Flambda.named) : Flambda.named =
     let sb to_substitute =
