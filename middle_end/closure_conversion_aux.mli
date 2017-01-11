@@ -57,6 +57,7 @@ module Function_decls : sig
       -> closure_bound_var:Variable.t
       -> kind:Lambda.function_kind
       -> params:(Ident.t * Lambda.value_kind) list
+      -> return:Lambda.value_kind
       -> body:Lambda.lambda
       -> inline:Lambda.inline_attribute
       -> specialise:Lambda.specialise_attribute
@@ -68,6 +69,7 @@ module Function_decls : sig
     val closure_bound_var : t -> Variable.t
     val kind : t -> Lambda.function_kind
     val params : t -> (Ident.t * Lambda.value_kind) list
+    val return : t -> Lambda.value_kind
     val body : t -> Lambda.lambda
     val inline : t -> Lambda.inline_attribute
     val specialise : t -> Lambda.specialise_attribute

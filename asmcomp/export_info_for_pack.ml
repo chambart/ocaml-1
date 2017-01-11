@@ -98,6 +98,7 @@ let import_function_declarations_for_pack units pack
     Variable.Map.map (fun (function_decl : Flambda.function_declaration) ->
         Flambda.create_function_declaration ~params:function_decl.params
           ~body:(import_code_for_pack units pack function_decl.body)
+          ~return:function_decl.return
           ~stub:function_decl.stub ~dbg:function_decl.dbg
           ~inline:function_decl.inline
           ~specialise:function_decl.specialise

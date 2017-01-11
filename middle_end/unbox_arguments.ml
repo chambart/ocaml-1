@@ -266,6 +266,7 @@ let unbox_function_declaration
       in
       Flambda.create_function_declaration
         ~params
+        ~return:decl.return
         ~body
         ~stub:true
         ~dbg:decl.dbg
@@ -296,6 +297,7 @@ let unbox_function_declaration
       in
       Flambda.create_function_declaration
         ~params:(List.map fst params)
+        ~return:decl.return
         ~body
         ~stub:decl.stub
         ~dbg:decl.dbg

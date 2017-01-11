@@ -737,12 +737,13 @@ and transl_exp0 e =
   | Texp_let(rec_flag, pat_expr_list, body) ->
       transl_let rec_flag pat_expr_list (event_before body (transl_exp body))
   | Texp_function { arg_label = _; param; cases; partial; } ->
-      let ((kind, params), body) =
+      let ((kind, params, return), body) =
         event_function e
           (function repr ->
             let pl = push_defaults e.exp_loc [] cases partial in
-            transl_function e.exp_loc !Clflags.native_code repr partial
-              param pl)
+            let return_kind = function_return_value_kind e.exp_env e.exp_type in
+            transl_function e.exp_loc return_kind !Clflags.native_code repr
+              partial param pl)
       in
       let attr = {
         default_function_attribute with
@@ -751,7 +752,7 @@ and transl_exp0 e =
       }
       in
       let loc = e.exp_loc in
-      Lfunction{kind; params; return = Pgenval; body; attr; loc}
+      Lfunction{kind; params; return; body; attr; loc}
   | Texp_apply({ exp_desc = Texp_ident(path, _, {val_kind = Val_prim p});
                 exp_type = prim_type } as funct, oargs)
     when List.length oargs >= p.prim_arity
@@ -1195,16 +1196,18 @@ and transl_apply ?(should_be_tailcall=false) ?(inlined = Default_inline)
                                 sargs)
      : Lambda.lambda)
 
-and transl_function loc untuplify_fn repr partial (param:Ident.t) cases =
+and transl_function loc return untuplify_fn repr partial (param:Ident.t) cases =
   match cases with
     [{c_lhs=pat; c_guard=None;
       c_rhs={exp_desc = Texp_function { arg_label = _; param = param'; cases;
-        partial = partial'; }} as exp}]
+        partial = partial'; }; exp_env; exp_type} as exp}]
     when Parmatch.fluid pat ->
       let kind = value_kind pat.pat_env pat.pat_type in
-      let ((_, params), body) =
-        transl_function exp.exp_loc false repr partial' param' cases in
-      ((Curried, (param, kind) :: params),
+      let return_kind = function_return_value_kind exp_env exp_type in
+      let ((_, params, return), body) =
+        transl_function exp.exp_loc return_kind false repr partial' param' cases
+      in
+      ((Curried, (param, kind) :: params, return),
        Matching.for_function loc None (Lvar param) [pat, body] partial)
   | {c_lhs={pat_desc = Tpat_tuple pl}} :: _ when untuplify_fn ->
       begin try
@@ -1216,21 +1219,21 @@ and transl_function loc untuplify_fn repr partial (param:Ident.t) cases =
             cases in
         let params = List.map (fun _ -> Ident.create "param") pl in
         let tparams = List.map (fun p -> p, Pgenval) params in
-        ((Tupled, tparams),
+        ((Tupled, tparams, return),
          Matching.for_tupled_function loc params
            (transl_tupled_cases pats_expr_list) partial)
       with Matching.Cannot_flatten ->
-        ((Curried, [param, Pgenval]),
+        ((Curried, [param, Pgenval], return),
          Matching.for_function loc repr (Lvar param)
            (transl_cases cases) partial)
       end
   | {c_lhs=pat} :: _ ->
       let kind = value_kind pat.pat_env pat.pat_type in
-      ((Curried, [param, kind]),
+      ((Curried, [param, kind], return),
        Matching.for_function loc repr (Lvar param)
          (transl_cases cases) partial)
   | [] ->
-      ((Curried, [param, Pgenval]),
+      ((Curried, [param, Pgenval], return),
        Matching.for_function loc repr (Lvar param)
          (transl_cases cases) partial)
 

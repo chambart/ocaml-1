@@ -37,6 +37,7 @@ let remove_params unused (fun_decl: Flambda.function_declaration) =
       unused_params
   in
   Flambda.create_function_declaration ~params:used_params ~body
+    ~return:fun_decl.return
     ~stub:fun_decl.stub ~dbg:fun_decl.dbg ~inline:fun_decl.inline
     ~specialise:fun_decl.specialise ~is_a_functor:fun_decl.is_a_functor
 
@@ -89,7 +90,9 @@ let make_stub unused var (fun_decl : Flambda.function_declaration)
     }
   in
   let function_decl =
-    Flambda.create_function_declaration ~params:(List.map (fun (_, arg, typ) -> arg, typ) args') ~body
+    Flambda.create_function_declaration
+      ~params:(List.map (fun (_, arg, typ) -> arg, typ) args') ~body
+      ~return:fun_decl.return
       ~stub:true ~dbg:fun_decl.dbg ~inline:Default_inline
       ~specialise:Default_specialise ~is_a_functor:fun_decl.is_a_functor
   in

@@ -125,6 +125,7 @@ and function_declarations = {
 
 and function_declaration = {
   params : (Variable.t * param_type) list;
+  return : param_type;
   body : t;
   free_variables : Variable.Set.t;
   free_symbols : Symbol.Set.t;
@@ -396,9 +397,9 @@ and print_function_declaration ppf var (f : function_declaration) =
     | Never_specialise -> " *never_specialise*"
     | Default_specialise -> ""
   in
-  fprintf ppf "@[<2>(%a%s%s%s%s@ =@ fun@[<2>%a@] ->@ @[<2>%a@])@]@ "
+  fprintf ppf "@[<2>(%a%s%s%s%s@ =@ fun@[<2>%a@] %a->@ @[<2>%a@])@]@ "
     Variable.print var stub is_a_functor inline specialise
-    params f.params lam f.body
+    params f.params param_type f.return lam f.body
 
 and print_set_of_closures ppf (set_of_closures : set_of_closures) =
   match set_of_closures with
@@ -1005,7 +1006,7 @@ let free_symbols_program (program : program) =
   loop program.program_body;
   !symbols
 
-let create_function_declaration ~params ~body ~stub ~dbg
+let create_function_declaration ~params ~return ~body ~stub ~dbg
       ~(inline : Lambda.inline_attribute)
       ~(specialise : Lambda.specialise_attribute) ~is_a_functor
       : function_declaration =
@@ -1026,6 +1027,7 @@ let create_function_declaration ~params ~body ~stub ~dbg
       print body
   end;
   { params;
+    return;
     body;
     free_variables = free_variables body;
     free_symbols = free_symbols body;

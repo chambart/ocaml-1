@@ -680,6 +680,7 @@ let introduce_free_variables_in_set_of_closures
                let body = Flambda_utils.toplevel_substitution subst body in
                Flambda.create_function_declaration
                  ~params:func_decl.params
+                 ~return:func_decl.return
                  ~body
                  ~stub:func_decl.stub
                  ~dbg:func_decl.dbg

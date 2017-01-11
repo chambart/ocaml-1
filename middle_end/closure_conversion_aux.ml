@@ -91,6 +91,7 @@ module Function_decls = struct
       closure_bound_var : Variable.t;
       kind : Lambda.function_kind;
       params : (Ident.t * Lambda.value_kind) list;
+      return : Lambda.value_kind;
       body : Lambda.lambda;
       free_idents_of_body : IdentSet.t;
       inline : Lambda.inline_attribute;
@@ -99,8 +100,8 @@ module Function_decls = struct
       loc : Location.t;
     }
 
-    let create ~let_rec_ident ~closure_bound_var ~kind ~params ~body ~inline
-        ~specialise ~is_a_functor ~loc =
+    let create ~let_rec_ident ~closure_bound_var ~kind ~params ~return
+        ~body ~inline ~specialise ~is_a_functor ~loc =
       let let_rec_ident =
         match let_rec_ident with
         | None -> Ident.create "unnamed_function"
@@ -110,6 +111,7 @@ module Function_decls = struct
         closure_bound_var;
         kind;
         params;
+        return;
         body;
         free_idents_of_body = Lambda.free_variables body;
         inline;
@@ -122,6 +124,7 @@ module Function_decls = struct
     let closure_bound_var t = t.closure_bound_var
     let kind t = t.kind
     let params t = t.params
+    let return t = t.return
     let body t = t.body
     let free_idents t = t.free_idents_of_body
     let inline t = t.inline

@@ -354,6 +354,7 @@ let make_closure_declaration ~id ~body ~params ~stub : Flambda.t =
   let function_declaration =
     Flambda.create_function_declaration
       ~params:(List.map (fun (var, typ) -> subst var, typ) params)
+      ~return:Val
       ~body ~stub ~dbg:Debuginfo.none ~inline:Default_inline
       ~specialise:Default_specialise ~is_a_functor:false
   in

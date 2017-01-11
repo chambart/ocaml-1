@@ -411,6 +411,7 @@ let map_general ~toplevel f f_named tree =
                   done_something := true;
                   Flambda.create_function_declaration
                     ~params:func_decl.params
+                    ~return:func_decl.return
                     ~body:new_body
                     ~stub:func_decl.stub
                     ~dbg:func_decl.dbg
@@ -501,6 +502,7 @@ let map_symbols_on_set_of_closures
         end;
         Flambda.create_function_declaration
           ~params:func_decl.params
+          ~return:func_decl.return
           ~body
           ~stub:func_decl.stub
           ~dbg:func_decl.dbg
@@ -595,6 +597,7 @@ let map_function_bodies (set_of_closures : Flambda.set_of_closures) ~f =
           done_something := true;
           Flambda.create_function_declaration ~body:new_body
             ~params:function_decl.params
+            ~return:function_decl.return
             ~stub:function_decl.stub
             ~dbg:function_decl.dbg
             ~inline:function_decl.inline
@@ -631,6 +634,7 @@ let map_sets_of_closures_of_program (program : Flambda.program)
                 done_something := true;
                 Flambda.create_function_declaration ~body
                   ~params:function_decl.params
+                  ~return:function_decl.return
                   ~stub:function_decl.stub
                   ~dbg:function_decl.dbg
                   ~inline:function_decl.inline
@@ -738,6 +742,7 @@ let map_exprs_at_toplevel_of_program (program : Flambda.program)
               done_something := true;
               Flambda.create_function_declaration ~body
                 ~params:function_decl.params
+                ~return:function_decl.return
                 ~stub:function_decl.stub
                 ~dbg:function_decl.dbg
                 ~inline:function_decl.inline

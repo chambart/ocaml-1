@@ -309,6 +309,7 @@ and function_declarations = private {
 
 and function_declaration = private {
   params : (Variable.t * param_type) list;
+  return : param_type;
   body : t;
   (* CR-soon mshinwell: inconsistent naming free_variables/free_vars here and
      above *)
@@ -555,6 +556,7 @@ end
     symbols occurring in the specified [body]. *)
 val create_function_declaration
    : params:(Variable.t * param_type) list
+  -> return:param_type
   -> body:t
   -> stub:bool
   -> dbg:Debuginfo.t

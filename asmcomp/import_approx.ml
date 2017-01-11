@@ -45,6 +45,7 @@ let import_set_of_closures =
             Flambda_iterators.map_toplevel_named f_named function_decl.body
           in
           Flambda.create_function_declaration ~params:function_decl.params
+            ~return:function_decl.return
             ~body ~stub:function_decl.stub ~dbg:function_decl.dbg
             ~inline:function_decl.inline
             ~specialise:function_decl.specialise

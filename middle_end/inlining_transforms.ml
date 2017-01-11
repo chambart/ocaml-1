@@ -478,6 +478,7 @@ let inline_by_copying_function_declaration ~env ~r
       in
       Flambda.create_function_declaration
         ~params:fun_decl.params
+        ~return:fun_decl.return
         ~stub:fun_decl.stub
         ~dbg:fun_decl.dbg
         ~inline:fun_decl.inline
