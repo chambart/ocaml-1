@@ -21,6 +21,43 @@ module C = Inlining_cost
 module I = Simplify_boxed_integer_ops
 module S = Simplify_common
 
+let ccall_type_specialisation ccall prim expr (descrs:A.descr list) args dbg
+      : Lambda.primitive * Flambda.named =
+  let unboxed_compare name native_repr : Lambda.primitive =
+    Pccall( Primitive.make ~name ~alloc:false
+              ~native_name:(name^"_unboxed")
+              ~native_repr_args:[native_repr;native_repr]
+              ~native_repr_res:Untagged_int)
+  in
+  let return prim : Lambda.primitive * Flambda.named =
+    prim, Prim(prim, args, dbg)
+  in
+  match ccall, descrs with
+  | "caml_equal",       [Value_float _; Value_float _] ->
+    return (Pfloatcomp (Ceq,Boxed))
+  | "caml_notequal",    [Value_float _; Value_float _] ->
+    return (Pfloatcomp (Cneq,Boxed))
+  | "caml_lessthan",    [Value_float _; Value_float _] ->
+    return (Pfloatcomp (Clt,Boxed))
+  | "caml_greaterthan" ,[Value_float _; Value_float _] ->
+    return (Pfloatcomp (Cgt,Boxed))
+  | "caml_lessequal",   [Value_float _; Value_float _] ->
+    return (Pfloatcomp (Cle,Boxed))
+  | "caml_greaterequal",[Value_float _; Value_float _] ->
+    return (Pfloatcomp (Cge,Boxed))
+  | "caml_compare",     [Value_float _; Value_float _] ->
+    return (unboxed_compare "caml_float_compare" Unboxed_float)
+  | _ ->
+    prim, expr
+
+let type_specialisation (p : Lambda.primitive) args approxs expr dbg
+      : Lambda.primitive * Flambda.named =
+  match p with
+  | Pccall { prim_name } ->
+    ccall_type_specialisation prim_name p expr (A.descrs approxs) args dbg
+  | _ ->
+    p, expr
+
 let phys_equal (approxs:A.t list) =
   match approxs with
   | [] | [_] | _ :: _ :: _ :: _ ->
@@ -40,6 +77,7 @@ let phys_equal (approxs:A.t list) =
 let primitive (p : Lambda.primitive) (args, approxs) expr dbg ~size_int
       ~big_endian : Flambda.named * A.t * Inlining_cost.Benefit.t =
   let fpc = !Clflags.float_const_prop in
+  let p, expr = type_specialisation p args approxs expr dbg in
   match p with
   | Pmakeblock(tag_int, Asttypes.Immutable, shape) ->
     let tag = Tag.create_exn tag_int in
