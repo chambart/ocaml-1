@@ -216,10 +216,17 @@ let unbox_function_declaration
   let has_some_unboxable_params =
     List.exists (fun arg -> Argument.Set.mem arg unboxable) params
   in
+  let has_unboxable_result =
+    (* This is really not sufficient to avoid increasing allocations,
+       but this might still be a good heuristic *)
+    match decl.return with
+    | Val | Float Unboxed -> false
+    | Float Boxed -> true
+  in
   let has_a_surrogate =
     Variable.Map.mem fun_var set_of_closures.direct_call_surrogates
   in
-  if not (has_some_unboxable_params &&
+  if not ((has_some_unboxable_params || has_unboxable_result) &&
           not decl.stub &&
           not has_a_surrogate) then
     No
@@ -234,17 +241,34 @@ let unbox_function_declaration
           Variable.rename var, None)
         decl.params
     in
+    let return : Flambda.param_type =
+      match decl.return with
+      | Val | Float Unboxed -> decl.return
+      | Float Boxed -> Float Unboxed
+    in
     let stub =
       let apply : Flambda.expr =
         Apply {
           func = new_fun_var;
           args = List.map fst params;
-          return = decl.return;
+          return;
           kind = Direct (Closure_id.wrap new_fun_var);
           dbg = Debuginfo.none;
           inline = Default_inline;
           specialise = Default_specialise;
         }
+      in
+      let body =
+        match decl.return with
+        | Val | Float Unboxed -> apply
+        | Float Boxed ->
+          (* CR: This makes the function not tail. This should be
+             fixable by using surrogates instead *)
+          let boxed = Variable.create "boxed" in
+          let unboxed = Variable.create "unboxed" in
+          Flambda.create_let unboxed (Expr apply)
+            (Flambda.create_let boxed (Prim (Pbox_float, [unboxed], Debuginfo.none))
+               (Var boxed))
       in
       let body =
         List.fold_left (fun body (var, pre_unboxed) ->
@@ -254,7 +278,7 @@ let unbox_function_declaration
             Flambda.create_let var
               (Prim (Punbox_float, [pre_unboxed], Debuginfo.none))
               body)
-          apply params
+          body params
       in
       let params =
         List.map2 (fun (var, pre_unboxed) (_, typ) ->
@@ -287,6 +311,17 @@ let unbox_function_declaration
           decl.params
       in
       let body =
+        match decl.return with
+        | Val | Float Unboxed -> decl.body
+        | Float Boxed ->
+          (* CR: This makes recursive calls of this function not tail. *)
+          let boxed = Variable.create "boxed" in
+          let unboxed = Variable.create "unboxed" in
+          Flambda.create_let boxed (Expr decl.body)
+            (Flambda.create_let unboxed (Prim (Punbox_float, [boxed], Debuginfo.none))
+               (Var unboxed))
+      in
+      let body =
         List.fold_left (fun body ((var, _typ), boxed) ->
           match boxed with
           | None -> body
@@ -294,11 +329,11 @@ let unbox_function_declaration
             Flambda.create_let boxed
               (Prim (Pbox_float, [var], Debuginfo.none))
               body)
-          decl.body params
+          body params
       in
       Flambda.create_function_declaration
         ~params:(List.map fst params)
-        ~return:decl.return
+        ~return
         ~body
         ~stub:decl.stub
         ~dbg:decl.dbg
@@ -365,8 +400,6 @@ let unbox_function_arguments (program : Flambda.program) : Flambda.program =
     Flambda_iterators.map_sets_of_closures_of_program program
       ~f:(unbox_set_of_closures unboxable)
   in
-  Format.printf "unboxable args:@ %a@."
-    Argument.Set.print unboxable;
   (* Format.printf "unboxable args:@ %a@.@.%a@.@.%a" *)
   (*   Argument.Set.print unboxable *)
   (*   Flambda.print_program program *)

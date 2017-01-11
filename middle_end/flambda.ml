@@ -204,7 +204,7 @@ let rec lam ppf (flam : t) =
   match flam with
   | Var (id) ->
       Variable.print ppf id
-  | Apply({func; args; kind; inline; dbg}) ->
+  | Apply({func; args; return; kind; inline; dbg}) ->
     let direct ppf () =
       match kind with
       | Indirect -> ()
@@ -217,7 +217,8 @@ let rec lam ppf (flam : t) =
       | Unroll i -> fprintf ppf "<unroll %i>" i
       | Default_inline -> ()
     in
-    fprintf ppf "@[<2>(apply%a%a<%s>@ %a%a)@]" direct () inline ()
+    fprintf ppf "@[<2>(apply%a%a%a<%s>@ %a%a)@]" direct () inline ()
+      param_type return
       (Debuginfo.to_string dbg)
       Variable.print func Variable.print_list args
   | Assign { being_assigned; new_value; } ->

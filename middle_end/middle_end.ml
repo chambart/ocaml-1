@@ -125,9 +125,9 @@ let middle_end ppf ~source_provenance ~prefixname ~backend
         +-+ ("Remove_unused_closure_vars 2",
              Remove_unused_closure_vars.remove_unused_closure_variables
               ~remove_direct_call_surrogates:false)
-        +-+ ("lift_lets 3", Lift_code.lift_lets)
         +-+ ("Unbox_arguments",
              Unbox_arguments.unbox_function_arguments)
+        +-+ ("lift_lets 3", Lift_code.lift_lets)
         +-+ ("Inline_and_simplify noinline",
              Inline_and_simplify.run ~never_inline:true ~backend
               ~prefixname ~round)
