@@ -1446,6 +1446,11 @@ let transl_int_switch arg low high cases default = match cases with
           a
           (Array.of_list inters) store)
 
+let translate_type (typ:Clambda.function_argument_type) =
+  match typ with
+  | Val
+  | Float Boxed -> typ_val
+  | Float Unboxed -> typ_float
 
 (* Auxiliary functions for optimizing "let" of boxed numbers (floats and
    boxed integers *)
@@ -1627,8 +1632,9 @@ let rec transl env e =
       if offset = 0
       then ptr
       else Cop(Caddv, [ptr; Cconst_int(offset * size_addr)], Debuginfo.none)
-  | Udirect_apply(lbl, args, dbg) ->
-      Cop(Capply typ_val, Cconst_symbol lbl :: List.map (transl env) args, dbg)
+  | Udirect_apply(lbl, args, return, dbg) ->
+      Cop(Capply (translate_type return),
+        Cconst_symbol lbl :: List.map (transl env) args, dbg)
   | Ugeneric_apply(clos, [arg], dbg) ->
       bind "fun" (transl env clos) (fun clos ->
         Cop(Capply typ_val, [get_field clos 0 dbg; transl env arg; clos],
@@ -2738,14 +2744,11 @@ let transl_function f =
       Afl_instrument.instrument_function (transl empty_env body)
     else
       transl empty_env body in
-  let translate_type (id, (typ:Clambda.function_argument_type)) =
-    match typ with
-    | Val
-    | Float Boxed -> id, typ_val
-    | Float Unboxed -> id, typ_float
+  let fun_args =
+    List.map (fun (id, typ) -> (id, translate_type typ)) f.params
   in
   Cfunction {fun_name = f.label;
-             fun_args = List.map translate_type f.params;
+             fun_args;
              fun_body = cmm_body;
              fun_fast = !Clflags.optimize_for_speed;
              fun_dbg  = f.dbg; }

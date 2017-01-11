@@ -25,6 +25,8 @@ type function_argument_type =
   | Val
   | Float of Lambda.boxed
 
+type return_type = function_argument_type
+
 type ustructured_constant =
   | Uconst_float of float
   | Uconst_int32 of int32
@@ -43,7 +45,7 @@ and uconstant =
 and ulambda =
     Uvar of Ident.t
   | Uconst of uconstant
-  | Udirect_apply of function_label * ulambda list * Debuginfo.t
+  | Udirect_apply of function_label * ulambda list * return_type * Debuginfo.t
   | Ugeneric_apply of ulambda * ulambda list * Debuginfo.t
   | Uclosure of ufunction list * ulambda list
   | Uoffset of ulambda * int
@@ -67,6 +69,7 @@ and ufunction = {
   label  : function_label;
   arity  : int;
   params : (Ident.t * function_argument_type) list;
+  return : function_argument_type;
   body   : ulambda;
   dbg    : Debuginfo.t;
 }

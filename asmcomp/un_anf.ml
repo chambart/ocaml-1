@@ -42,6 +42,7 @@ let ignore_ident_list (_ : Ident.t list) = ()
 let ignore_ident_type_list (_ : (Ident.t * Clambda.function_argument_type) list) = ()
 let ignore_direction_flag (_ : Asttypes.direction_flag) = ()
 let ignore_meth_kind (_ : Lambda.meth_kind) = ()
+let ignore_function_argument_type (_ : Clambda.function_argument_type) = ()
 
 (* CR-soon mshinwell: check we aren't traversing function bodies more than
    once (need to analyse exactly what the calls are from Cmmgen into this
@@ -77,8 +78,9 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
          of the closures will be traversed when this function is called from
          [Cmmgen.transl_function].) *)
       ignore_uconstant const
-    | Udirect_apply (label, args, dbg) ->
+    | Udirect_apply (label, args, return, dbg) ->
       ignore_function_label label;
+      ignore_function_argument_type return;
       List.iter loop args;
       ignore_debuginfo dbg
     | Ugeneric_apply (func, args, dbg) ->
@@ -87,7 +89,8 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
       ignore_debuginfo dbg
     | Uclosure (functions, captured_variables) ->
       List.iter loop captured_variables;
-      List.iter (fun ({ Clambda. label; arity; params; body; dbg } as clos) ->
+      List.iter (fun ({ Clambda. label; arity; params;
+        return; body; dbg } as clos) ->
           (match closure_environment_ident clos with
            | None -> ()
            | Some env_var ->
@@ -96,6 +99,7 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
           ignore_function_label label;
           ignore_int arity;
           ignore_ident_type_list params;
+          ignore_function_argument_type return;
           loop body;
           ignore_debuginfo dbg)
         functions
@@ -241,12 +245,13 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
       end
     | Uconst const ->
       ignore_uconstant const
-    | Udirect_apply (label, args, dbg) ->
+    | Udirect_apply (label, args, return, dbg) ->
       ignore_function_label label;
       examine_argument_list args;
       (* We don't currently traverse [args]; they should all be variables
          anyway.  If this is added in the future, take care to traverse [args]
          following the evaluation order. *)
+      ignore_function_argument_type return;
       ignore_debuginfo dbg
     | Ugeneric_apply (func, args, dbg) ->
       examine_argument_list (args @ [func]);
@@ -254,10 +259,12 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
     | Uclosure (functions, captured_variables) ->
       ignore_ulambda_list captured_variables;
       (* Start a new let stack for speed. *)
-      List.iter (fun { Clambda. label; arity; params; body; dbg; } ->
+      List.iter (fun { Clambda. label; arity; params;
+        return; body; dbg; } ->
           ignore_function_label label;
           ignore_int arity;
           ignore_ident_type_list params;
+          ignore_function_argument_type return;
           let_stack := [];
           loop body;
           let_stack := [];
@@ -406,9 +413,9 @@ let rec substitute_let_moveable is_let_moveable env (clam : Clambda.ulambda)
           Ident.print id
       end
   | Uconst _ -> clam
-  | Udirect_apply (label, args, dbg) ->
+  | Udirect_apply (label, args, return, dbg) ->
     let args = substitute_let_moveable_list is_let_moveable env args in
-    Udirect_apply (label, args, dbg)
+    Udirect_apply (label, args, return, dbg)
   | Ugeneric_apply (func, args, dbg) ->
     let func = substitute_let_moveable is_let_moveable env func in
     let args = substitute_let_moveable_list is_let_moveable env args in
@@ -601,9 +608,9 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
   | Uconst _ ->
     (* Constant closures are rewritten separately. *)
     clam, Constant
-  | Udirect_apply (label, args, dbg) ->
+  | Udirect_apply (label, args, return, dbg) ->
     let args = un_anf_list ident_info env args in
-    Udirect_apply (label, args, dbg), Fixed
+    Udirect_apply (label, args, return, dbg), Fixed
   | Ugeneric_apply (func, args, dbg) ->
     let func = un_anf ident_info env func in
     let args = un_anf_list ident_info env args in

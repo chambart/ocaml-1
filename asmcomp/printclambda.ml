@@ -78,10 +78,11 @@ and lam ppf = function
   | Uvar id ->
       Ident.print ppf id
   | Uconst c -> uconstant ppf c
-  | Udirect_apply(f, largs, _) ->
+  | Udirect_apply(f, largs, return, _) ->
       let lams ppf largs =
         List.iter (fun l -> fprintf ppf "@ %a" lam l) largs in
-      fprintf ppf "@[<2>(apply*@ %s %a)@]" f lams largs
+      fprintf ppf "@[<2>(apply*%a@ %s %a)@]"
+        function_argument_type return f lams largs
   | Ugeneric_apply(lfun, largs, _) ->
       let lams ppf largs =
         List.iter (fun l -> fprintf ppf "@ %a" lam l) largs in

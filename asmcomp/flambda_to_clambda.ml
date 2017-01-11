@@ -262,7 +262,7 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
       List.map (fun (id, var, def) -> id, to_clambda_named t env var def) defs
     in
     Uletrec (defs, to_clambda t env body)
-  | Apply { func; args; kind = Direct direct_func; dbg = dbg } ->
+  | Apply { func; args; kind = Direct direct_func; return; dbg = dbg } ->
     (* The closure _parameter_ of the function is added by cmmgen.
        At the call site, for a direct call, the closure argument must be
        explicitly added (by [to_clambda_direct_apply]); there is no special
@@ -270,7 +270,7 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
        For an indirect call, we do not need to do anything here; Cmmgen will
        do the equivalent of the previous paragraph when it generates a direct
        call to [caml_apply]. *)
-    to_clambda_direct_apply t func args direct_func dbg env
+    to_clambda_direct_apply t func args direct_func return dbg env
   | Apply { func; args; kind = Indirect; dbg = dbg } ->
     let callee = subst_var env func in
     Ugeneric_apply (check_closure callee (Flambda.Expr (Var func)),
@@ -478,7 +478,8 @@ and to_clambda_switch t env cases num_keys default =
   | [| |] -> [| |], [| |]  (* May happen when [default] is [None]. *)
   | _ -> index, actions
 
-and to_clambda_direct_apply t func args direct_func dbg env : Clambda.ulambda =
+and to_clambda_direct_apply t func args direct_func return dbg env
+      : Clambda.ulambda =
   let closed = is_function_constant t direct_func in
   let label = Compilenv.function_label direct_func in
   let uargs =
@@ -488,7 +489,7 @@ and to_clambda_direct_apply t func args direct_func dbg env : Clambda.ulambda =
        dropping any side effects.) *)
     if closed then uargs else uargs @ [subst_var env func]
   in
-  Udirect_apply (label, uargs, dbg)
+  Udirect_apply (label, uargs, to_clambda_param_type return, dbg)
 
 (* Describe how to build a runtime closure block that corresponds to the
    given Flambda set of closures.
@@ -573,6 +574,7 @@ and to_clambda_set_of_closures t env
     { label = Compilenv.function_label closure_id;
       arity = Flambda_utils.function_arity function_decl;
       params = params @ [env_var, Clambda.Val];
+      return = to_clambda_param_type function_decl.return;
       body = to_clambda t env_body function_decl.body;
       dbg = function_decl.dbg;
     }
@@ -612,6 +614,7 @@ and to_clambda_closed_set_of_closures t env symbol
     { label = Compilenv.function_label (Closure_id.wrap id);
       arity = Flambda_utils.function_arity function_decl;
       params;
+      return = to_clambda_param_type function_decl.return;
       body = to_clambda t env_body function_decl.body;
       dbg = function_decl.dbg;
     }

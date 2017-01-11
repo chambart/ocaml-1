@@ -60,7 +60,7 @@ let occurs_var var u =
   let rec occurs = function
       Uvar v -> v = var
     | Uconst _ -> false
-    | Udirect_apply(_lbl, args, _) -> List.exists occurs args
+    | Udirect_apply(_lbl, args, _return, _) -> List.exists occurs args
     | Ugeneric_apply(funct, args, _) -> occurs funct || List.exists occurs args
     | Uclosure(_fundecls, clos) -> List.exists occurs clos
     | Uoffset(u, _ofs) -> occurs u
@@ -144,7 +144,7 @@ let lambda_smaller lam threshold =
     match lam with
       Uvar _ -> ()
     | Uconst _ -> incr size
-    | Udirect_apply(_, args, _) ->
+    | Udirect_apply(_, args, _, _) ->
         size := !size + 4; lambda_list_size args
     | Ugeneric_apply(fn, args, _) ->
         size := !size + 6; lambda_size fn; lambda_list_size args
@@ -528,9 +528,9 @@ let rec substitute loc fpc sb ulam =
     Uvar v ->
       begin try Tbl.find v sb with Not_found -> ulam end
   | Uconst _ -> ulam
-  | Udirect_apply(lbl, args, dbg) ->
+  | Udirect_apply(lbl, args, return, dbg) ->
       let dbg = subst_debuginfo loc dbg in
-      Udirect_apply(lbl, List.map (substitute loc fpc sb) args, dbg)
+      Udirect_apply(lbl, List.map (substitute loc fpc sb) args, return, dbg)
   | Ugeneric_apply(fn, args, dbg) ->
       let dbg = subst_debuginfo loc dbg in
       Ugeneric_apply(substitute loc fpc sb fn,
@@ -712,7 +712,7 @@ let direct_apply fundesc funct ufunct uargs ~loc ~attribute =
       let dbg = Debuginfo.from_location loc in
         warning_if_forced_inline ~loc ~attribute
           "Function information unavailable";
-        Udirect_apply(fundesc.fun_label, app_args, dbg)
+        Udirect_apply(fundesc.fun_label, app_args, Val, dbg)
     | Some(params, body), _  ->
         bind_params loc fundesc.fun_float_const_prop params app_args body
   in
@@ -1187,7 +1187,7 @@ and close_functions fenv cenv fun_defs =
   let uncurried_defs =
     List.map
       (function
-          (id, Lfunction{kind; params; body; loc}) ->
+          (id, Lfunction{kind; params; return; body; loc}) ->
             let label = Compilenv.make_symbol (Some (Ident.unique_name id)) in
             let arity = List.length params in
             let fundesc =
@@ -1197,20 +1197,20 @@ and close_functions fenv cenv fun_defs =
                fun_inline = None;
                fun_float_const_prop = !Clflags.float_const_prop } in
             let dbg = Debuginfo.from_location loc in
-            (id, params, body, fundesc, dbg)
+            (id, params, return, body, fundesc, dbg)
         | (_, _) -> fatal_error "Closure.close_functions")
       fun_defs in
   (* Build an approximate fenv for compiling the functions *)
   let fenv_rec =
     List.fold_right
-      (fun (id, _params, _body, fundesc, _dbg) fenv ->
+      (fun (id, _params, _return, _body, fundesc, _dbg) fenv ->
         Tbl.add id (Value_closure(fundesc, Value_unknown)) fenv)
       uncurried_defs fenv in
   (* Determine the offsets of each function's closure in the shared block *)
   let env_pos = ref (-1) in
   let clos_offsets =
     List.map
-      (fun (_id, _params, _body, fundesc, _dbg) ->
+      (fun (_id, _params, _return, _body, fundesc, _dbg) ->
         let pos = !env_pos + 1 in
         env_pos := !env_pos + 1 + (if fundesc.fun_arity <> 1 then 3 else 2);
         pos)
@@ -1220,13 +1220,13 @@ and close_functions fenv cenv fun_defs =
      does not use its environment parameter is invalidated. *)
   let useless_env = ref initially_closed in
   (* Translate each function definition *)
-  let clos_fundef (id, params, body, fundesc, dbg) env_pos =
+  let clos_fundef (id, params, return, body, fundesc, dbg) env_pos =
     let env_param = Ident.create "env" in
     let cenv_fv =
       build_closure_env env_param (fv_pos - env_pos) fv in
     let cenv_body =
       List.fold_right2
-        (fun (id, _params, _body, _fundesc, _dbg) pos env ->
+        (fun (id, _params, _return, _body, _fundesc, _dbg) pos env ->
           Tbl.add id (Uoffset(Uvar env_param, pos - env_pos)) env)
         uncurried_defs clos_offsets cenv_fv in
     let (ubody, approx) = close fenv_rec cenv_body body in
@@ -1240,12 +1240,18 @@ and close_functions fenv cenv fun_defs =
           id, typ)
         params
     in
+    let return =
+      match return with
+      | Pfloatval -> Float Boxed
+      | _ -> Val
+    in
     let fun_params = if !useless_env then params else params @ [env_param, Val] in
     let f =
       {
         label  = fundesc.fun_label;
         arity  = fundesc.fun_arity;
         params = fun_params;
+        return;
         body   = ubody;
         dbg;
       }
@@ -1285,7 +1291,7 @@ and close_functions fenv cenv fun_defs =
          recompile *)
         Compilenv.backtrack snap; (* PR#6337 *)
         List.iter
-          (fun (_id, _params, _body, fundesc, _dbg) ->
+          (fun (_id, _params, _return, _body, fundesc, _dbg) ->
              fundesc.fun_closed <- false;
              fundesc.fun_inline <- None;
           )
@@ -1390,7 +1396,7 @@ let collect_exported_structured_constants a =
   and ulam = function
     | Uvar _ -> ()
     | Uconst c -> const c
-    | Udirect_apply (_, ul, _) -> List.iter ulam ul
+    | Udirect_apply (_, ul, _, _) -> List.iter ulam ul
     | Ugeneric_apply (u, ul, _) -> ulam u; List.iter ulam ul
     | Uclosure (fl, ul) ->
         List.iter (fun f -> ulam f.body) fl;
