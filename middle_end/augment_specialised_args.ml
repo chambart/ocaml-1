@@ -469,6 +469,7 @@ module Make (T : S) = struct
           func = new_fun_var;
           args = List.map fst wrapper_params @ spec_args_bound_in_the_wrapper;
           kind = Direct (Closure_id.wrap new_fun_var);
+          return = function_decl.return;
           dbg = Debuginfo.none;
           inline = Default_inline;
           specialise = Default_specialise;

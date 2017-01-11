@@ -516,6 +516,7 @@ let inline_by_copying_function_declaration ~env ~r
             (Apply {
               func;
               args;
+              return = Val;
               kind = Direct closure_id_being_applied;
               dbg;
               inline = inline_requested;

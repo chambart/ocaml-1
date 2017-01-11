@@ -517,6 +517,7 @@ let for_call_site ~env ~r ~(function_decls : Flambda.function_declarations)
     Flambda.Apply {
       func = lhs_of_application;
       args;
+      return = function_decl.return;
       kind = Direct closure_id_being_applied;
       dbg;
       inline = inline_requested;

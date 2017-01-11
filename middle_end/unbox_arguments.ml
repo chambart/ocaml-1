@@ -239,6 +239,7 @@ let unbox_function_declaration
         Apply {
           func = new_fun_var;
           args = List.map fst params;
+          return = decl.return;
           kind = Direct (Closure_id.wrap new_fun_var);
           dbg = Debuginfo.none;
           inline = Default_inline;

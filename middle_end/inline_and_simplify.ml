@@ -770,7 +770,8 @@ and simplify_apply env r ~(apply : Flambda.apply) : Flambda.t * R.t =
           in
           wrap result, r
         | Wrong ->  (* Insufficient approximation information to simplify. *)
-          Apply ({ func = lhs_of_application; args; kind = Indirect; dbg;
+          Apply ({ func = lhs_of_application; return = apply.return;
+              args; kind = Indirect; dbg;
               inline = inline_requested; specialise = specialise_requested; }),
             ret r (A.value_unknown Other)))
 
@@ -823,6 +824,7 @@ and simplify_partial_application env r ~lhs_of_application
       Apply {
         func = lhs_of_application;
         args = List.map fst freshened_params;
+        return = function_decl.Flambda.return;
         kind = Direct closure_id_being_applied;
         dbg;
         inline = Default_inline;
@@ -869,7 +871,8 @@ and simplify_over_application env r ~args ~args_approxs ~function_decls
   let expr : Flambda.t =
     Flambda.create_let func_var (Expr expr)
       (Apply { func = func_var; args = remaining_args; kind = Indirect; dbg;
-        inline = inline_requested; specialise = specialise_requested; })
+        return = Val; inline = inline_requested;
+        specialise = specialise_requested; })
   in
   let expr = Lift_code.lift_lets_expr expr ~toplevel:true in
   simplify (E.set_never_inline env) r expr

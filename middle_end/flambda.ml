@@ -35,6 +35,7 @@ type param_type =
 type apply = {
   func : Variable.t;
   args : Variable.t list;
+  return : param_type;
   kind : call_kind;
   dbg : Debuginfo.t;
   inline : Lambda.inline_attribute;

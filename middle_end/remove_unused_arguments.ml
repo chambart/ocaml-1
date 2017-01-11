@@ -83,6 +83,7 @@ let make_stub unused var (fun_decl : Flambda.function_declaration)
     Apply {
       func = renamed;
       args;
+      return = fun_decl.return;
       kind;
       dbg = fun_decl.dbg;
       inline = Default_inline;
