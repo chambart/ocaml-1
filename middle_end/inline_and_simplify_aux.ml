@@ -654,13 +654,16 @@ let populate_closure_approximations
   in
   (* Add known approximations of function parameters *)
   let env =
-    List.fold_left (fun env id ->
+    List.fold_left (fun env (id, typ) ->
         let approx =
           try Variable.Map.find id parameter_approximations
           with Not_found -> (A.value_unknown Other)
         in
+        let approx =
+          A.augment_with_param_type approx typ
+        in
         E.add env id approx)
-      env (List.map fst function_decl.params)
+      env function_decl.params
   in
   env
 

@@ -265,6 +265,9 @@ val augment_with_symbol_field : t -> Symbol.t -> int -> t
 (** Replace the description within an approximation. *)
 val replace_description : t -> descr -> t
 
+(** Improve the description by taking the type into account *)
+val augment_with_param_type : t -> Flambda.param_type -> t
+
 (** Improve the description by taking the kind into account *)
 val augment_with_kind : t -> Lambda.value_kind -> t
 

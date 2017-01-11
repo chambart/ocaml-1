@@ -172,6 +172,56 @@ let augment_with_symbol_field t symbol field =
   | Some _ -> t
 let replace_description t descr = { t with descr }
 
+let augment_with_param_type t (kind:Flambda.param_type) =
+  match kind with
+  | Val -> t
+  | Float Boxed ->
+    begin match t.descr with
+    | Value_float _ ->
+      t
+    | Value_unknown _ | Value_unresolved _ ->
+      { t with descr = Value_float Unknown }
+    | Value_unboxed_float _
+    | Value_block _
+    | Value_int _
+    | Value_char _
+    | Value_constptr _
+    | Value_boxed_int _
+    | Value_set_of_closures _
+    | Value_closure _
+    | Value_string _
+    | Value_float_array _
+    | Value_bottom ->
+      (* Unreachable *)
+      { t with descr = Value_bottom }
+    | Value_extern _ | Value_symbol _ ->
+      (* We don't know yet *)
+      t
+    end
+  | Float Unboxed ->
+    begin match t.descr with
+    | Value_unboxed_float _ ->
+      t
+    | Value_unknown _ | Value_unresolved _ ->
+      { t with descr = Value_unboxed_float Unknown }
+    | Value_float _
+    | Value_block _
+    | Value_int _
+    | Value_char _
+    | Value_constptr _
+    | Value_boxed_int _
+    | Value_set_of_closures _
+    | Value_closure _
+    | Value_string _
+    | Value_float_array _
+    | Value_bottom ->
+      (* Unreachable *)
+      { t with descr = Value_bottom }
+    | Value_extern _ | Value_symbol _ ->
+      (* We don't know yet *)
+      t
+    end
+
 let augment_with_kind t (kind:Lambda.value_kind) =
   match kind with
   | Pgenval -> t
