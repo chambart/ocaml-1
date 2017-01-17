@@ -222,6 +222,12 @@ let augment_with_param_type t (kind:Flambda.param_type) =
       t
     end
 
+let augment_param_type_with_approx t (kind:Flambda.param_type) : Flambda.param_type =
+  match t.descr with
+  | Value_float _ -> Float Boxed
+  | Value_unboxed_float _ -> Float Unboxed
+  | _ -> kind
+
 let augment_with_kind t (kind:Lambda.value_kind) =
   match kind with
   | Pgenval -> t

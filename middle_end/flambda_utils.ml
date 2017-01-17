@@ -102,7 +102,9 @@ let rec same (l1 : Flambda.t) (l2 : Flambda.t) =
   | Apply a1 , Apply a2  ->
     a1.kind = a2.kind
       && Variable.equal a1.func a2.func
-      && Misc.Stdlib.List.equal Variable.equal a1.args a2.args
+      && Misc.Stdlib.List.equal (fun (v1, t1) (v2, t2) ->
+           (Variable.equal v1 v2) && (compare_param_type t1 t2 = 0))
+           a1.args a2.args
   | Apply _, _ | _, Apply _ -> false
   | Let { var = var1; defining_expr = defining_expr1; body = body1; _ },
       Let { var = var2; defining_expr = defining_expr2; body = body2; _ } ->
@@ -260,7 +262,7 @@ let toplevel_substitution sb tree =
       Assign { being_assigned; new_value; }
     | Apply { func; args; kind; return; dbg; inline; specialise; } ->
       let func = sb func in
-      let args = List.map sb args in
+      let args = List.map (fun (var, typ) -> sb var, typ) args in
       Apply { func; args; kind; return; dbg; inline; specialise; }
     | If_then_else (cond, e1, e2) ->
       let cond = sb cond in
@@ -741,7 +743,10 @@ let substitute_read_symbol_field_for_variables
     | Apply { func; args; return; kind; dbg; inline; specialise } ->
       let func, bind_func = make_var_subst func in
       let args, bind_args =
-        List.split (List.map make_var_subst args)
+        List.split (List.map (fun (var, typ) ->
+          let var, bind = make_var_subst var in
+          (var, typ), bind)
+          args)
       in
       bind_func @@
       List.fold_right (fun f expr -> f expr) bind_args @@

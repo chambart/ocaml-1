@@ -274,7 +274,7 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
   | Apply { func; args; kind = Indirect; dbg = dbg } ->
     let callee = subst_var env func in
     Ugeneric_apply (check_closure callee (Flambda.Expr (Var func)),
-      subst_vars env args, dbg)
+      subst_vars env (List.map fst args), dbg)
   | Switch (arg, sw) ->
     let aux () : Clambda.ulambda =
       let const_index, const_actions =
@@ -478,12 +478,13 @@ and to_clambda_switch t env cases num_keys default =
   | [| |] -> [| |], [| |]  (* May happen when [default] is [None]. *)
   | _ -> index, actions
 
-and to_clambda_direct_apply t func args direct_func return dbg env
+and to_clambda_direct_apply t func (args:(Variable.t * Flambda.param_type) list)
+      direct_func return dbg env
       : Clambda.ulambda =
   let closed = is_function_constant t direct_func in
   let label = Compilenv.function_label direct_func in
   let uargs =
-    let uargs = subst_vars env args in
+    let uargs = subst_vars env (List.map fst args) in
     (* Remove the closure argument if the closure is closed.  (Note that the
        closure argument is always a variable, so we can be sure we are not
        dropping any side effects.) *)

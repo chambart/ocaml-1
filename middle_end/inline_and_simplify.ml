@@ -680,7 +680,16 @@ and simplify_apply env r ~(apply : Flambda.apply) : Flambda.t * R.t =
   let dbg = E.add_inlined_debuginfo env ~dbg in
   simplify_free_variable env lhs_of_application
     ~f:(fun env lhs_of_application lhs_of_application_approx ->
-      simplify_free_variables env args ~f:(fun env args args_approxs ->
+      simplify_free_variables env (List.map fst args)
+        ~f:(fun env args_without_types args_approxs ->
+        let args =
+          List.map2 (fun arg (_, typ) -> arg, typ) args_without_types args
+        in
+        let args =
+          List.map2 (fun (arg, typ) approx ->
+            arg, A.augment_param_type_with_approx approx typ)
+            args args_approxs
+        in
         (* By using the approximation of the left-hand side of the
            application, attempt to determine which function is being applied
            (even if the application is currently [Indirect]).  If
@@ -784,7 +793,8 @@ and simplify_full_application env r ~function_decls ~lhs_of_application
     ~inline_requested ~specialise_requested
 
 and simplify_partial_application env r ~lhs_of_application
-      ~closure_id_being_applied ~function_decl ~args ~dbg
+      ~closure_id_being_applied ~function_decl
+      ~(args:(Variable.t * Flambda.param_type) list) ~dbg
       ~inline_requested ~specialise_requested =
   let arity = Flambda_utils.function_arity function_decl in
   assert (arity > List.length args);
@@ -823,7 +833,7 @@ and simplify_partial_application env r ~lhs_of_application
     let body : Flambda.t =
       Apply {
         func = lhs_of_application;
-        args = List.map fst freshened_params;
+        args = freshened_params;
         return = function_decl.Flambda.return;
         kind = Direct closure_id_being_applied;
         dbg;
@@ -843,7 +853,7 @@ and simplify_partial_application env r ~lhs_of_application
   in
   let with_known_args =
     Flambda_utils.bind
-      ~bindings:(List.map (fun (var, arg) ->
+      ~bindings:(List.map (fun (var, (arg, _typ)) ->
           var, Flambda.Expr (Var arg)) applied_args)
       ~body:wrapper_accepting_remaining_args
   in

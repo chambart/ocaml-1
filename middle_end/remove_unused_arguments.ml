@@ -77,7 +77,7 @@ let make_stub unused var (fun_decl : Flambda.function_declaration)
           Variable.Map.add arg outer_var additional_specialised_args)
       additional_specialised_args args'
   in
-  let args = List.map (fun (_, var, _typ) -> var) used_args' in
+  let args = List.map (fun (_, var, typ) -> var, typ) used_args' in
   let kind = Flambda.Direct (Closure_id.wrap renamed) in
   let body : Flambda.t =
     Apply {

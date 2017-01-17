@@ -37,7 +37,8 @@ let inline env r ~lhs_of_application
     ~(function_decls : Flambda.function_declarations)
     ~closure_id_being_applied ~(function_decl : Flambda.function_declaration)
     ~value_set_of_closures ~only_use_of_function ~original ~recursive
-    ~(args : Variable.t list) ~size_from_approximation ~dbg ~simplify
+    ~(args : (Variable.t * Flambda.param_type) list)
+    ~size_from_approximation ~dbg ~simplify
     ~(inline_requested : Lambda.inline_attribute)
     ~(specialise_requested : Lambda.specialise_attribute)
     ~self_call ~fun_cost ~inlining_threshold =
@@ -106,7 +107,7 @@ let inline env r ~lhs_of_application
       in
       Don't_try_it (S.Not_inlined.Function_obviously_too_large threshold)
     else if not (toplevel && branch_depth = 0)
-         && A.all_not_useful (E.find_list_exn env args) then
+         && A.all_not_useful (E.find_list_exn env (List.map fst args)) then
       (* When all of the arguments to the function being inlined are unknown,
          then we cannot materially simplify the function.  As such, we know
          what the benefit of inlining it would be: just removing the call.
@@ -302,7 +303,8 @@ let specialise env r ~lhs_of_application
       ~(function_decl : Flambda.function_declaration)
       ~closure_id_being_applied
       ~(value_set_of_closures : Simple_value_approx.value_set_of_closures)
-      ~args ~args_approxs ~dbg ~simplify ~original ~recursive ~self_call
+      ~(args : (Variable.t * Flambda.param_type) list)
+      ~args_approxs ~dbg ~simplify ~original ~recursive ~self_call
       ~inlining_threshold ~fun_cost
       ~inline_requested ~specialise_requested =
   let bound_vars =

@@ -29,7 +29,7 @@ val for_call_site
   -> closure_id_being_applied:Closure_id.t
   -> function_decl:Flambda.function_declaration
   -> value_set_of_closures:Simple_value_approx.value_set_of_closures
-  -> args:Variable.t list
+  -> args:(Variable.t * Flambda.param_type) list
   -> args_approxs:Simple_value_approx.t list
   -> dbg:Debuginfo.t
   -> simplify:Inlining_decision_intf.simplify

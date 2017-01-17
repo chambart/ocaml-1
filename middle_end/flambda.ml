@@ -34,7 +34,7 @@ type param_type =
 
 type apply = {
   func : Variable.t;
-  args : Variable.t list;
+  args : (Variable.t * param_type) list;
   return : param_type;
   kind : call_kind;
   dbg : Debuginfo.t;
@@ -199,6 +199,10 @@ let param_type ppf = function
   | Float Lambda.Boxed -> fprintf ppf ":float"
   | Float Lambda.Unboxed -> fprintf ppf ":float_unboxed"
 
+let params_with_type ppf =
+  List.iter (fun (id, typ) ->
+    fprintf ppf "@ %a%a" Variable.print id param_type typ)
+
 (** CR-someday lwhite: use better name than this *)
 let rec lam ppf (flam : t) =
   match flam with
@@ -220,7 +224,7 @@ let rec lam ppf (flam : t) =
     fprintf ppf "@[<2>(apply%a%a%a<%s>@ %a%a)@]" direct () inline ()
       param_type return
       (Debuginfo.to_string dbg)
-      Variable.print func Variable.print_list args
+      Variable.print func params_with_type args
   | Assign { being_assigned; new_value; } ->
     fprintf ppf "@[<2>(assign@ %a@ %a)@]"
       Mutable_variable.print being_assigned
@@ -370,10 +374,6 @@ and print_named ppf (named : named) =
     (* lam ppf expr *)
 
 and print_function_declaration ppf var (f : function_declaration) =
-  let params ppf =
-    List.iter (fun (id, typ) ->
-      fprintf ppf "@ %a%a" Variable.print id param_type typ)
-  in
   let stub =
     if f.stub then
       " *stub*"
@@ -401,7 +401,7 @@ and print_function_declaration ppf var (f : function_declaration) =
   in
   fprintf ppf "@[<2>(%a%s%s%s%s@ =@ fun@[<2>%a@] %a->@ @[<2>%a@])@]@ "
     Variable.print var stub is_a_functor inline specialise
-    params f.params param_type f.return lam f.body
+    params_with_type f.params param_type f.return lam f.body
 
 and print_set_of_closures ppf (set_of_closures : set_of_closures) =
   match set_of_closures with
@@ -548,7 +548,7 @@ let rec variables_usage ?ignore_uses_as_callee ?ignore_uses_as_argument
         | Some () -> ()
         end;
         begin match ignore_uses_as_argument with
-        | None -> List.iter free_variable args
+        | None -> List.iter (fun (var, _typ) -> free_variable var) args
         | Some () -> ()
         end
       | Let { var; free_vars_of_defining_expr; free_vars_of_body;

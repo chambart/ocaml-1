@@ -232,7 +232,7 @@ let analyse_functions ~backend ~param_to_param
         | Some callee_arg ->
           relation := anything_to_param ~callee ~callee_arg !relation
       done;
-      List.iteri (fun callee_pos caller_arg ->
+      List.iteri (fun callee_pos (caller_arg, _typ) ->
           check_argument ~caller ~callee ~callee_pos ~caller_arg)
         args
     | _ -> ()

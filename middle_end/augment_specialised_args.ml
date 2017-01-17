@@ -452,8 +452,9 @@ module Make (T : S) = struct
     let spec_args_bound_in_the_wrapper =
       (* N.B.: in the order matching the new specialised argument parameters
          to the main function. *)
-      Variable.Map.data
-        new_inner_vars_to_spec_args_bound_in_the_wrapper_renaming
+      List.map (fun v -> v, Flambda.Val)
+        (Variable.Map.data
+           new_inner_vars_to_spec_args_bound_in_the_wrapper_renaming)
     in
     (* New definitions that project from existing specialised args need
        to be rewritten to use the corresponding specialised args of
@@ -467,7 +468,7 @@ module Make (T : S) = struct
       let apply : Flambda.expr =
         Apply {
           func = new_fun_var;
-          args = List.map fst wrapper_params @ spec_args_bound_in_the_wrapper;
+          args = wrapper_params @ spec_args_bound_in_the_wrapper;
           kind = Direct (Closure_id.wrap new_fun_var);
           return = function_decl.return;
           dbg = Debuginfo.none;

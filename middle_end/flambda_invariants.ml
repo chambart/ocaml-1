@@ -192,7 +192,10 @@ let variable_and_symbol_invariants (program : Flambda.program) =
     | Var var -> check_variable_is_bound env var
     | Apply { func; args; return; kind; dbg; inline; specialise; } ->
       check_variable_is_bound env func;
-      check_variables_are_bound env args;
+      List.iter (fun (arg, typ) ->
+        check_variable_is_bound env arg;
+        ignore_param_type typ)
+        args;
       ignore_param_type return;
       ignore_call_kind kind;
       ignore_debuginfo dbg;

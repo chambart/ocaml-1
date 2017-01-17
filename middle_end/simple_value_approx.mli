@@ -268,6 +268,9 @@ val replace_description : t -> descr -> t
 (** Improve the description by taking the type into account *)
 val augment_with_param_type : t -> Flambda.param_type -> t
 
+(** Improve the type by taking the description into account *)
+val augment_param_type_with_approx : t -> Flambda.param_type -> Flambda.param_type
+
 (** Improve the description by taking the kind into account *)
 val augment_with_kind : t -> Lambda.value_kind -> t
 

@@ -24,12 +24,13 @@ let new_var name =
   Variable.create name
     ~current_compilation_unit:(Compilation_unit.get_current_exn ())
 
-let which_function_parameters_can_we_specialise ~params ~args
+let which_function_parameters_can_we_specialise ~params
+      ~(args : (Variable.t * Flambda.param_type) list)
       ~args_approxs ~(invariant_params:Variable.Set.t Variable.Map.t lazy_t)
       ~specialised_args =
   assert (List.length params = List.length args);
   assert (List.length args = List.length args_approxs);
-  List.fold_right2 (fun (var, arg) approx
+  List.fold_right2 (fun (var, (arg, _typ)) approx
     (worth_specialising_args, spec_args, args, args_decl) ->
       let spec_args =
         if Variable.Map.mem var (Lazy.force invariant_params) ||
@@ -115,9 +116,10 @@ let inline_by_copying_function_body ~env ~r
       ~(inline_requested : Lambda.inline_attribute)
       ~(specialise_requested : Lambda.specialise_attribute)
       ~closure_id_being_applied
-      ~(function_decl : Flambda.function_declaration) ~args ~dbg ~simplify =
+      ~(function_decl : Flambda.function_declaration)
+      ~(args : (Variable.t * Flambda.param_type) list) ~dbg ~simplify =
   assert (E.mem env lhs_of_application);
-  assert (List.for_all (E.mem env) args);
+  assert (List.for_all (E.mem env) (List.map fst args));
   let r =
     if function_decl.stub then r
     else R.map_benefit r B.remove_call
@@ -141,7 +143,7 @@ let inline_by_copying_function_body ~env ~r
   in
   let bindings_for_params_to_args =
     (* Bind the function's parameters to the arguments from the call site. *)
-    let args = List.map (fun arg -> Flambda.Expr (Var arg)) args in
+    let args = List.map (fun (arg, _typ) -> Flambda.Expr (Var arg)) args in
     Flambda_utils.bind ~body ~bindings:(List.combine freshened_params args)
   in
   (* Add bindings for the variables bound by the closure. *)
@@ -183,7 +185,8 @@ let inline_by_copying_function_declaration ~env ~r
     ~(inline_requested : Lambda.inline_attribute)
     ~closure_id_being_applied
     ~(function_decl : Flambda.function_declaration)
-    ~args ~args_approxs
+    ~(args:(Variable.t * Flambda.param_type) list)
+    ~args_approxs
     ~(invariant_params:Variable.Set.t Variable.Map.t lazy_t)
     ~(specialised_args : Flambda.specialised_to Variable.Map.t)
     ~direct_call_surrogates ~dbg ~simplify =
@@ -461,7 +464,7 @@ let inline_by_copying_function_declaration ~env ~r
                                set contains multiply-recursive functions. *)
                             Variable.Set.mem param args)
                         specialised_params
-                        apply.args
+                        (List.map fst apply.args)
                   in
                   if apply_is_preserving_specialised_args then
                     Flambda.Apply
@@ -515,7 +518,7 @@ let inline_by_copying_function_declaration ~env ~r
           (Flambda.create_let func (Project_closure project_closure)
             (Apply {
               func;
-              args;
+              args = List.map (fun v -> v, Flambda.Val) args;
               return = Val;
               kind = Direct closure_id_being_applied;
               dbg;

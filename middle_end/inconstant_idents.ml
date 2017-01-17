@@ -279,7 +279,7 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
     | Apply ({func; args; _ }) ->
       mark_curr curr;
       mark_var func curr;
-      mark_vars args curr;
+      mark_vars (List.map fst args) curr;
     | Switch (arg,sw) ->
       mark_curr curr;
       mark_var arg curr;

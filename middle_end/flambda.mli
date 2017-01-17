@@ -46,7 +46,7 @@ type apply = {
   (* CR-soon mshinwell: rename func -> callee, and
      lhs_of_application -> callee *)
   func : Variable.t;
-  args : Variable.t list;
+  args : (Variable.t * param_type) list;
   return : param_type;
   kind : call_kind;
   dbg : Debuginfo.t;

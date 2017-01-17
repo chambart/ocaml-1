@@ -67,10 +67,10 @@ let collect_named (c:collection) (named:Flambda.named) =
 let collect_expr (c:collection) (expr:Flambda.t) =
   match expr with
   | Apply { func; args; kind = Indirect } ->
-    List.iter (add c Anything_else) args;
+    List.iter (fun (var, _typ) -> add c Anything_else var) args;
     add c Anything_else func
   | Apply { func; args; kind = Direct closure_id } ->
-    List.iteri (fun i v ->
+    List.iteri (fun i (v, _typ) ->
       add c (Argument_of (Argument.Set.singleton (closure_id, i))) v)
       args;
     add c Anything_else func
@@ -250,7 +250,7 @@ let unbox_function_declaration
       let apply : Flambda.expr =
         Apply {
           func = new_fun_var;
-          args = List.map fst params;
+          args = List.map (fun (var, _) -> var, Flambda.Val) params;
           return;
           kind = Direct (Closure_id.wrap new_fun_var);
           dbg = Debuginfo.none;
@@ -400,6 +400,8 @@ let unbox_function_arguments (program : Flambda.program) : Flambda.program =
     Flambda_iterators.map_sets_of_closures_of_program program
       ~f:(unbox_set_of_closures unboxable)
   in
+  (* Format.printf "unboxable args:@ %a@." *)
+  (*   Argument.Set.print unboxable; *)
   (* Format.printf "unboxable args:@ %a@.@.%a@.@.%a" *)
   (*   Argument.Set.print unboxable *)
   (*   Flambda.print_program program *)
