@@ -625,9 +625,12 @@ and simplify_set_of_closures original_env r
       | inline ->
         inline
     in
+    let return =
+      A.augment_param_type_with_approx (R.approx r) function_decl.return
+    in
     let function_decl =
       Flambda.create_function_declaration ~params:function_decl.params
-        ~return:function_decl.return
+        ~return
         ~body ~stub:function_decl.stub ~dbg:function_decl.dbg
         ~inline ~specialise:function_decl.specialise
         ~is_a_functor:function_decl.is_a_functor
