@@ -16,6 +16,63 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+type typ = Bottom | Type of Flambda.param_type
+
+let union_typ typ1 typ2 =
+  match typ1, typ2 with
+  | Bottom, t | t, Bottom -> t
+  | Type Val, _ | _, Type Val -> Type Val
+  | Type t1, Type t2 when t1 = t2 -> typ1
+  | Type _, Type _ -> Type Val
+
+let inter_typ typ (kind:Flambda.param_type) =
+  match typ, kind with
+  | Bottom, Float _ ->
+    Type kind
+  | Bottom, Val ->
+    Bottom
+  | Type Val, t | Type t, Val ->
+    Type t
+  | Type Float k1, Float k2 ->
+    assert(k1 = k2);
+    typ
+
+type env = {
+  current_function : Closure_id.t;
+  def : typ Variable.Map.t
+}
+
+let rec find_return_type env (expr:Flambda.t) : typ =
+  match expr with
+  | Var v ->
+    begin match Variable.Map.find v env.def with
+    | exception Not_found -> Type Val
+    | v -> v
+    end
+  | Let { var; defining_expr; kind; body } ->
+    let typ = find_return_type_named env defining_expr in
+    let typ = inter_typ typ kind in
+    let env = { env with def = Variable.Map.add var typ env.def } in
+    find_return_type env body
+  | If_then_else (_cond, ifso, ifnot) ->
+    let typ1 = find_return_type env ifso in
+    let typ2 = find_return_type env ifnot in
+    union_typ typ1 typ2
+  | Apply { return = (Float _ as return) } ->
+    Type return
+  | Apply { kind = Direct closure_id } when
+      Closure_id.equal closure_id env.current_function ->
+    Bottom
+  | _ ->
+    Type Val
+
+and find_return_type_named env (named:Flambda.named) : typ =
+  match named with
+  | Expr e ->
+    find_return_type env e
+  | _ ->
+    Type Val
+
 let collect_function_uses (program:Flambda.program) =
   let projected_tbl = Closure_id.Tbl.create 10 in
   let not_direct_called_set = ref Variable.Set.empty in
@@ -108,7 +165,8 @@ let improve_type_annotations (program:Flambda.program) =
     ~f:(fun (set_of_closures : Flambda.set_of_closures) ->
       let funs =
         Variable.Map.mapi (fun fun_var (decl:Flambda.function_declaration) ->
-          match Closure_id.Map.find (Closure_id.wrap fun_var) function_uses with
+          let closure_id = Closure_id.wrap fun_var in
+          match Closure_id.Map.find closure_id function_uses with
           | exception Not_found -> decl
           | types ->
             let params =
@@ -120,9 +178,26 @@ let improve_type_annotations (program:Flambda.program) =
                   param, typ)
                 decl.params types
             in
+            let return_type =
+              let initial_env =
+                List.fold_left (fun env (param, typ) ->
+                  Variable.Map.add param (Type typ) env)
+                  Variable.Map.empty
+                  params
+              in
+              find_return_type
+                { current_function = closure_id;
+                  def = initial_env }
+                decl.body
+            in
+            let return : Flambda.param_type =
+              match inter_typ return_type decl.return with
+              | Bottom -> Val
+              | Type t -> t
+            in
             Flambda.create_function_declaration
               ~params
-              ~return:decl.return
+              ~return
               ~body:decl.body
               ~stub:decl.stub
               ~dbg:decl.dbg
