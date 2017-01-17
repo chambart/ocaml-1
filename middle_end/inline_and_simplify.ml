@@ -626,6 +626,9 @@ and simplify_set_of_closures original_env r
         inline
     in
     let return =
+      (* Format.printf "return approx %a@ %a@." *)
+      (*   Variable.print fun_var *)
+      (*   A.print (R.approx r); *)
       A.augment_param_type_with_approx (R.approx r) function_decl.return
     in
     let function_decl =
@@ -1124,12 +1127,15 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
   | Apply apply ->
     simplify_apply env r ~apply
   | Let _ ->
-    let for_defining_expr (env, r) var defining_expr =
+    let for_defining_expr (env, r) var kind defining_expr =
       let defining_expr, r = simplify_named env r defining_expr in
       let var, sb = Freshening.add_variable (E.freshening env) var in
       let env = E.set_freshening env sb in
-      let env = E.add env var (R.approx r) in
-      (env, r), var, defining_expr
+      let approx = R.approx r in
+      let kind = A.augment_param_type_with_approx approx kind in
+      let approx = A.augment_with_param_type approx kind in
+      let env = E.add env var approx in
+      (env, r), var, kind, defining_expr
     in
     let for_last_body (env, r) body =
       simplify env r body

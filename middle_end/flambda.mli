@@ -177,6 +177,7 @@ and named =
 
 and let_expr = private {
   var : Variable.t;
+  kind : param_type;
   defining_expr : named;
   body : t;
   (* CR-someday mshinwell: we could consider having these be keys into some
@@ -471,7 +472,8 @@ val free_symbols_program : program -> Symbol.Set.t
 val fold_lets_option
    : t
   -> init:'a
-  -> for_defining_expr:('a -> Variable.t -> named -> 'a * Variable.t * named)
+  -> for_defining_expr:('a -> Variable.t -> param_type -> named ->
+                        'a * Variable.t * param_type * named)
   -> for_last_body:('a -> t -> t * 'b)
   (* CR-someday mshinwell: consider making [filter_defining_expr]
      optional *)
@@ -482,7 +484,7 @@ val fold_lets_option
 (** Like [fold_lets_option], but just a map. *)
 val map_lets
    : t
-  -> for_defining_expr:(Variable.t -> named -> named)
+  -> for_defining_expr:(Variable.t -> param_type -> named -> param_type * named)
   -> for_last_body:(t -> t)
   -> after_rebuild:(t -> t)
   -> t
@@ -497,7 +499,7 @@ val iter_lets
 
 (** Creates a [Let] expression.  (This computes the free variables of the
     defining expression and the body.) *)
-val create_let : Variable.t -> named -> t -> t
+val create_let : Variable.t -> ?kind:param_type -> named -> t -> t
 
 (** Apply the specified function [f] to the defining expression of the given
     [Let]-expression, returning a new [Let]. *)
@@ -525,6 +527,7 @@ module With_free_variables : sig
       [expr]. *)
   val create_let_reusing_defining_expr
      : Variable.t
+    -> ?kind:param_type
     -> named t
     -> expr
     -> expr
@@ -533,6 +536,7 @@ module With_free_variables : sig
       [named]. *)
   val create_let_reusing_body
      : Variable.t
+    -> ?kind:param_type
     -> named
     -> expr t
     -> expr
@@ -540,6 +544,7 @@ module With_free_variables : sig
   (** O(1) time. *)
   val create_let_reusing_both
      : Variable.t
+    -> ?kind:param_type
     -> named t
     -> expr t
     -> expr

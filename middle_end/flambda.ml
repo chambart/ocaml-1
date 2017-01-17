@@ -98,6 +98,7 @@ and named =
 
 and let_expr = {
   var : Variable.t;
+  kind : param_type;
   defining_expr : named;
   body : t;
   free_vars_of_defining_expr : Variable.Set.t;
@@ -244,16 +245,17 @@ let rec lam ppf (flam : t) =
       print_args args
   | Proved_unreachable ->
       fprintf ppf "unreachable"
-  | Let { var = id; defining_expr = arg; body; _ } ->
+  | Let { var = id; kind; defining_expr = arg; body; _ } ->
       let rec letbody (ul : t) =
         match ul with
-        | Let { var = id; defining_expr = arg; body; _ } ->
-            fprintf ppf "@ @[<2>%a@ %a@]" Variable.print id print_named arg;
+        | Let { var = id; kind; defining_expr = arg; body; _ } ->
+            fprintf ppf "@ @[<2>%a%a@ %a@]" Variable.print id param_type kind
+              print_named arg;
             letbody body
         | _ -> ul
       in
-      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a@ %a@]"
-        Variable.print id print_named arg;
+      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a%a@ %a@]"
+        Variable.print id param_type kind print_named arg;
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" lam expr
   | Let_mutable { var = mut_var; initial_value = var; body; contents_kind } ->
@@ -685,7 +687,7 @@ let used_variables_named ?ignore_uses_in_project_var named =
   variables_usage_named ?ignore_uses_in_project_var
     ~all_used_variables:true named
 
-let create_let var defining_expr body : t =
+let create_let var ?(kind=Val) defining_expr body : t =
   begin match !Clflags.dump_flambda_let with
   | None -> ()
   | Some stamp ->
@@ -703,6 +705,7 @@ let create_let var defining_expr body : t =
   in
   Let {
     var;
+    kind;
     defining_expr;
     body;
     free_vars_of_defining_expr;
@@ -719,6 +722,7 @@ let map_defining_expr_of_let let_expr ~f =
     in
     Let {
       var = let_expr.var;
+      kind = let_expr.kind;
       defining_expr;
       body = let_expr.body;
       free_vars_of_defining_expr;
@@ -740,30 +744,30 @@ let iter_lets t ~for_defining_expr ~for_last_body ~for_each_let =
 let map_lets t ~for_defining_expr ~for_last_body ~after_rebuild =
   let rec loop (t : t) ~rev_lets =
     match t with
-    | Let { var; defining_expr; body; _ } ->
-      let new_defining_expr =
-        for_defining_expr var defining_expr
+    | Let { var; defining_expr; kind; body; _ } ->
+      let new_kind, new_defining_expr =
+        for_defining_expr var kind defining_expr
       in
       let original =
-        if new_defining_expr == defining_expr then
+        if new_defining_expr == defining_expr && new_kind == kind then
           Some t
         else
           None
       in
-      let rev_lets = (var, new_defining_expr, original) :: rev_lets in
+      let rev_lets = (var, kind, new_defining_expr, original) :: rev_lets in
       loop body ~rev_lets
     | t ->
       let last_body = for_last_body t in
       (* As soon as we see a change, we have to rebuild that [Let] and every
          outer one. *)
       let seen_change = ref (not (last_body == t)) in
-      List.fold_left (fun t (var, defining_expr, original) ->
+      List.fold_left (fun t (var, kind, defining_expr, original) ->
           let let_expr =
             match original with
             | Some original when not !seen_change -> original
             | Some _ | None ->
               seen_change := true;
-              create_let var defining_expr t
+              create_let var ~kind defining_expr t
           in
           let new_let = after_rebuild let_expr in
           if not (new_let == let_expr) then begin
@@ -850,34 +854,37 @@ module With_free_variables = struct
   let of_named named =
     Named (named, free_variables_named named)
 
-  let create_let_reusing_defining_expr var (t : named t) body =
+  let create_let_reusing_defining_expr var ?(kind=Val) (t : named t) body =
     match t with
     | Named (defining_expr, free_vars_of_defining_expr) ->
       Let {
         var;
+        kind;
         defining_expr;
         body;
         free_vars_of_defining_expr;
         free_vars_of_body = free_variables body;
       }
 
-  let create_let_reusing_body var defining_expr (t : expr t) =
+  let create_let_reusing_body var ?(kind=Val) defining_expr (t : expr t) =
     match t with
     | Expr (body, free_vars_of_body) ->
       Let {
         var;
+        kind;
         defining_expr;
         body;
         free_vars_of_defining_expr = free_variables_named defining_expr;
         free_vars_of_body;
       }
 
-  let create_let_reusing_both var (t1 : named t) (t2 : expr t) =
+  let create_let_reusing_both var ?(kind=Val) (t1 : named t) (t2 : expr t) =
     match t1, t2 with
     | Named (defining_expr, free_vars_of_defining_expr),
         Expr (body, free_vars_of_body) ->
       Let {
         var;
+        kind;
         defining_expr;
         body;
         free_vars_of_defining_expr;
@@ -901,14 +908,15 @@ end
 
 let fold_lets_option
     t ~init
-    ~(for_defining_expr:('a -> Variable.t -> named -> 'a * Variable.t * named))
+    ~(for_defining_expr:('a -> Variable.t -> param_type -> named ->
+                         'a * Variable.t * param_type * named))
     ~for_last_body
     ~(filter_defining_expr:('b -> Variable.t -> named -> Variable.Set.t ->
                             'b * Variable.t * named option)) =
   let finish ~last_body ~acc ~rev_lets =
     let module W = With_free_variables in
     let acc, t =
-      List.fold_left (fun (acc, t) (var, defining_expr) ->
+      List.fold_left (fun (acc, t) (var, kind, defining_expr) ->
           let free_vars_of_body = W.free_variables t in
           let acc, var, defining_expr =
             filter_defining_expr acc var defining_expr free_vars_of_body
@@ -917,7 +925,7 @@ let fold_lets_option
           | None -> acc, t
           | Some defining_expr ->
             let let_expr =
-              W.create_let_reusing_body var defining_expr t
+              W.create_let_reusing_body var ~kind defining_expr t
             in
             acc, W.of_expr let_expr)
         (acc, W.of_expr last_body)
@@ -927,11 +935,11 @@ let fold_lets_option
   in
   let rec loop (t : t) ~acc ~rev_lets =
     match t with
-    | Let { var; defining_expr; body; _ } ->
-      let acc, var, defining_expr =
-        for_defining_expr acc var defining_expr
+    | Let { var; defining_expr; kind; body; _ } ->
+      let acc, var, kind, defining_expr =
+        for_defining_expr acc var kind defining_expr
       in
-      let rev_lets = (var, defining_expr) :: rev_lets in
+      let rev_lets = (var, kind, defining_expr) :: rev_lets in
       loop body ~acc ~rev_lets
     | t ->
       let last_body, acc = for_last_body acc t in

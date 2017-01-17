@@ -302,7 +302,7 @@ let map_general ~toplevel f f_named tree =
           let done_something = ref false in
           let defs =
             List.map (fun (id, lam) ->
-                id, aux_named_done_something id lam done_something)
+                id, aux_named_done_something id Flambda.Val lam done_something)
               defs
           in
           let body = aux_done_something body done_something in
@@ -391,7 +391,8 @@ let map_general ~toplevel f f_named tree =
       done_something := true
     end;
     new_expr
-  and aux_named (id : Variable.t) (named : Flambda.named) =
+  and aux_named (id : Variable.t) (kind : Flambda.param_type)
+      (named : Flambda.named) =
     let named : Flambda.named =
       match named with
       | Symbol _ | Unboxed_const _ | Const _ | Allocated_const _ | Read_mutable _
@@ -438,9 +439,10 @@ let map_general ~toplevel f f_named tree =
         if new_expr == expr then named
         else Expr new_expr
     in
-    f_named id named
-  and aux_named_done_something id named done_something =
-    let new_named = aux_named id named in
+    (* XXX Should be Flambda.Val if we might change the type *)
+    kind, f_named id named
+  and aux_named_done_something id kind named done_something =
+    let _new_kind, new_named = aux_named id kind named in
     if not (new_named == named) then begin
       done_something := true
     end;
