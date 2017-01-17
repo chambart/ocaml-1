@@ -731,10 +731,14 @@ let rec meet_descr ~really_import_approx d1 d2 = match d1, d2 with
       d1
   | Value_extern e1, Value_extern e2 when Export_id.equal e1 e2 ->
       d1
-  | Value_float i, Value_float j when i = j ->
+  | Value_float (Const i), Value_float (Const j) when i = j ->
       d1
-  | Value_unboxed_float i, Value_unboxed_float j when i = j ->
+  | Value_float _, Value_float _ ->
+      Value_float Unknown
+  | Value_unboxed_float (Const i), Value_unboxed_float (Const j) when i = j ->
       d1
+  | Value_unboxed_float _, Value_unboxed_float _ ->
+      Value_unboxed_float Unknown
   | Value_boxed_int (bi1, i1), Value_boxed_int (bi2, i2) when
       equal_boxed_int bi1 i1 bi2 i2 ->
       d1
