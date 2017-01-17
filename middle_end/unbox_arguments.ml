@@ -16,6 +16,134 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+let collect_function_uses (program:Flambda.program) =
+  let projected_tbl = Closure_id.Tbl.create 10 in
+  let not_direct_called_set = ref Variable.Set.empty in
+  let direct_calls = Closure_id.Tbl.create 10 in
+  let projected closure_id var =
+    let set =
+      try
+        Closure_id.Tbl.find projected_tbl closure_id
+      with Not_found ->
+        Variable.Set.singleton (Closure_id.unwrap closure_id)
+    in
+    Closure_id.Tbl.replace projected_tbl closure_id
+      (Variable.Set.add var set)
+  in
+  let not_direct_called var =
+    not_direct_called_set := Variable.Set.union var !not_direct_called_set
+  in
+  let direct_call closure_id args =
+    let types =
+      match Closure_id.Tbl.find direct_calls closure_id with
+      | exception Not_found -> List.map snd args
+      | types ->
+        List.map2 (fun typ1 (_, typ2) ->
+          if typ1 = typ2 then typ1 else Flambda.Val)
+          types args
+    in
+    Closure_id.Tbl.replace direct_calls closure_id types
+  in
+  let _program =
+    (* TODO: change that for an iter *)
+    Flambda_iterators.map_named_of_program program
+      ~f:(fun var (named:Flambda.named) ->
+        match named with
+        | Move_within_set_of_closures { move_to = closure_id }
+        | Project_closure { closure_id } ->
+          projected closure_id var;
+          not_direct_called (Variable.Set.singleton var);
+          named
+        | Expr _ ->
+          named
+        | _ ->
+          not_direct_called (Flambda.free_variables_named named);
+          named)
+  in
+  Flambda_iterators.iter_exprs_at_toplevel_of_program program
+    ~f:(Flambda_iterators.iter_expr (fun (expr:Flambda.t) ->
+      match expr with
+      | Apply { kind = Direct closure_id; args } ->
+        direct_call closure_id args;
+        List.iter (fun (arg, _) ->
+          not_direct_called (Variable.Set.singleton arg))
+          args
+      | _ -> ()));
+  Flambda_iterators.iter_constant_defining_values_on_program program
+    ~f:(fun constant_defining_value ->
+      match constant_defining_value with
+      | Project_closure (_, closure_id) ->
+        (* To simplify the first tests, this is not tracked *)
+        not_direct_called
+          (Variable.Set.singleton (Closure_id.unwrap closure_id))
+      | _ -> ());
+  let direct_call_annotations =
+    Closure_id.Tbl.fold (fun closure_id args map ->
+      let projections =
+        match Closure_id.Tbl.find projected_tbl closure_id with
+        | exception Not_found ->
+          Variable.Set.singleton (Closure_id.unwrap closure_id)
+        | set -> set
+      in
+      let not_direc_called =
+        Variable.Set.is_empty
+          (Variable.Set.inter !not_direct_called_set projections)
+      in
+      if not_direc_called then
+        map
+      else
+        Closure_id.Map.add closure_id args map)
+      direct_calls Closure_id.Map.empty
+  in
+  direct_call_annotations
+
+(* let print_param_type ppf = function *)
+(*   | Flambda.Val -> Format.fprintf ppf "val" *)
+(*   | Flambda.Float Lambda.Boxed -> Format.fprintf ppf "float" *)
+(*   | Flambda.Float Lambda.Unboxed -> Format.fprintf ppf "float_unboxed" *)
+
+let improve_type_annotations (program:Flambda.program) =
+  let function_uses = collect_function_uses program in
+  Flambda_iterators.map_sets_of_closures_of_program program
+    ~f:(fun (set_of_closures : Flambda.set_of_closures) ->
+      let funs =
+        Variable.Map.mapi (fun fun_var (decl:Flambda.function_declaration) ->
+          match Closure_id.Map.find (Closure_id.wrap fun_var) function_uses with
+          | exception Not_found -> decl
+          | types ->
+            let params =
+              List.map2 (fun (param, typ) new_typ ->
+                match typ, new_typ with
+                | Flambda.Val, t | t, Flambda.Val -> param, t
+                | _ ->
+                  assert(typ = new_typ);
+                  param, typ)
+                decl.params types
+            in
+            Flambda.create_function_declaration
+              ~params
+              ~return:decl.return
+              ~body:decl.body
+              ~stub:decl.stub
+              ~dbg:decl.dbg
+              ~inline:decl.inline
+              ~specialise:decl.specialise
+              ~is_a_functor:decl.is_a_functor)
+          set_of_closures.function_decls.funs
+      in
+      let function_decls =
+        Flambda.update_function_declarations
+          set_of_closures.function_decls
+          ~funs
+      in
+      Flambda.create_set_of_closures
+        ~function_decls
+        ~free_vars:set_of_closures.free_vars
+        ~specialised_args:set_of_closures.specialised_args
+        ~direct_call_surrogates:set_of_closures.direct_call_surrogates)
+
+(*******************)
+
 module Argument = struct
   type t = Closure_id.t * int
   include Identifiable.Make(Identifiable.Pair(Closure_id)(Numbers.Int))
@@ -50,7 +178,7 @@ let add (c:collection) use v =
     | prev_use ->
       prev_use
   in
-  Variable.Tbl.add c.variable_usage v (union_use use prev_use)
+  Variable.Tbl.replace c.variable_usage v (union_use use prev_use)
 
 let collect_named (c:collection) (named:Flambda.named) =
   match named with
@@ -107,7 +235,7 @@ let collect_argument_use (a:argument_declaration)
   Variable.Map.iter (fun fun_var (decl:Flambda.function_declaration) ->
     let closure_id = Closure_id.wrap fun_var in
     List.iteri (fun i (v, typ) ->
-      Variable.Tbl.add a.variable_argument v ((closure_id, i), typ))
+      Variable.Tbl.replace a.variable_argument v ((closure_id, i), typ))
       decl.params)
     set_of_closures.function_decls.funs
 
@@ -383,6 +511,7 @@ let unbox_set_of_closures (unboxable:Argument.Set.t)
 
 
 let unbox_function_arguments (program : Flambda.program) : Flambda.program =
+  let program = improve_type_annotations program in
   let usage, declarations = collect_usage program in
   let not_unboxable = fixpoint usage declarations in
   let unboxable =
