@@ -1311,7 +1311,14 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
     let being_assigned =
       Freshening.apply_mutable_variable (E.freshening env) being_assigned
     in
-    simplify_free_variable env new_value ~f:(fun _env new_value _approx ->
+    simplify_free_variable env new_value ~f:(fun env new_value approx ->
+      let mut_approx = E.find_mutable_exn env being_assigned in
+      if not (A.is_compatible_approx
+                ~really_import_approx:(E.really_import_approx env)
+                mut_approx approx) then begin
+        (* TODO: better warning *)
+        Location.prerr_warning Location.none (Warnings.Unreachable_case)
+      end;
       Assign { being_assigned; new_value; }, ret r (A.value_unknown Other))
   | Switch (arg, sw) ->
     (* When [arg] is known to be a variable whose approximation is that of a

@@ -792,6 +792,19 @@ and meet ~really_import_approx a1 a2 =
         var;
         symbol }
 
+
+let is_compatible_approx ~really_import_approx t1 t2 =
+  match t1.descr, t2.descr with
+  | Value_unknown _, _ | _, Value_unknown _
+  | Value_unresolved _, _ | _, Value_unresolved _ ->
+    true
+  | d1, d2 ->
+    match meet_descr ~really_import_approx d1 d2 with
+    | Value_unknown _ ->
+      false
+    | _ ->
+      true
+
 (* Given a set-of-closures approximation and a closure ID, apply any
    freshening specified in the approximation to the closure ID, and return
    that new closure ID.  A fatal error is produced if the new closure ID

@@ -272,6 +272,8 @@ val augment_with_kind : t -> Lambda.value_kind -> t
 (** Improve the kind by taking the description into account *)
 val augment_kind_with_approx : t -> Lambda.value_kind -> Lambda.value_kind
 
+val is_compatible_approx : really_import_approx:(t -> t) -> t -> t -> bool
+
 val equal_boxed_int : 'a boxed_int -> 'a -> 'b boxed_int -> 'b -> bool
 
 (* CR-soon mshinwell for pchambart: Add comment describing semantics.  (Maybe
