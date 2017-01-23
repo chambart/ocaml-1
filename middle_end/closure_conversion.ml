@@ -591,6 +591,7 @@ and close_functions t external_env function_declarations : Flambda.named =
         let typ : Flambda.param_type =
           match kind with
           | Lambda.Pfloatval -> Float Boxed
+          | Lambda.Parrayval k -> Array k
           | _ -> Val
         in
         var, typ)
@@ -601,6 +602,7 @@ and close_functions t external_env function_declarations : Flambda.named =
     let return : Flambda.param_type =
       match Function_decl.return decl with
       | Lambda.Pfloatval -> Float Boxed
+      | Lambda.Parrayval k -> Array k
       | _ -> Val
     in
     let fun_decl =

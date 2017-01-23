@@ -236,6 +236,7 @@ let to_clambda_const env (const : Flambda.constant_defining_value_block_field)
   | Const (Const_pointer i) -> Uconst_ptr i
 
 let to_clambda_param_type : Flambda.param_type -> Clambda.function_argument_type = function
+  | Array _
   | Val -> Val
   | Float b -> Float b
 

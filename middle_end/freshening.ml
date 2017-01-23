@@ -404,6 +404,10 @@ let does_not_freshen t vars =
 let freshen_projection (projection : Projection.t) ~freshening
       ~closure_freshening : Projection.t =
   match projection with
+  | Boxing var ->
+    Boxing (apply_variable freshening var)
+  | Unboxing var ->
+    Unboxing (apply_variable freshening var)
   | Project_var { closure; closure_id; var; } ->
     Project_var {
       closure = apply_variable freshening closure;

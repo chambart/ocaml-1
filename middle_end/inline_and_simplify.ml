@@ -893,7 +893,7 @@ and simplify_over_application env r ~args ~args_approxs ~function_decls
   let expr = Lift_code.lift_lets_expr expr ~toplevel:true in
   simplify (E.set_never_inline env) r expr
 
-and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
+and simplify_named bound_to env r (tree : Flambda.named) : Flambda.named * R.t =
   match tree with
   | Symbol sym ->
     (* New Symbol construction could have been introduced during
@@ -1043,16 +1043,31 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
             simplify_named_using_approx_and_env env r tree approx
           end
         end
-      | Punbox_float, [_arg], [arg_approx] ->
-        begin match A.unbox_float arg_approx with
-        | Unreachable -> (Flambda.Expr Proved_unreachable, r)
-        | Ok approx ->
-          simplify_named_using_approx_and_env env r tree approx
+      | Punbox_float, [arg], [arg_approx] ->
+        let projection : Projection.t = Unboxing arg in
+        begin match E.find_projection env ~projection with
+        | Some var ->
+          simplify_free_variable_named env var ~f:(fun _env var var_approx ->
+            let r = R.map_benefit r (B.remove_projection projection) in
+            Expr (Var var), ret r var_approx)
+        | None ->
+          let env = E.add_projection ~projection:(Boxing arg) ~bound_to env in
+          begin match A.unbox_float arg_approx with
+          | Unreachable -> (Flambda.Expr Proved_unreachable, r)
+          | Ok approx ->
+            Format.printf "approx unbox %a %a@."
+              Variable.print arg
+              A.print arg_approx;
+            simplify_named_using_approx_and_env env r tree approx
+          end
         end
       | Pbox_float, [_arg], [arg_approx] ->
         begin match A.box_float arg_approx with
         | Unreachable -> (Flambda.Expr Proved_unreachable, r)
         | Ok approx ->
+          Format.printf "approx box %a %a@."
+            Variable.print _arg
+            A.print arg_approx;
           simplify_named_using_approx_and_env env r tree approx
         end
       | Pfield _, _, _ -> Misc.fatal_error "Pfield arity error"
@@ -1128,7 +1143,7 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
     simplify_apply env r ~apply
   | Let _ ->
     let for_defining_expr (env, r) var kind defining_expr =
-      let defining_expr, r = simplify_named env r defining_expr in
+      let defining_expr, r = simplify_named var env r defining_expr in
       let var, sb = Freshening.add_variable (E.freshening env) var in
       let env = E.set_freshening env sb in
       let approx = R.approx r in
@@ -1180,7 +1195,7 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
     in
     let defs, body_env, r =
       List.fold_right (fun (id, lam) (defs, env_acc, r) ->
-          let lam, r = simplify_named def_env r lam in
+          let lam, r = simplify_named id def_env r lam in
           let defs = (id, lam) :: defs in
           let env_acc = E.add env_acc id (R.approx r) in
           defs, env_acc, r)

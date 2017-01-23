@@ -31,6 +31,7 @@ type unboxed_const =
 type param_type =
   | Val
   | Float of Lambda.boxed
+  | Array of Lambda.array_kind
 
 type apply = {
   func : Variable.t;
@@ -199,6 +200,7 @@ let param_type ppf = function
   | Val -> ()
   | Float Lambda.Boxed -> fprintf ppf ":float"
   | Float Lambda.Unboxed -> fprintf ppf ":float_unboxed"
+  | Array k -> fprintf ppf ":array(%s)" (Printlambda.array_kind k)
 
 let params_with_type ppf =
   List.iter (fun (id, typ) ->

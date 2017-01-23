@@ -91,6 +91,8 @@ let print_project_var ppf (project_var : project_var) =
     Variable.print project_var.closure
 
 type t =
+  | Boxing of Variable.t
+  | Unboxing of Variable.t
   | Project_var of project_var
   | Project_closure of project_closure
   | Move_within_set_of_closures of move_within_set_of_closures
@@ -101,6 +103,10 @@ include Identifiable.Make (struct
 
   let compare t1 t2 =
     match t1, t2 with
+    | Boxing v1, Boxing v2 ->
+      Variable.compare v1 v2
+    | Unboxing v1, Unboxing v2 ->
+      Variable.compare v1 v2
     | Project_var project_var1, Project_var project_var2 ->
       compare_project_var project_var1 project_var2
     | Project_closure project_closure1, Project_closure project_closure2 ->
@@ -117,6 +123,10 @@ include Identifiable.Make (struct
     | _, Project_closure _ -> 1
     | Move_within_set_of_closures _, _ -> -1
     | _, Move_within_set_of_closures _ -> 1
+    | Boxing _, _ -> -1
+    | _, Boxing _ ->  1
+    | Unboxing _, _ -> -1
+    | _, Unboxing _ ->  1
 
   let equal t1 t2 =
     (compare t1 t2) = 0
@@ -125,6 +135,10 @@ include Identifiable.Make (struct
 
   let print ppf t =
     match t with
+    | Boxing var ->
+      Format.fprintf ppf "Boxing %a" Variable.print var
+    | Unboxing var ->
+      Format.fprintf ppf "Unboxing %a" Variable.print var
     | Project_closure (project_closure) ->
       print_project_closure ppf project_closure
     | Project_var (project_var) -> print_project_var ppf project_var
@@ -138,6 +152,8 @@ end)
 
 let projecting_from t =
   match t with
+  | Boxing var -> var
+  | Unboxing var -> var
   | Project_var { closure; _ } -> closure
   | Project_closure { set_of_closures; _ } -> set_of_closures
   | Move_within_set_of_closures { closure; _ } -> closure
@@ -167,3 +183,8 @@ let map_projecting_from t ~f : t =
     in
     Move_within_set_of_closures move
   | Field (field_index, var) -> Field (field_index, f var)
+  | Boxing var ->
+    Boxing (f var)
+  | Unboxing var ->
+    Unboxing (f var)
+

@@ -138,7 +138,7 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
       let fields, box =
         List.fold_right (fun (new_var, def) (fields, box) ->
           match named_return_type def with
-          | Val | Float Boxed ->
+          | Val | Float Boxed | Array _ ->
             new_var :: fields, box
           | Float Unboxed ->
             let boxed_var = Variable.rename new_var in
@@ -291,7 +291,7 @@ let rebuild (used_variables:Variable.Set.t) (accumulated:accumulated) =
           in
           let expr =
             match typ with
-            | Val | Float Boxed ->
+            | Val | Float Boxed | Array _ ->
               expr
             | Float Unboxed ->
               let unboxed = Variable.rename var in

@@ -92,6 +92,9 @@ let compare_param_type (t1 : Flambda.param_type) (t2 : Flambda.param_type) =
   | _, Val -> -1
   | Float Boxed, _ -> -1
   | _, Float Boxed -> 1
+  | Float Unboxed, _ -> -1
+  | _, Float Unboxed -> 1
+  | Array k1, Array k2 -> compare k1 k2
 
 let rec same (l1 : Flambda.t) (l2 : Flambda.t) =
   l1 == l2 || (* it is ok for the string case: if they are physically the same,
@@ -579,7 +582,7 @@ let substitute_read_symbol_field_for_variables
     in
     let named : Flambda.named =
       match typ with
-      | Val | Float Boxed ->
+      | Val | Float Boxed | Array _ ->
         make_named path
       | Float Unboxed ->
         let block = Variable.create "symbol_field_block" in
@@ -871,6 +874,8 @@ let clean_projections ~which_variables =
 
 let projection_to_named (projection : Projection.t) : Flambda.named =
   match projection with
+  | Boxing var -> Prim(Pbox_float, [var], Debuginfo.none)
+  | Unboxing var -> Prim(Punbox_float, [var], Debuginfo.none)
   | Project_var project_var -> Project_var project_var
   | Project_closure project_closure -> Project_closure project_closure
   | Move_within_set_of_closures move -> Move_within_set_of_closures move

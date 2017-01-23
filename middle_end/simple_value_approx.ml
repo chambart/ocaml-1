@@ -77,14 +77,9 @@ and value_set_of_closures = {
   direct_call_surrogates : Closure_id.t Closure_id.Map.t;
 }
 
-and value_float_array_contents =
+and value_float_array =
   | Contents of t array
-  | Unknown_or_mutable
-
-and value_float_array = {
-  contents : value_float_array_contents;
-  size : int;
-}
+  | Unknown_or_mutable of { size : int option }
 
 let descr t = t.descr
 
@@ -138,11 +133,13 @@ let rec print_descr ppf = function
           Format.fprintf ppf "string %i %S" size s
     end
   | Value_float_array float_array ->
-    begin match float_array.contents with
-    | Unknown_or_mutable ->
-      Format.fprintf ppf "float_array %i" float_array.size
-    | Contents _ ->
-      Format.fprintf ppf "float_array_imm %i" float_array.size
+    begin match float_array with
+    | Unknown_or_mutable { size = Some size } ->
+      Format.fprintf ppf "float_array %i" size
+    | Unknown_or_mutable { size = None } ->
+      Format.fprintf ppf "float_array"
+    | Contents a ->
+      Format.fprintf ppf "float_array_imm %i" (Array.length a)
     end
   | Value_boxed_int (t, i) ->
     match t with
@@ -174,7 +171,30 @@ let replace_description t descr = { t with descr }
 
 let augment_with_param_type t (kind:Flambda.param_type) =
   match kind with
-  | Val -> t
+  | Array Pfloatarray ->
+    begin match t.descr with
+    | Value_float_array _ ->
+      t
+    | Value_unknown _ | Value_unresolved _ ->
+      { t with descr = Value_float_array (Unknown_or_mutable { size = None }) }
+    | Value_float _
+    | Value_unboxed_float _
+    | Value_int _
+    | Value_char _
+    | Value_constptr _
+    | Value_boxed_int _
+    | Value_set_of_closures _
+    | Value_closure _
+    | Value_string _
+    | Value_bottom ->
+      (* Unreachable *)
+      { t with descr = Value_bottom }
+    | Value_block _
+    | Value_extern _ | Value_symbol _ ->
+      (* We don't know yet *)
+      t
+    end
+  | Val | Array _ -> t
   | Float Boxed ->
     begin match t.descr with
     | Value_float _ ->
@@ -348,13 +368,12 @@ let value_unresolved sym = approx (Value_unresolved sym)
 
 let value_string size contents = approx (Value_string {size; contents })
 let value_mutable_float_array ~size =
-  approx (Value_float_array { contents = Unknown_or_mutable; size; } )
+  approx (Value_float_array (Unknown_or_mutable { size = Some size }) )
 let value_immutable_float_array (contents:t array) =
-  let size = Array.length contents in
   let contents =
     Array.map (fun t -> augment_with_kind t Pfloatval) contents
   in
-  approx (Value_float_array { contents = Contents contents; size; } )
+  approx (Value_float_array ( Contents contents ))
 
 let name_expr_fst (named, thing) ~name =
   (Flambda_utils.name_expr named ~name), thing
@@ -634,15 +653,10 @@ let unbox_float t : unbox_float_result =
   | Value_string _ | Value_unboxed_float _ | Value_boxed_int _
   | Value_set_of_closures _ | Value_closure _ ->
     Unreachable
-  | Value_symbol _ | Value_extern _ ->
-    (* These should have been resolved. *)
-    Ok (value_unknown Other)
-  | Value_unknown reason ->
-    Ok (value_unknown reason)
-  | Value_unresolved sym ->
-    (* We don't know anything, but we must remember that it comes
-       from another compilation unit in case it contains a closure. *)
-    Ok (value_unresolved sym)
+  | Value_symbol _ | Value_extern _
+  | Value_unknown _
+  | Value_unresolved _ ->
+    Ok (value_unboxed_float_converted t)
 
 type box_float_result =
   | Ok of t
@@ -662,15 +676,10 @@ let box_float t : box_float_result =
   | Value_string _ | Value_float _ | Value_boxed_int _
   | Value_set_of_closures _ | Value_closure _ ->
     Unreachable
-  | Value_symbol _ | Value_extern _ ->
-    (* These should have been resolved. *)
-    Ok (value_unknown Other)
-  | Value_unknown reason ->
-    Ok (value_unknown reason)
-  | Value_unresolved sym ->
-    (* We don't know anything, but we must remember that it comes
-       from another compilation unit in case it contains a closure. *)
-    Ok (value_unresolved sym)
+  | Value_symbol _ | Value_extern _
+  | Value_unknown _
+  | Value_unresolved _ ->
+    Ok (value_float_converted t)
 
 type checked_approx_for_block =
   | Wrong
@@ -915,8 +924,8 @@ let check_approx_for_float t : float option =
       None
 
 let float_array_as_constant (t:value_float_array) : float list option =
-  match t.contents with
-  | Unknown_or_mutable -> None
+  match t with
+  | Unknown_or_mutable _ -> None
   | Contents contents ->
     Array.fold_right (fun elt acc ->
       match acc, elt.descr with

@@ -27,15 +27,20 @@ let union_typ typ1 typ2 =
 
 let inter_typ typ (kind:Flambda.param_type) =
   match typ, kind with
-  | Bottom, Float _ ->
+  | Bottom, (Float _ | Array _) ->
     Type kind
   | Bottom, Val ->
     Bottom
   | Type Val, t | Type t, Val ->
     Type t
+  | Type Array k1, Array k2 ->
+    assert(k1 = k2);
+    typ
   | Type Float k1, Float k2 ->
     assert(k1 = k2);
     typ
+  | Type Float _, Array _ | Type Array _, Float _ ->
+    assert false
 
 type env = {
   current_function : Closure_id.t;
@@ -216,6 +221,27 @@ let improve_type_annotations (program:Flambda.program) =
         ~free_vars:set_of_closures.free_vars
         ~specialised_args:set_of_closures.specialised_args
         ~direct_call_surrogates:set_of_closures.direct_call_surrogates)
+
+(*******************)
+
+let rec unbox_expr (expr:Flambda.t) : Flambda.t =
+  match expr with
+  | Let { var; kind; defining_expr; body } ->
+    Flambda.create_let var ~kind defining_expr (unbox_expr body)
+  | If_then_else (cond, ifso, ifnot) ->
+    If_then_else (cond, unbox_expr ifso, unbox_expr ifnot)
+  | Var boxed ->
+    let unboxed = Variable.create "unboxed" in
+    Flambda.create_let unboxed ~kind:(Float Unboxed)
+      (Prim (Punbox_float, [boxed], Debuginfo.none))
+      (Var unboxed)
+  | _ ->
+    let boxed = Variable.create "unboxed" in
+    let unboxed = Variable.create "unboxed" in
+    Flambda.create_let boxed ~kind:(Float Boxed) (Expr expr)
+      (Flambda.create_let unboxed ~kind:(Float Unboxed)
+         (Prim (Punbox_float, [boxed], Debuginfo.none))
+         (Var unboxed))
 
 (*******************)
 
@@ -423,7 +449,7 @@ let unbox_function_declaration
     (* This is really not sufficient to avoid increasing allocations,
        but this might still be a good heuristic *)
     match decl.return with
-    | Val | Float Unboxed -> false
+    | Val | Float Unboxed | Array _ -> false
     | Float Boxed -> true
   in
   let has_a_surrogate =
@@ -446,7 +472,7 @@ let unbox_function_declaration
     in
     let return : Flambda.param_type =
       match decl.return with
-      | Val | Float Unboxed -> decl.return
+      | Val | Float Unboxed | Array _ -> decl.return
       | Float Boxed -> Float Unboxed
     in
     let stub =
@@ -463,7 +489,7 @@ let unbox_function_declaration
       in
       let body =
         match decl.return with
-        | Val | Float Unboxed -> apply
+        | Val | Float Unboxed | Array _ -> apply
         | Float Boxed ->
           (* CR: This makes the function not tail. This should be
              fixable by using surrogates instead *)
@@ -515,14 +541,18 @@ let unbox_function_declaration
       in
       let body =
         match decl.return with
-        | Val | Float Unboxed -> decl.body
+        | Val | Float Unboxed | Array _ -> decl.body
         | Float Boxed ->
           (* CR: This makes recursive calls of this function not tail. *)
-          let boxed = Variable.create "boxed" in
-          let unboxed = Variable.create "unboxed" in
-          Flambda.create_let boxed (Expr decl.body)
-            (Flambda.create_let unboxed (Prim (Punbox_float, [boxed], Debuginfo.none))
-               (Var unboxed))
+          Format.printf "unbox return of %a to %a@."
+            Variable.print fun_var
+            Variable.print new_fun_var;
+          unbox_expr decl.body
+          (* let boxed = Variable.create "boxed" in *)
+          (* let unboxed = Variable.create "unboxed" in *)
+          (* Flambda.create_let boxed (Expr decl.body) *)
+          (*   (Flambda.create_let unboxed (Prim (Punbox_float, [boxed], Debuginfo.none)) *)
+          (*      (Var unboxed)) *)
       in
       let body =
         List.fold_left (fun body ((var, _typ), boxed) ->
@@ -592,7 +622,7 @@ let unbox_function_arguments (program : Flambda.program) : Flambda.program =
   let unboxable =
     Variable.Tbl.fold (fun _v (arg, (typ : Flambda.param_type)) acc ->
       match typ with
-      | Val | Float Unboxed -> acc
+      | Val | Float Unboxed | Array _ -> acc
       | Float Boxed ->
         if Argument.Set.mem arg not_unboxable then
           acc

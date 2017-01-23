@@ -40,6 +40,7 @@ type unboxed_const =
 type param_type =
   | Val
   | Float of Lambda.boxed
+  | Array of Lambda.array_kind
 
 (** The application of a function to a list of arguments. *)
 type apply = {

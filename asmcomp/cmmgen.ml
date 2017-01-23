@@ -2556,7 +2556,7 @@ and transl_let env str kind id exp body =
            we do it only if this indeed allows us to get rid of
            some allocations in the bound expression. *)
         is_unboxed_number ~strict:false env exp
-    | _, Pgenval ->
+    | _, (Pgenval | Parrayval _) ->
         (* Here we don't know statically that the bound expression
            evaluates to an unboxable number type.  We need to be stricter
            and ensure that all possible branches in the expression

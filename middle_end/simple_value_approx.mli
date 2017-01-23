@@ -159,14 +159,9 @@ and value_set_of_closures = private {
   direct_call_surrogates : Closure_id.t Closure_id.Map.t;
 }
 
-and value_float_array_contents =
+and value_float_array =
   | Contents of t array
-  | Unknown_or_mutable
-
-and value_float_array = {
-  contents : value_float_array_contents;
-  size : int;
-}
+  | Unknown_or_mutable of { size : int option }
 
 (** Extraction of the description of approximation(s). *)
 val descr : t -> descr

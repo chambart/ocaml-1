@@ -41,6 +41,16 @@ let known_valid_projections ~env ~projections ~which_variables =
       in
       let approx = E.find_exn env outer_var in
       match projection with
+      | Boxing _ ->
+        begin match A.box_float approx with
+        | Ok _ -> true
+        | Unreachable -> false
+        end
+      | Unboxing _ ->
+        begin match A.unbox_float approx with
+        | Ok _ -> true
+        | Unreachable -> false
+        end
       | Project_var project_var ->
         begin match A.check_approx_for_closure approx with
         | Ok (_value_closure, _approx_var, _approx_sym,

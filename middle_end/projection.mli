@@ -66,6 +66,8 @@ val compare_move_within_set_of_closures
   -> int
 
 type t =
+  | Boxing of Variable.t
+  | Unboxing of Variable.t
   | Project_var of project_var
   | Project_closure of project_closure
   | Move_within_set_of_closures of move_within_set_of_closures

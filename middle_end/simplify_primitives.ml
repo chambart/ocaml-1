@@ -281,22 +281,43 @@ let primitive (p : Lambda.primitive) (args, approxs) expr dbg ~size_int
           A.value_unknown Other,
           (* we improved it, but there is no way to account for that: *)
           C.Benefit.zero
-
-    | [Value_float_array { size; contents }] ->
+    | [Value_float_array (Contents a)] ->
         begin match p with
-        | Parraylength _ -> S.const_int_expr expr size
+        | Parraylength _ -> S.const_int_expr expr (Array.length a)
         | Pfloatfield i ->
-          begin match contents with
-          | A.Contents a when i >= 0 && i < size ->
+          if i >= 0 && i < (Array.length a) then
             begin match A.check_approx_for_float a.(i) with
             | None -> expr, a.(i), C.Benefit.zero
             | Some v -> S.const_float_expr expr v
             end
-          | Contents _ | Unknown_or_mutable ->
+          else
             expr, A.value_unknown Other, C.Benefit.zero
-          end
+        | _ -> expr, A.value_unknown Other, C.Benefit.zero
+      end
+    | [Value_float_array (Unknown_or_mutable { size = Some size })] ->
+        begin match p with
+        | Parraylength _ -> S.const_int_expr expr size
         | _ -> expr, A.value_unknown Other, C.Benefit.zero
         end
+    | [Value_float_array (Unknown_or_mutable { size = None })] ->
+        begin match p with
+        | Parraylength Pfloatarray ->
+          expr, A.value_unknown Other, C.Benefit.zero
+        | Parraylength _ ->
+          Flambda.Prim (Parraylength Pfloatarray, args, dbg),
+          A.value_unknown Other, C.Benefit.zero
+        | _ -> expr, A.value_unknown Other, C.Benefit.zero
+        end
+    | [Value_float_array _; _] ->
+      begin match p with
+      | Parrayrefu _ ->
+        Flambda.Prim (Parrayrefu Pfloatarray, args, dbg),
+        A.value_any_float, C.Benefit.zero
+      | Parrayrefs _ ->
+        Flambda.Prim (Parrayrefs Pfloatarray, args, dbg),
+        A.value_any_float, C.Benefit.zero
+      | _ -> expr, A.value_unknown Other, C.Benefit.zero
+      end
     | _ ->
       match Semantics_of_primitives.return_type_of_primitive p with
       | Float ->

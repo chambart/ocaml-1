@@ -23,3 +23,4 @@ val program: formatter -> program -> unit
 val primitive: formatter -> primitive -> unit
 val name_of_primitive : primitive -> string
 val value_kind : formatter -> value_kind -> unit
+val array_kind : array_kind -> string

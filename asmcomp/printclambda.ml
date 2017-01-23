@@ -22,6 +22,14 @@ let mutable_flag = function
   | Mutable-> "[mut]"
   | Immutable -> ""
 
+let array_kind =
+  let open Lambda in
+  function
+  | Pgenarray -> "gen"
+  | Paddrarray -> "addr"
+  | Pintarray -> "int"
+  | Pfloatarray -> "float"
+
 let value_kind =
   let open Lambda in
   function
@@ -31,6 +39,7 @@ let value_kind =
   | Pboxedintval Pnativeint -> ":nativeint"
   | Pboxedintval Pint32 -> ":int32"
   | Pboxedintval Pint64 -> ":int64"
+  | Parrayval k -> asprintf ":array(%s)" (array_kind k)
 
 let function_argument_type ppf = function
   | Val -> ()

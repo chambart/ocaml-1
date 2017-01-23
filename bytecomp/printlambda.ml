@@ -59,18 +59,21 @@ let value_kind ppf = function
   | Pintval -> fprintf ppf "[int]"
   | Pfloatval -> fprintf ppf "[float]"
   | Pboxedintval bi -> fprintf ppf "[%s]" (boxed_integer_name bi)
+  | Parrayval k -> fprintf ppf "[array(%s)]" (array_kind k)
 
 let return_kind ppf = function
   | Pgenval -> ()
   | Pintval -> fprintf ppf ": int@ "
   | Pfloatval -> fprintf ppf ": float@ "
   | Pboxedintval bi -> fprintf ppf ": %s@ " (boxed_integer_name bi)
+  | Parrayval k -> fprintf ppf ": array(%s)" (array_kind k)
 
 let field_kind = function
   | Pgenval -> "*"
   | Pintval -> "int"
   | Pfloatval -> "float"
   | Pboxedintval bi -> boxed_integer_name bi
+  | Parrayval k -> asprintf "array(%s)" (array_kind k)
 
 let print_boxed_integer_conversion ppf bi1 bi2 =
   fprintf ppf "%s_of_%s" (boxed_integer_name bi2) (boxed_integer_name bi1)
