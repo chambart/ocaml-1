@@ -909,7 +909,8 @@ and simplify_named bound_to env r (tree : Flambda.named) : Flambda.named * R.t =
     let mut_var =
       Freshening.apply_mutable_variable (E.freshening env) mut_var
     in
-    Read_mutable mut_var, ret r (A.value_unknown Other)
+    let approx = E.find_mutable_exn env mut_var in
+    Read_mutable mut_var, ret r approx
   | Read_symbol_field (symbol, field_index) ->
     let approx = E.find_or_load_symbol env symbol in
     begin match A.get_field approx ~field_index with
@@ -1171,13 +1172,15 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
       ~filter_defining_expr
   | Let_mutable { var = mut_var; initial_value = var; body; contents_kind } ->
     (* CR-someday mshinwell: add the dead let elimination, as above. *)
-    simplify_free_variable env var ~f:(fun env var _var_approx ->
+    simplify_free_variable env var ~f:(fun env var var_approx ->
       let mut_var, sb =
         Freshening.add_mutable_variable (E.freshening env) mut_var
       in
       let env = E.set_freshening env sb in
+      let contents_kind = A.augment_kind_with_approx var_approx contents_kind in
+      let approx = A.augment_with_kind (A.value_unknown Other) contents_kind in
       let body, r =
-        simplify (E.add_mutable env mut_var (A.value_unknown Other)) r body
+        simplify (E.add_mutable env mut_var approx) r body
       in
       Flambda.Let_mutable
         { var = mut_var;
