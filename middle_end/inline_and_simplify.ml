@@ -789,7 +789,7 @@ and simplify_partial_application env r ~lhs_of_application
      inlined when applied to its first set of arguments, e.g. for some kind
      of type class like thing. *)
   begin match (inline_requested : Lambda.inline_attribute) with
-  | Always_inline | Never_inline ->
+  | Always_inline | Never_inline | Inline_on_argument _ ->
     Location.prerr_warning (Debuginfo.to_location dbg)
       (Warnings.Inlining_impossible "[@inlined] attributes may not be used \
         on partial applications")

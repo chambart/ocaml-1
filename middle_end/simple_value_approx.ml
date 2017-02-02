@@ -488,6 +488,84 @@ let useful t =
 
 let all_not_useful ts = List.for_all (fun t -> not (useful t)) ts
 
+type inlining_trigger =
+  | Cannot_inline
+  | Must_inline
+  | Can_inline
+
+let value_triggering_inlining t =
+  match t.descr with
+  | Value_string { contents = Some _ }
+  | Value_float_array { contents = Contents _ }
+  | Value_block _
+  | Value_int _
+  | Value_char _
+  | Value_constptr _
+  | Value_set_of_closures _
+  | Value_float (Some _)
+  | Value_boxed_int _
+  | Value_closure _ ->
+    true
+  | Value_string { contents = None }
+  | Value_float None
+  | Value_float_array { contents = Unknown_or_mutable }
+  | Value_extern _
+  | Value_symbol _
+  | Value_unresolved _ | Value_unknown _ | Value_bottom ->
+    false
+
+let trigger_union t1 t2 =
+  match t1, t2 with
+  | Cannot_inline, _ | _, Cannot_inline ->
+    Cannot_inline
+  | Must_inline, _ | _, Must_inline ->
+    Must_inline
+  | Can_inline, Can_inline ->
+    Can_inline
+
+let pp_option f ppf v =
+  match v with
+  | None -> Format.fprintf ppf "None"
+  | Some v -> f ppf v
+
+let rec can_trigger_inlining (pattern:Lambda.inline_pattern) t =
+  match pattern with
+  | Required ->
+    if value_triggering_inlining t then
+      let () = Format.printf "required on %a@." (pp_option Variable.print) t.var in
+      Can_inline
+    else
+      let () =
+        Format.printf "required off %a %a@." (pp_option Variable.print) t.var
+          print t in
+      Cannot_inline
+  | Trigger ->
+    if value_triggering_inlining t then
+      let () = Format.printf "trigger on %a@." (pp_option Variable.print) t.var in
+      Must_inline
+    else
+      let () = Format.printf "trigger off %a@." (pp_option Variable.print) t.var in
+      Can_inline
+  | Default ->
+    Can_inline
+  | Block (tag, patterns) -> begin
+      match t.descr with
+      | Value_block (tag', fields) when
+          Tag.to_int tag' = tag &&
+          Array.length fields = List.length patterns ->
+        List.fold_left2 (fun acc t pattern ->
+          trigger_union acc (can_trigger_inlining pattern t))
+          Can_inline (Array.to_list fields) patterns
+      | _ ->
+        (* TODO: think a bit more about the default case *)
+        Can_inline
+    end
+  | Or patterns ->
+    List.fold_left (fun acc pattern ->
+      (* TODO: think a bit more about the union *)
+      trigger_union acc (can_trigger_inlining pattern t))
+      Can_inline patterns
+
 let is_definitely_immutable t =
   match t.descr with
   | Value_string { contents = Some _ }

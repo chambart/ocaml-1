@@ -200,6 +200,10 @@ let rec lam ppf (flam : t) =
       | Always_inline -> fprintf ppf "<always>"
       | Never_inline -> fprintf ppf "<never>"
       | Unroll i -> fprintf ppf "<unroll %i>" i
+      | Inline_on_argument l ->
+        fprintf ppf "<Inline_on_argument @[[%a]@]>"
+          (Format.pp_print_list ~pp_sep:(fun ppf () -> fprintf ppf ",@ ")
+             Printlambda.inline_pattern) l
       | Default_inline -> ()
     in
     fprintf ppf "@[<2>(apply%a%a<%s>@ %a%a)@]" direct () inline ()
@@ -375,6 +379,10 @@ and print_function_declaration ppf var (f : function_declaration) =
     | Always_inline -> " *inline*"
     | Never_inline -> " *never_inline*"
     | Unroll _ -> " *unroll*"
+    | Inline_on_argument l ->
+      Format.asprintf "*inline_on_argument_@[[%a]@]*"
+        (Format.pp_print_list ~pp_sep:(fun ppf () -> fprintf ppf ",@ ")
+           Printlambda.inline_pattern) l
     | Default_inline -> ""
   in
   let specialise =
@@ -994,8 +1002,9 @@ let create_function_declaration ~params ~body ~stub ~dbg
       : function_declaration =
   begin match stub, inline with
   | true, (Never_inline | Default_inline)
-  | false, (Never_inline | Default_inline | Always_inline | Unroll _) -> ()
-  | true, (Always_inline | Unroll _) ->
+  | false, (Never_inline | Default_inline | Always_inline
+           | Unroll _ | Inline_on_argument _) -> ()
+  | true, (Always_inline | Unroll _ | Inline_on_argument _) ->
     Misc.fatal_errorf
       "Stubs may not be annotated as [Always_inline] or [Unroll]: %a"
       print body

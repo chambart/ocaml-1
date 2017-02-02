@@ -1191,6 +1191,7 @@ and close_functions fenv cenv fun_defs =
     in
     let threshold =
       match inline_attribute with
+      | Inline_on_argument _
       | Default_inline ->
           let inline_threshold =
             Clflags.Float_arg_helper.get ~key:0 !Clflags.inline_threshold

@@ -691,6 +691,65 @@ let rec cut n l =
   match l with [] -> failwith "Translcore.cut"
   | a::l -> let (l1,l2) = cut (n-1) l in (a::l1,l2)
 
+(* inline patter *)
+
+let build_or pl =
+  let default p = p = Default in
+  if List.for_all default pl then
+    Default
+  else
+    let l =
+      List.map
+        (function
+          | Or l -> l
+          | p -> [p])
+        pl
+    in
+    Or (List.concat l)
+
+let build_block tag pl =
+  let default p = p = Default in
+  if List.for_all default pl then
+    Default
+  else
+    let l =
+      List.map
+        (function
+          | Or l -> l
+          | p -> [p])
+        pl
+    in
+    Block (tag, List.concat l)
+
+let rec transl_inline_patterns (cases : Typedtree.case list) =
+  match cases with
+  | [] -> assert false
+  | [case] -> transl_inline_pattern case.c_lhs
+  | _ :: _ ->
+      build_or (List.map (fun { c_lhs } -> transl_inline_pattern c_lhs) cases)
+
+and transl_inline_pattern (pattern : Typedtree.pattern) =
+  match Translattribute.get_inline_attribute_on_pattern pattern with
+  | Inline_when_known ->
+      Trigger
+  | Dont_inline_when_unknown ->
+      Required
+  | Default_param_inline ->
+      match pattern.pat_desc with
+      | Tpat_or (p1, p2, _) ->
+          build_or [transl_inline_pattern p1; transl_inline_pattern p2]
+      | Tpat_tuple pl ->
+          build_block 0 (List.map transl_inline_pattern pl)
+      | Tpat_record (((_, { lbl_repres = Record_regular; lbl_all }, _) :: _) as fields, _) ->
+          let size = Array.length lbl_all in
+          let pat_fields = Array.make size Default in
+          List.iter (fun (_, (field:Types.label_description), pattern) ->
+              pat_fields.(field.lbl_pos) <- transl_inline_pattern pattern)
+            fields;
+          build_block 0 (Array.to_list pat_fields)
+      | _ ->
+          Default
+
 (* Translation of expressions *)
 
 let try_ids = Hashtbl.create 8
@@ -737,16 +796,22 @@ and transl_exp0 e =
   | Texp_let(rec_flag, pat_expr_list, body) ->
       transl_let rec_flag pat_expr_list (event_before body (transl_exp body))
   | Texp_function { arg_label = _; param; cases; partial; } ->
-      let ((kind, params), body) =
+      let ((kind, params, param_attributes), body) =
         event_function e
           (function repr ->
             let pl = push_defaults e.exp_loc [] cases partial in
             transl_function e.exp_loc !Clflags.native_code repr partial
               param pl)
       in
+      let inline =
+        Translattribute.add_inline_attribute_on_arguments
+          param_attributes
+          e.exp_loc
+          (Translattribute.get_inline_attribute e.exp_attributes)
+      in
       let attr = {
         default_function_attribute with
-        inline = Translattribute.get_inline_attribute e.exp_attributes;
+        inline;
         specialise = Translattribute.get_specialise_attribute e.exp_attributes;
       }
       in
@@ -1209,14 +1274,15 @@ and transl_apply ?(should_be_tailcall=false) ?(inlined = Default_inline)
      : Lambda.lambda)
 
 and transl_function loc untuplify_fn repr partial param cases =
+  let attribute = transl_inline_patterns cases in
   match cases with
     [{c_lhs=pat; c_guard=None;
       c_rhs={exp_desc = Texp_function { arg_label = _; param = param'; cases;
         partial = partial'; }} as exp}]
     when Parmatch.fluid pat ->
-      let ((_, params), body) =
+      let ((_, params, attributes), body) =
         transl_function exp.exp_loc false repr partial' param' cases in
-      ((Curried, param :: params),
+      ((Curried, param :: params, attribute :: attributes),
        Matching.for_function loc None (Lvar param) [pat, body] partial)
   | {c_lhs={pat_desc = Tpat_tuple pl}} :: _ when untuplify_fn ->
       begin try
@@ -1227,16 +1293,17 @@ and transl_function loc untuplify_fn repr partial param cases =
               (Matching.flatten_pattern size c_lhs, c_guard, c_rhs))
             cases in
         let params = List.map (fun _ -> Ident.create "param") pl in
-        ((Tupled, params),
+        let attributes = List.map (fun _ -> Default) params in
+        ((Tupled, params, attributes),
          Matching.for_tupled_function loc params
            (transl_tupled_cases pats_expr_list) partial)
       with Matching.Cannot_flatten ->
-        ((Curried, [param]),
+        ((Curried, [param], [attribute]),
          Matching.for_function loc repr (Lvar param)
            (transl_cases cases) partial)
       end
   | _ ->
-      ((Curried, [param]),
+      ((Curried, [param], [attribute]),
        Matching.for_function loc repr (Lvar param)
          (transl_cases cases) partial)
 

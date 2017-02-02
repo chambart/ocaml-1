@@ -152,7 +152,7 @@ let middle_end ppf ~prefixname ~backend
       (* Check that there aren't any unused "always inline" attributes. *)
       Flambda_iterators.iter_apply_on_program flam ~f:(fun apply ->
           match apply.inline with
-          | Default_inline | Never_inline -> ()
+          | Default_inline | Never_inline | Inline_on_argument _ -> ()
           | Always_inline ->
             (* CR-someday mshinwell: consider a different error message if
                this triggers as a result of the propagation of a user's

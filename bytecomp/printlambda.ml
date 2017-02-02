@@ -430,6 +430,25 @@ let name_of_primitive = function
   | Pint_as_pointer -> "Pint_as_pointer"
   | Popaque -> "Popaque"
 
+let rec inline_pattern ppf : inline_pattern -> unit =
+  function
+  | Required -> fprintf ppf "Required"
+  | Trigger -> fprintf ppf "Trigger"
+  | Default -> fprintf ppf "Default"
+  | Or patterns ->
+      fprintf ppf "[@[<2>%a@]]"
+        (pp_print_list
+           ~pp_sep:(fun ppf () -> fprintf ppf "| ")
+           inline_pattern)
+        patterns
+  | Block (tag, patterns) ->
+      fprintf ppf "[@[<2>%i: %a@]]"
+        tag
+        (pp_print_list
+           ~pp_sep:(fun ppf () -> fprintf ppf ", ")
+           inline_pattern)
+        patterns
+
 let function_attribute ppf { inline; specialise; is_a_functor; stub } =
   if is_a_functor then
     fprintf ppf "is_a_functor@ ";
@@ -440,6 +459,11 @@ let function_attribute ppf { inline; specialise; is_a_functor; stub } =
   | Always_inline -> fprintf ppf "always_inline@ "
   | Never_inline -> fprintf ppf "never_inline@ "
   | Unroll i -> fprintf ppf "unroll(%i)@ " i
+  | Inline_on_argument l ->
+      fprintf ppf "[@[<2>%a@]]"
+        (Format.pp_print_list ~pp_sep:(fun ppf () -> fprintf ppf ",@ ")
+           inline_pattern)
+        l
   end;
   begin match specialise with
   | Default_specialise -> ()
@@ -455,7 +479,12 @@ let apply_inlined_attribute ppf = function
   | Default_inline -> ()
   | Always_inline -> fprintf ppf " always_inline"
   | Never_inline -> fprintf ppf " never_inline"
-  | Unroll i -> fprintf ppf " never_inline(%i)" i
+  | Unroll i -> fprintf ppf " unroll(%i)" i
+  | Inline_on_argument l ->
+      fprintf ppf " [@[<2>%a@]]"
+        (Format.pp_print_list ~pp_sep:(fun ppf () -> fprintf ppf ",@ ")
+           inline_pattern)
+        l
 
 let apply_specialised_attribute ppf = function
   | Default_specialise -> ()

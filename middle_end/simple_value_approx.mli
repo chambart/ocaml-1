@@ -282,6 +282,13 @@ val useful : t -> bool
 (** Whether all approximations in the given list do *not* satisfy [useful]. *)
 val all_not_useful : t list -> bool
 
+type inlining_trigger =
+  | Cannot_inline
+  | Must_inline
+  | Can_inline
+
+val can_trigger_inlining : Lambda.inline_pattern -> t -> inlining_trigger
+
 (** A value is certainly immutable if its approximation is known and not bottom.
     It must have been resolved (it cannot be [Value_extern] or
     [Value_symbol]).  (See comment above for further explanation.) *)

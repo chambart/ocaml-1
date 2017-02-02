@@ -17,6 +17,10 @@ open Typedtree
 open Lambda
 open Location
 
+let is_inline_attribute_on_argument = function
+  | {txt=("inline"|"ocaml.inline")}, _ -> true
+  | _ -> false
+
 let is_inline_attribute = function
   | {txt=("inline"|"ocaml.inline")}, _ -> true
   | _ -> false
@@ -133,13 +137,91 @@ let parse_specialise_attribute attr =
       Location.prerr_warning loc (warning txt);
       Default_specialise
 
+let parse_inline_attribute_on_argument attr : inline_attribute_on_argument =
+  match attr with
+  | None -> Default_param_inline
+  | Some ({txt;loc}, payload) ->
+    let open Parsetree in
+    begin
+      (* the 'inline' and 'inlined' attributes can be used as
+         [@inline], [@inline never] or [@inline always].
+         [@inline] is equivalent to [@inline always] *)
+      let warning txt =
+        Warnings.Attribute_payload
+          (txt, "It must be either empty, 'required' or 'with'")
+      in
+      match payload with
+      | PStr [] -> Inline_when_known
+      | PStr [{pstr_desc = Pstr_eval ({pexp_desc},[])}] -> begin
+          match pexp_desc with
+          | Pexp_ident { txt = Longident.Lident "required" } ->
+            Dont_inline_when_unknown
+          | Pexp_ident { txt = Longident.Lident "with" } ->
+            Inline_when_known
+          | _ ->
+            Location.prerr_warning loc (warning txt);
+            Default_param_inline
+        end
+      | _ ->
+        Location.prerr_warning loc (warning txt);
+        Default_param_inline
+    end
+
 let get_inline_attribute l =
   let attr, _ = find_attribute is_inline_attribute l in
   parse_inline_attribute attr
 
+let add_inline_attribute_on_arguments param_attributes loc attribute =
+  if List.for_all
+      (fun param_attr -> param_attr = Default)
+      param_attributes
+  then
+    attribute
+  else
+    match attribute with
+    | Default_inline ->
+        Inline_on_argument param_attributes
+    | _ ->
+        Location.prerr_warning loc
+          (Warnings.Duplicated_attribute "inline");
+        Inline_on_argument param_attributes
+
 let get_specialise_attribute l =
   let attr, _ = find_attribute is_specialise_attribute l in
   parse_specialise_attribute attr
+
+let get_inline_attribute_on_argument (cases:Typedtree.case list)
+  : Lambda.inline_attribute_on_argument =
+  match cases with
+  | [ { c_lhs = { pat_attributes = l }} ] ->
+      let attr, _ = find_attribute is_inline_attribute_on_argument l in
+      parse_inline_attribute_on_argument attr
+  | _ ->
+      Default_param_inline
+
+let get_inline_attribute_on_pattern (pattern:Typedtree.pattern)
+  : Lambda.inline_attribute_on_argument =
+  let { pat_attributes = l } = pattern in
+  let attr, _ = find_attribute is_inline_attribute_on_argument l in
+  parse_inline_attribute_on_argument attr
+
+(* let get_inline_attribute_on_arguments params = *)
+(*   let attrs, _ = *)
+(*     List.split (List.map *)
+(*       (find_attribute is_inline_attribute_on_argument) *)
+(*       params) *)
+(*   in *)
+(*   if List.exists (function None -> false | Some _ -> true) attrs then *)
+(*     let attrs = *)
+(*       List.map *)
+(*         (function *)
+(*           | Some _ -> Inline_when_known *)
+(*           | None -> (Default_inline:inline_attribute_on_argument)) *)
+(*         attrs *)
+(*     in *)
+(*     Inline_on_argument attrs *)
+(*   else *)
+(*     Default_inline *)
 
 let add_inline_attribute expr loc attributes =
   match expr, get_inline_attribute attributes with
@@ -147,13 +229,13 @@ let add_inline_attribute expr loc attributes =
   | Lfunction({ attr = { stub = false } as attr } as funct), inline ->
       begin match attr.inline with
       | Default_inline -> ()
-      | Always_inline | Never_inline | Unroll _ ->
+      | Inline_on_argument _ | Always_inline | Never_inline | Unroll _ ->
           Location.prerr_warning loc
             (Warnings.Duplicated_attribute "inline")
       end;
       let attr = { attr with inline } in
       Lfunction { funct with attr = attr }
-  | expr, (Always_inline | Never_inline | Unroll _) ->
+  | expr, (Inline_on_argument _ | Always_inline | Never_inline | Unroll _) ->
       Location.prerr_warning loc
         (Warnings.Misplaced_attribute "inline");
       expr

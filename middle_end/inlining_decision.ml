@@ -33,6 +33,17 @@ type 'b good_idea =
   | Try_it
   | Don't_try_it of 'b
 
+let inlining_trigger env args arg_attributes =
+  List.fold_left2 (fun acc_trigger arg attr : A.inlining_trigger ->
+    let trigger =
+      A.can_trigger_inlining attr (E.find_exn env arg)
+    in
+    match acc_trigger, trigger with
+    | A.Cannot_inline, _ | _, Cannot_inline -> Cannot_inline
+    | A.Must_inline, _ | _, Must_inline -> Must_inline
+    | A.Can_inline, Can_inline -> Can_inline)
+    A.Can_inline args arg_attributes
+
 let inline env r ~lhs_of_application
     ~(function_decls : Flambda.function_declarations)
     ~closure_id_being_applied ~(function_decl : Flambda.function_declaration)
@@ -61,10 +72,30 @@ let inline env r ~lhs_of_application
           (* Merge call site annotation and function annotation.
              The call site annotation takes precedence *)
           match (inline_requested : Lambda.inline_attribute) with
+          | Inline_on_argument arg_attribute ->
+            let inlining_trigger = inlining_trigger env args arg_attribute in
+            begin match inlining_trigger with
+              | Cannot_inline ->
+                Lambda.Never_inline
+              | Must_inline ->
+                Lambda.Always_inline
+              | Can_inline ->
+                function_decl.inline
+            end
           | Always_inline | Never_inline | Unroll _ -> inline_requested
           | Default_inline -> function_decl.inline
         in
         match inline_annotation with
+        | Inline_on_argument arg_attribute ->
+          let inlining_trigger = inlining_trigger env args arg_attribute in
+          begin match inlining_trigger with
+            | Cannot_inline ->
+              false, false, true, env
+            | Must_inline ->
+              true, true, false, env
+            | Can_inline ->
+              false, false, false, env
+          end
         | Always_inline -> false, true, false, env
         | Never_inline -> false, false, true, env
         | Default_inline -> false, false, false, env
@@ -511,7 +542,8 @@ let for_call_site ~env ~r ~(function_decls : Flambda.function_declarations)
         | Some _ -> Default_inline
         | None -> inline_requested
       end
-    | Always_inline | Default_inline | Never_inline -> inline_requested
+    | Always_inline | Default_inline | Never_inline
+    | Inline_on_argument _ -> inline_requested
   in
   let original =
     Flambda.Apply {

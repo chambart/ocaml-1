@@ -193,11 +193,22 @@ type structured_constant =
   | Const_float_array of string list
   | Const_immstring of string
 
+type inline_pattern =
+  | Required | Trigger | Default
+  | Or of inline_pattern list
+  | Block of int * inline_pattern list
+
+type inline_attribute_on_argument =
+  | Inline_when_known
+  | Dont_inline_when_unknown
+  | Default_param_inline
+
 type inline_attribute =
   | Always_inline (* [@inline] or [@inline always] *)
   | Never_inline (* [@inline never] *)
   | Unroll of int (* [@unroll x] *)
   | Default_inline (* no [@inline] attribute *)
+  | Inline_on_argument of inline_pattern list (* [@inline] on argument *)
 
 type specialise_attribute =
   | Always_specialise (* [@specialise] or [@specialise always] *)
