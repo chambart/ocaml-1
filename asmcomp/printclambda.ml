@@ -31,6 +31,7 @@ let value_kind =
   | Pboxedintval Pnativeint -> ":nativeint"
   | Pboxedintval Pint32 -> ":int32"
   | Pboxedintval Pint64 -> ":int64"
+  | Parrayval k -> asprintf ":array(%s)" (Printlambda.array_kind k)
 
 let rec structured_constant ppf = function
   | Uconst_float x -> fprintf ppf "%F" x

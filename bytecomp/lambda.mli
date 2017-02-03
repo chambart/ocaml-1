@@ -166,6 +166,7 @@ and array_kind =
 
 and value_kind =
     Pgenval | Pfloatval | Pboxedintval of boxed_integer | Pintval
+  | Parrayval of array_kind
 
 and block_shape =
   value_kind list option

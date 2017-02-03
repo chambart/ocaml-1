@@ -164,6 +164,8 @@ let value_kind env ty =
       Pboxedintval Pint64
   | Tconstr(p, _, _) when Path.same p Predef.path_nativeint ->
       Pboxedintval Pnativeint
+  | Tconstr(p, _, _) when Path.same p Predef.path_array ->
+      Parrayval (array_type_kind env ty)
   | _ ->
       Pgenval
 
