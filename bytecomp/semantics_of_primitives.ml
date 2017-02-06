@@ -33,10 +33,14 @@ let for_primitive (prim : Lambda.primitive) =
       Only_generative_effects, Has_coeffects
   | Pccall { prim_name =
                ( "caml_format_float" | "caml_format_int" | "caml_int32_format"
+               | "caml_nativeint_format" | "caml_int64_format" ) }
+  | Pccall_unboxed { prim_name =
+               ( "caml_format_float" | "caml_format_int" | "caml_int32_format"
                | "caml_nativeint_format" | "caml_int64_format" ) } ->
       No_effects, No_coeffects
   | Plazyforce
-  | Pccall _ -> Arbitrary_effects, Has_coeffects
+  | Pccall _
+  | Pccall_unboxed _ -> Arbitrary_effects, Has_coeffects
   | Praise _ -> Arbitrary_effects, No_coeffects
   | Pnot
   | Pnegint
@@ -62,15 +66,16 @@ let for_primitive (prim : Lambda.primitive) =
       Arbitrary_effects, No_coeffects
   | Poffsetint _ -> No_effects, No_coeffects
   | Poffsetref _ -> Arbitrary_effects, Has_coeffects
-  | Pintoffloat
-  | Pfloatofint
-  | Pnegfloat
-  | Pabsfloat
-  | Paddfloat
-  | Psubfloat
-  | Pmulfloat
-  | Pdivfloat
-  | Pfloatcomp _ -> No_effects, No_coeffects
+  | Pintoffloat _
+  | Pfloatofint _
+  | Pnegfloat _
+  | Pabsfloat _
+  | Paddfloat _
+  | Psubfloat _
+  | Pmulfloat _
+  | Pdivfloat _
+  | Pfloatcomp _
+  | Punbox_float | Pbox_float -> No_effects, No_coeffects
   | Pstringlength | Pbyteslength
   | Parraylength _ ->
       No_effects, Has_coeffects  (* That old chestnut: [Obj.truncate]. *)
@@ -102,7 +107,7 @@ let for_primitive (prim : Lambda.primitive) =
   | Pstring_load_16 true
   | Pstring_load_32 true
   | Pstring_load_64 true
-  | Pbigarrayref (true, _, _, _)
+  | Pbigarrayref (true, _, _, _, _)
   | Pbigstring_load_16 true
   | Pbigstring_load_32 true
   | Pbigstring_load_64 true ->
@@ -113,7 +118,7 @@ let for_primitive (prim : Lambda.primitive) =
   | Pstring_load_16 false
   | Pstring_load_32 false
   | Pstring_load_64 false
-  | Pbigarrayref (false, _, _, _)
+  | Pbigarrayref (false, _, _, _, _)
   | Pbigstring_load_16 false
   | Pbigstring_load_32 false
   | Pbigstring_load_64 false ->
@@ -156,20 +161,35 @@ let for_primitive (prim : Lambda.primitive) =
 
 type return_type =
   | Float
+  | Unboxed_float
   | Other
 
 let return_type_of_primitive (prim:Lambda.primitive) =
   match prim with
-  | Pfloatofint
-  | Pnegfloat
-  | Pabsfloat
-  | Paddfloat
-  | Psubfloat
-  | Pmulfloat
-  | Pdivfloat
+  | Pbox_float
+  | Pfloatofint Boxed
+  | Pnegfloat Boxed
+  | Pabsfloat Boxed
+  | Paddfloat Boxed
+  | Psubfloat Boxed
+  | Pmulfloat Boxed
+  | Pdivfloat Boxed
   | Pfloatfield _
   | Parrayrefu Pfloatarray
-  | Parrayrefs Pfloatarray ->
-      Float
+  | Parrayrefs Pfloatarray
+  | Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64), _, Boxed)
+  | Pccall { prim_native_repr_res = Unboxed_float } ->
+    Float
+  | Punbox_float
+  | Pfloatofint Unboxed
+  | Pnegfloat Unboxed
+  | Pabsfloat Unboxed
+  | Paddfloat Unboxed
+  | Psubfloat Unboxed
+  | Pmulfloat Unboxed
+  | Pdivfloat Unboxed
+  | Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64), _, Unboxed)
+  | Pccall_unboxed { prim_native_repr_res = Unboxed_float } ->
+    Unboxed_float
   | _ ->
       Other

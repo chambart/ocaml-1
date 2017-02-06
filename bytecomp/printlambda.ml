@@ -77,8 +77,8 @@ let boxed_integer_mark name = function
 let print_boxed_integer name ppf bi =
   fprintf ppf "%s" (boxed_integer_mark name bi);;
 
-let print_bigarray name unsafe kind ppf layout =
-  fprintf ppf "Bigarray.%s[%s,%s]"
+let print_bigarray name unsafe kind ppf layout boxed =
+  fprintf ppf "Bigarray.%s[%s,%s%s]"
     (if unsafe then "unsafe_"^ name else name)
     (match kind with
      | Pbigarray_unknown -> "generic"
@@ -98,6 +98,9 @@ let print_bigarray name unsafe kind ppf layout =
     |  Pbigarray_unknown_layout -> "unknown"
      | Pbigarray_c_layout -> "C"
      | Pbigarray_fortran_layout -> "Fortran")
+    (match boxed with
+     | Boxed -> ""
+     | Unboxed -> ",unboxed")
 
 let record_rep ppf r =
   match r with
@@ -127,6 +130,10 @@ let block_shape ppf shape = match shape with
           Format.fprintf ppf ",%s" (field_kind elt))
         t;
       Format.fprintf ppf ")"
+
+let boxed ppf = function
+  | Boxed -> ()
+  | Unboxed -> fprintf ppf "(unboxed)"
 
 let primitive ppf = function
   | Pidentity -> fprintf ppf "id"
@@ -168,6 +175,7 @@ let primitive ppf = function
   | Pduprecord (rep, size) -> fprintf ppf "duprecord %a %i" record_rep rep size
   | Plazyforce -> fprintf ppf "force"
   | Pccall p -> fprintf ppf "%s" p.prim_name
+  | Pccall_unboxed p -> fprintf ppf "%s(unboxed)" p.prim_name
   | Praise k -> fprintf ppf "%s" (Lambda.raise_kind k)
   | Psequand -> fprintf ppf "&&"
   | Psequor -> fprintf ppf "||"
@@ -194,20 +202,20 @@ let primitive ppf = function
   | Pintcomp(Cge) -> fprintf ppf ">="
   | Poffsetint n -> fprintf ppf "%i+" n
   | Poffsetref n -> fprintf ppf "+:=%i"n
-  | Pintoffloat -> fprintf ppf "int_of_float"
-  | Pfloatofint -> fprintf ppf "float_of_int"
-  | Pnegfloat -> fprintf ppf "~."
-  | Pabsfloat -> fprintf ppf "abs."
-  | Paddfloat -> fprintf ppf "+."
-  | Psubfloat -> fprintf ppf "-."
-  | Pmulfloat -> fprintf ppf "*."
-  | Pdivfloat -> fprintf ppf "/."
-  | Pfloatcomp(Ceq) -> fprintf ppf "==."
-  | Pfloatcomp(Cneq) -> fprintf ppf "!=."
-  | Pfloatcomp(Clt) -> fprintf ppf "<."
-  | Pfloatcomp(Cle) -> fprintf ppf "<=."
-  | Pfloatcomp(Cgt) -> fprintf ppf ">."
-  | Pfloatcomp(Cge) -> fprintf ppf ">=."
+  | Pintoffloat b -> fprintf ppf "int_of_float%a" boxed b
+  | Pfloatofint b -> fprintf ppf "float_of_int%a" boxed b
+  | Pnegfloat b -> fprintf ppf "~.%a" boxed b
+  | Pabsfloat b -> fprintf ppf "abs.%a" boxed b
+  | Paddfloat b -> fprintf ppf "+.%a" boxed b
+  | Psubfloat b -> fprintf ppf "-.%a" boxed b
+  | Pmulfloat b -> fprintf ppf "*.%a" boxed b
+  | Pdivfloat b -> fprintf ppf "/.%a" boxed b
+  | Pfloatcomp(Ceq,b) -> fprintf ppf "==.%a" boxed b
+  | Pfloatcomp(Cneq,b) -> fprintf ppf "!=.%a" boxed b
+  | Pfloatcomp(Clt,b) -> fprintf ppf "<.%a" boxed b
+  | Pfloatcomp(Cle,b) -> fprintf ppf "<=.%a" boxed b
+  | Pfloatcomp(Cgt,b) -> fprintf ppf ">.%a" boxed b
+  | Pfloatcomp(Cge,b) -> fprintf ppf ">=.%a" boxed b
   | Pstringlength -> fprintf ppf "string.length"
   | Pstringrefu -> fprintf ppf "string.unsafe_get"
   | Pstringrefs -> fprintf ppf "string.get"
@@ -267,10 +275,10 @@ let primitive ppf = function
   | Pbintcomp(bi, Cgt) -> print_boxed_integer ">" ppf bi
   | Pbintcomp(bi, Cle) -> print_boxed_integer "<=" ppf bi
   | Pbintcomp(bi, Cge) -> print_boxed_integer ">=" ppf bi
-  | Pbigarrayref(unsafe, _n, kind, layout) ->
-      print_bigarray "get" unsafe kind ppf layout
-  | Pbigarrayset(unsafe, _n, kind, layout) ->
-      print_bigarray "set" unsafe kind ppf layout
+  | Pbigarrayref(unsafe, _n, kind, layout, boxed) ->
+      print_bigarray "get" unsafe kind ppf layout boxed
+  | Pbigarrayset(unsafe, _n, kind, layout, boxed) ->
+      print_bigarray "set" unsafe kind ppf layout boxed
   | Pbigarraydim(n) -> fprintf ppf "Bigarray.dim_%i" n
   | Pstring_load_16(unsafe) ->
      if unsafe then fprintf ppf "string.unsafe_get16"
@@ -312,6 +320,8 @@ let primitive ppf = function
   | Pbbswap(bi) -> print_boxed_integer "bswap" ppf bi
   | Pint_as_pointer -> fprintf ppf "int_as_pointer"
   | Popaque -> fprintf ppf "opaque"
+  | Punbox_float -> fprintf ppf "unbox"
+  | Pbox_float -> fprintf ppf "box"
 
 let name_of_primitive = function
   | Pidentity -> "Pidentity"
@@ -331,6 +341,7 @@ let name_of_primitive = function
   | Pduprecord _ -> "Pduprecord"
   | Plazyforce -> "Plazyforce"
   | Pccall _ -> "Pccall"
+  | Pccall_unboxed _ -> "Pccall_unboxed"
   | Praise _ -> "Praise"
   | Psequand -> "Psequand"
   | Psequor -> "Psequor"
@@ -350,14 +361,14 @@ let name_of_primitive = function
   | Pintcomp _ -> "Pintcomp"
   | Poffsetint _ -> "Poffsetint"
   | Poffsetref _ -> "Poffsetref"
-  | Pintoffloat -> "Pintoffloat"
-  | Pfloatofint -> "Pfloatofint"
-  | Pnegfloat -> "Pnegfloat"
-  | Pabsfloat -> "Pabsfloat"
-  | Paddfloat -> "Paddfloat"
-  | Psubfloat -> "Psubfloat"
-  | Pmulfloat -> "Pmulfloat"
-  | Pdivfloat -> "Pdivfloat"
+  | Pintoffloat _ -> "Pintoffloat"
+  | Pfloatofint _ -> "Pfloatofint"
+  | Pnegfloat _ -> "Pnegfloat"
+  | Pabsfloat _ -> "Pabsfloat"
+  | Paddfloat _ -> "Paddfloat"
+  | Psubfloat _ -> "Psubfloat"
+  | Pmulfloat _ -> "Pmulfloat"
+  | Pdivfloat _ -> "Pdivfloat"
   | Pfloatcomp _ -> "Pfloatcomp"
   | Pstringlength -> "Pstringlength"
   | Pstringrefu -> "Pstringrefu"
@@ -413,6 +424,8 @@ let name_of_primitive = function
   | Pbbswap _ -> "Pbbswap"
   | Pint_as_pointer -> "Pint_as_pointer"
   | Popaque -> "Popaque"
+  | Punbox_float -> "Punbox_float"
+  | Pbox_float -> "Pbox_float"
 
 let function_attribute ppf { inline; specialise; is_a_functor; stub } =
   if is_a_functor then
