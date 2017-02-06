@@ -34,6 +34,10 @@ type 'b good_idea =
   | Don't_try_it of 'b
 
 let inlining_trigger env args arg_attributes =
+  (* TODO: do that another way: fix argument transforming pass *)
+  if not (List.length args = List.length arg_attributes) then
+    A.Can_inline
+  else
   List.fold_left2 (fun acc_trigger arg attr : A.inlining_trigger ->
     let trigger =
       A.can_trigger_inlining attr (E.find_exn env arg)
@@ -87,6 +91,8 @@ let inline env r ~lhs_of_application
         in
         match inline_annotation with
         | Inline_on_argument arg_attribute ->
+          Format.printf "args: %i attr: %i@."
+            (List.length args) (List.length arg_attribute);
           let inlining_trigger = inlining_trigger env args arg_attribute in
           begin match inlining_trigger with
             | Cannot_inline ->
