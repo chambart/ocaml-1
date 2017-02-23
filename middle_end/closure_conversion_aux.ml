@@ -19,11 +19,17 @@
 module IdentSet = Lambda.IdentSet
 
 module Env = struct
+
+  type variable_access =
+    | Closure of Var_within_closure.t
+    | Variable of Variable.t
+
   type t = {
-    variables : Variable.t Ident.tbl;
+    variables : variable_access Ident.tbl;
     mutable_variables : Mutable_variable.t Ident.tbl;
     static_exceptions : Static_exception.t Numbers.Int.Map.t;
     globals : Symbol.t Numbers.Int.Map.t;
+    current_closure : (Variable.t * Closure_id.t) option;
     at_toplevel : bool;
   }
 
@@ -32,14 +38,22 @@ module Env = struct
     mutable_variables = Ident.empty;
     static_exceptions = Numbers.Int.Map.empty;
     globals = Numbers.Int.Map.empty;
+    current_closure = None;
     at_toplevel = true;
   }
 
   let clear_local_bindings env =
     { empty with globals = env.globals }
 
-  let add_var t id var = { t with variables = Ident.add id var t.variables }
+  let add_var t id var =
+    { t with variables = Ident.add id (Variable var) t.variables }
   let add_vars t ids vars = List.fold_left2 add_var t ids vars
+
+  let add_var_from_current_closure t id var =
+    let variables =
+      Ident.add id (Closure (Var_within_closure.wrap var)) t.variables
+    in
+    { t with variables }
 
   let find_var t id =
     try Ident.find_same id t.variables
@@ -56,6 +70,16 @@ module Env = struct
 
   let find_mutable_var_exn t id =
     Ident.find_same id t.mutable_variables
+
+  let set_current_closure t var closure_id =
+    { t with current_closure = Some (var, closure_id) }
+
+  let current_closure t =
+    match t.current_closure with
+    | None ->
+      Misc.fatal_errorf "Closure_conversion.Env.current_closure_variable"
+    | Some var ->
+      var
 
   let add_static_exception t st_exn fresh_st_exn =
     { t with
@@ -179,7 +203,9 @@ module Function_decls = struct
         t.function_decls (Env.clear_local_bindings external_env)
     in
     (* For free variables. *)
-    IdentSet.fold (fun id env ->
-        Env.add_var env id (Variable.create (Ident.name id)))
-      t.all_free_idents closure_env
+    IdentSet.fold (fun id (env, local_env) ->
+        let variable = Variable.create (Ident.name id) in
+        Env.add_var_from_current_closure env id variable,
+        Ident.add id variable local_env)
+      t.all_free_idents (closure_env, Ident.empty)
 end

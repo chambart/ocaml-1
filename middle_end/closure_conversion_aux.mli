@@ -28,9 +28,17 @@ module Env : sig
 
   val add_var : t -> Ident.t -> Variable.t -> t
   val add_vars : t -> Ident.t list -> Variable.t list -> t
+  val add_var_from_current_closure : t -> Ident.t -> Variable.t -> t
 
-  val find_var : t -> Ident.t -> Variable.t
-  val find_var_exn : t -> Ident.t -> Variable.t
+  type variable_access =
+    | Closure of Var_within_closure.t
+    | Variable of Variable.t
+
+  val find_var : t -> Ident.t -> variable_access
+  val find_var_exn : t -> Ident.t -> variable_access
+
+  val set_current_closure : t -> Variable.t -> Closure_id.t -> t
+  val current_closure : t -> Variable.t * Closure_id.t
 
   val add_mutable_var : t -> Ident.t -> Mutable_variable.t -> t
   val find_mutable_var_exn : t -> Ident.t -> Mutable_variable.t
@@ -90,5 +98,6 @@ module Function_decls : sig
      is the set of all identifiers free in the bodies of the declarations that
      are not bound as parameters.
      It also contains the globals bindings of the provided environment. *)
-  val closure_env_without_parameters : Env.t -> t -> Env.t
+  val closure_env_without_parameters
+      : Env.t -> t -> Env.t * Variable.t Ident.tbl
 end
