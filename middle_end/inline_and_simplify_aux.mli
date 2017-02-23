@@ -356,7 +356,6 @@ val prepare_to_simplify_set_of_closures
 
 val prepare_to_simplify_closure
    : function_decl:Flambda.function_declaration
-  -> free_vars:(Flambda.specialised_to * Simple_value_approx.t) Variable.Map.t
   -> specialised_args:Flambda.specialised_to Variable.Map.t
   -> parameter_approximations:Simple_value_approx.t Variable.Map.t
   -> set_of_closures_env:Env.t

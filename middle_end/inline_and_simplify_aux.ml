@@ -643,16 +643,8 @@ let prepare_to_simplify_set_of_closures ~env
    to catch potential substitution bugs. *)
 let populate_closure_approximations
       ~(function_decl : Flambda.function_declaration)
-      ~(free_vars : (_ * A.t) Variable.Map.t)
       ~(parameter_approximations : A.t Variable.Map.t)
       ~set_of_closures_env =
-  (* Add approximations of free variables *)
-  let env =
-    Variable.Map.fold (fun id (_, desc) env ->
-        E.add_outer_scope env id desc)
-      free_vars set_of_closures_env
-  in
-  (* Add known approximations of function parameters *)
   let env =
     List.fold_left (fun env id ->
         let approx =
@@ -660,15 +652,15 @@ let populate_closure_approximations
           with Not_found -> (A.value_unknown Other)
         in
         E.add env id approx)
-      env function_decl.params
+      set_of_closures_env function_decl.params
   in
   env
 
 let prepare_to_simplify_closure ~(function_decl : Flambda.function_declaration)
-      ~free_vars ~specialised_args ~parameter_approximations
+      ~specialised_args ~parameter_approximations
       ~set_of_closures_env =
   let closure_env =
-    populate_closure_approximations ~function_decl ~free_vars
+    populate_closure_approximations ~function_decl
       ~parameter_approximations ~set_of_closures_env
   in
   (* Add definitions of known projections to the environment. *)
@@ -690,5 +682,4 @@ let prepare_to_simplify_closure ~(function_decl : Flambda.function_declaration)
     add_projections ~closure_env ~which_variables:specialised_args
       ~map:(fun spec_to -> spec_to)
   in
-  add_projections ~closure_env ~which_variables:free_vars
-    ~map:(fun (spec_to, _approx) -> spec_to)
+  closure_env
