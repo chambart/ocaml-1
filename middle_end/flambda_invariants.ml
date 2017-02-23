@@ -271,17 +271,13 @@ let variable_and_symbol_invariants (program : Flambda.program) =
       ignore_set_of_closures_id set_of_closures_id;
       ignore_set_of_closures_origin set_of_closures_origin;
       let functions_in_closure = Variable.Map.keys funs in
-      let variables_in_closure =
-        Variable.Map.fold (fun var (var_in_closure : Flambda.specialised_to)
-                  variables_in_closure ->
+      Variable.Map.iter (fun var (var_in_closure : Flambda.specialised_to) ->
             (* [var] may occur in the body, but will effectively be renamed
                to [var_in_closure], so the latter is what we check to make
                sure it's bound. *)
-            ignore_variable var;
-            check_variable_is_bound env var_in_closure.var;
-            Variable.Set.add var variables_in_closure)
-          free_vars Variable.Set.empty
-      in
+          ignore_variable var;
+          check_variable_is_bound env var_in_closure.var)
+        free_vars;
       let all_params, all_free_vars =
         Variable.Map.fold (fun fun_var function_decl acc ->
             let all_params, all_free_vars = acc in
@@ -301,8 +297,7 @@ let variable_and_symbol_invariants (program : Flambda.program) =
             (* Check that every variable free in the body of the function is
                bound by either the set of closures or the parameter list. *)
             let acceptable_free_variables =
-              Variable.Set.union
-                (Variable.Set.union variables_in_closure functions_in_closure)
+              Variable.Set.union functions_in_closure
                 (Variable.Set.of_list params)
             in
             let bad =
