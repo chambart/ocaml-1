@@ -318,8 +318,15 @@ let toplevel_substitution_named sb named =
   | Let let_expr -> let_expr.defining_expr
   | _ -> assert false
 
+let bind ~bindings ~body =
+  List.fold_left (fun expr (var, var_def) ->
+      Flambda.create_let var var_def expr)
+    body bindings
+
 let make_closure_declaration ~id ~body ~params ~stub : Flambda.t =
   let free_variables = Flambda.free_variables body in
+  let closure_id = Closure_id.wrap id in
+  let closure = id in
   let param_set = Variable.Set.of_list params in
   if not (Variable.Set.subset param_set free_variables) then begin
     Misc.fatal_error "Flambda_utils.make_closure_declaration"
@@ -333,26 +340,31 @@ let make_closure_declaration ~id ~body ~params ~stub : Flambda.t =
      function is only called from [Inline_and_simplify], so we should be able
      to do something similar to what happens in [Inlining_transforms] now. *)
   let body = toplevel_substitution sb body in
-  let subst id = Variable.Map.find id sb in
-  let function_declaration =
-    Flambda.create_function_declaration ~params:(List.map subst params)
-      ~body ~stub ~dbg:Debuginfo.none ~inline:Default_inline
-      ~specialise:Default_specialise ~is_a_functor:false
-  in
-  assert (Variable.Set.equal (Variable.Set.map subst free_variables)
-    function_declaration.free_variables);
-  let free_vars =
-    Variable.Map.fold (fun id id' fv' ->
+  let bindings, free_vars =
+    Variable.Map.fold (fun id id' (bindings, fv') ->
+        let var_within_closure = Variable.rename id in
         let spec_to : Flambda.specialised_to =
           { var = id;
             projection = None;
           }
         in
-        Variable.Map.add id' spec_to fv')
+        let projection : Flambda.named =
+          Project_var { closure; closure_id;
+                        var = Var_within_closure.wrap var_within_closure }
+        in
+        (id', projection) :: bindings,
+        Variable.Map.add var_within_closure spec_to fv')
       (Variable.Map.filter
         (fun id _ -> not (Variable.Set.mem id param_set))
         sb)
-      Variable.Map.empty
+      ([], Variable.Map.empty)
+  in
+  let body = bind ~bindings ~body in
+  let subst id = Variable.Map.find id sb in
+  let function_declaration =
+    Flambda.create_function_declaration ~params:(List.map subst params)
+      ~body ~stub ~dbg:Debuginfo.none ~inline:Default_inline
+      ~specialise:Default_specialise ~is_a_functor:false
   in
   let compilation_unit = Compilation_unit.get_current_exn () in
   let set_of_closures_var =
@@ -371,7 +383,7 @@ let make_closure_declaration ~id ~body ~params ~stub : Flambda.t =
   let project_closure : Flambda.named =
     Project_closure {
         set_of_closures = set_of_closures_var;
-        closure_id = Closure_id.wrap id;
+        closure_id;
       }
   in
   let project_closure_var =
@@ -381,11 +393,6 @@ let make_closure_declaration ~id ~body ~params ~stub : Flambda.t =
   Flambda.create_let set_of_closures_var (Set_of_closures set_of_closures)
     (Flambda.create_let project_closure_var project_closure
       (Var (project_closure_var)))
-
-let bind ~bindings ~body =
-  List.fold_left (fun expr (var, var_def) ->
-      Flambda.create_let var var_def expr)
-    body bindings
 
 let all_lifted_constants (program : Flambda.program) =
   let rec loop (program : Flambda.program_body) =

@@ -383,7 +383,7 @@ let inline_by_copying_function_declaration ~env ~r
         ~function_decls
         ~specialised_args:specialisable_args
     in
-    let rewrite_function (fun_decl:Flambda.function_declaration) =
+    let rewrite_function fun_var (fun_decl:Flambda.function_declaration) =
       (* First rewrite every use of the closure(s) defined by the current set
          of closures to free variable(s) corresponding to the original
          (non-specialised) closure(s).
@@ -420,11 +420,28 @@ let inline_by_copying_function_declaration ~env ~r
          a correct code transformation without optimisation; and then the
          second just performs the optimisation on a best-effort basis.
       *)
+      let substitution, bindings =
+        Variable.Map.fold
+          (fun original_var var_within_closure (substitution, bindings) ->
+             let projection : Flambda.named =
+               Project_var {
+                 closure_id = Closure_id.wrap fun_var; closure = fun_var;
+                 var = Var_within_closure.wrap var_within_closure; }
+             in
+             let internal_var = Variable.rename var_within_closure in
+             Variable.Map.add original_var internal_var substitution,
+             (internal_var, projection) :: bindings)
+          original_vars
+          (Variable.Map.empty, [])
+      in
       let body_substituted =
         (* The use of [Freshening.rewrite_recursive_calls_with_symbols] above
            ensures that we catch all calls to the functions being defined
            in the current set of closures. *)
-        Flambda_utils.toplevel_substitution original_vars fun_decl.body
+        Flambda_utils.toplevel_substitution substitution fun_decl.body
+      in
+      let body_substituted_with_projections_to_original_closure =
+        Flambda_utils.bind ~bindings ~body:body_substituted
       in
       let body =
         Flambda_iterators.map_toplevel_expr (fun (expr : Flambda.t) ->
@@ -474,7 +491,7 @@ let inline_by_copying_function_declaration ~env ~r
                 end
               end
             | _ -> expr)
-          body_substituted
+          body_substituted_with_projections_to_original_closure
       in
       Flambda.create_function_declaration
         ~params:fun_decl.params
@@ -486,7 +503,7 @@ let inline_by_copying_function_declaration ~env ~r
         ~body
     in
     let funs =
-      Variable.Map.map rewrite_function function_decls.funs
+      Variable.Map.mapi rewrite_function function_decls.funs
     in
     let function_decls =
       Flambda.update_function_declarations ~funs function_decls
