@@ -19,10 +19,8 @@
 include Identifiable.S
 
 val wrap : Variable.t -> t
-val unwrap : t -> Variable.t
 
 val wrap_map : 'a Variable.Map.t -> 'a Map.t
-val unwrap_set : Set.t -> Variable.Set.t
 
 val in_compilation_unit : t -> Compilation_unit.t -> bool
 val get_compilation_unit : t -> Compilation_unit.t

@@ -216,7 +216,7 @@ and set_of_closures = private {
   (* CR-soon mshinwell: I'd like to arrange these maps so that it's impossible
      to put invalid projection information into them (in particular, so that
      we enforce that the relation stays within the domain of the map). *)
-  free_vars : specialised_to Variable.Map.t;
+  free_vars : specialised_to Var_within_closure.Map.t;
   (** Mapping from all variables free in the body of the [function_decls] to
       variables in scope at the definition point of the [set_of_closures].
       The domain of this map is sometimes known as the "variables bound by
@@ -275,7 +275,7 @@ and set_of_closures = private {
       is essential to transport the closure freshening information to the
       point of use (e.g. a [Project_var] from such an argument).
   *)
-  direct_call_surrogates : Variable.t Variable.Map.t;
+  direct_call_surrogates : Closure_id.t Closure_id.Map.t;
   (** If [direct_call_surrogates] maps [fun_var1] to [fun_var2] then direct
       calls to [fun_var1] should be redirected to [fun_var2].  This is used
       to reduce the overhead of transformations that introduce wrapper
@@ -294,7 +294,7 @@ and function_declarations = private {
       function declarations is based.  Used to prevent different
       specialisations of the same functions from being inlined/specialised
       within each other. *)
-  funs : function_declaration Variable.Map.t;
+  funs : function_declaration Closure_id.Map.t;
   (** The function(s) defined by the set of function declarations.  The
       keys of this map are often referred to in the code as "fun_var"s. *)
 }
@@ -325,6 +325,15 @@ and function_declaration = private {
   (** Specialising requirements from the source code. *)
   is_a_functor : bool;
   (** Whether the function is known definitively to be a functor. *)
+  closure_var : Variable.t;
+  (** Variable to access the closure from within the closure.
+      This is equivalent to
+      {[ let closure_var = Project_closure closure_id set_of_closures in
+         body ]}
+      But there is no variable bound to the set of closures, hence the need
+      to represent it here.
+*)
+
 }
 
 (** Equivalent to the similar type in [Lambda]. *)
@@ -553,18 +562,19 @@ val create_function_declaration
   -> inline:Lambda.inline_attribute
   -> specialise:Lambda.specialise_attribute
   -> is_a_functor:bool
+  -> closure_var:Variable.t
   -> function_declaration
 
 (** Create a set of function declarations given the individual declarations. *)
 val create_function_declarations
-   : funs:function_declaration Variable.Map.t
+   : funs:function_declaration Closure_id.Map.t
   -> function_declarations
 
 (** Create a set of function declarations based on another set of function
     declarations. *)
 val update_function_declarations
    : function_declarations
-  -> funs:function_declaration Variable.Map.t
+  -> funs:function_declaration Closure_id.Map.t
   -> function_declarations
 
 val import_function_declarations_for_pack
@@ -577,9 +587,9 @@ val import_function_declarations_for_pack
     and [specialised_args] are reasonable. *)
 val create_set_of_closures
    : function_decls:function_declarations
-  -> free_vars:specialised_to Variable.Map.t
+  -> free_vars:specialised_to Var_within_closure.Map.t
   -> specialised_args:specialised_to Variable.Map.t
-  -> direct_call_surrogates:Variable.t Variable.Map.t
+  -> direct_call_surrogates:Closure_id.t Closure_id.Map.t
   -> set_of_closures
 
 (** Given a function declaration, find which of its parameters (if any)
@@ -614,7 +624,7 @@ val print_constant_defining_value
 
 val print_function_declaration
    : Format.formatter
-  -> Variable.t * function_declaration
+  -> Closure_id.t * function_declaration
   -> unit
 
 val print_function_declarations
