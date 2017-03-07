@@ -67,26 +67,37 @@ let add_default_argument_wrappers lam =
   in
   Lambda.map f lam
 
+(*
 (** Generate a wrapper ("stub") function that accepts a tuple argument and
     calls another function with arguments extracted in the obvious
     manner from the tuple. *)
 let tupled_function_call_stub original_params unboxed_version
       : Flambda.function_declaration =
+  let closure_var = Variable.create "closure_var" in
   let tuple_param =
-    Variable.rename ~append:"tupled_stub_param" unboxed_version
+    Variable.create "tupled_stub_param"
+    (* Variable.rename ~append:"tupled_stub_param" unboxed_version *)
   in
   let params = List.map (fun p -> Variable.rename p) original_params in
+  let unboxed_version_variable = Variable.create "unboxed_version" in
   let call : Flambda.t =
     Apply ({
-        func = unboxed_version;
+        func = unboxed_version_variable;
         args = params;
         (* CR-someday mshinwell for mshinwell: investigate if there is some
            redundancy here (func is also unboxed_version) *)
-        kind = Direct (Closure_id.wrap unboxed_version);
+        kind = Direct unboxed_version;
         dbg = Debuginfo.none;
         inline = Default_inline;
         specialise = Default_specialise;
       })
+  in
+  let call =
+    Flambda.create_let unboxed_version_variable
+      (Move_within_set_of_closures
+         { closure = closure_var;
+           start_from; move_to = unboxed_version})
+      call
   in
   let _, body =
     List.fold_left (fun (pos, body) param ->
@@ -99,6 +110,8 @@ let tupled_function_call_stub original_params unboxed_version
   Flambda.create_function_declaration ~params:[tuple_param]
     ~body ~stub:true ~dbg:Debuginfo.none ~inline:Default_inline
     ~specialise:Default_specialise ~is_a_functor:false
+    ~closure_var
+*)
 
 let register_const t (constant:Flambda.constant_defining_value) name
       : Flambda.constant_defining_value_block_field * string =
@@ -557,6 +570,7 @@ and close_functions t external_env function_declarations
   let all_free_idents = Function_decls.all_free_idents function_declarations in
   let close_one_function map decl =
     let closure_bound_var = Function_decl.closure_bound_var decl in
+    let closure_id = Closure_id.wrap closure_bound_var in
     let closure_env_without_parameters =
       Env.set_current_closure
         closure_env_without_parameters
@@ -589,21 +603,23 @@ and close_functions t external_env function_declarations
         ~inline:(Function_decl.inline decl)
         ~specialise:(Function_decl.specialise decl)
         ~is_a_functor:(Function_decl.is_a_functor decl)
+        ~closure_var:closure_bound_var
     in
     match Function_decl.kind decl with
-    | Curried -> Variable.Map.add closure_bound_var fun_decl map
+    | Curried -> Closure_id.Map.add closure_id fun_decl map
     | Tupled ->
-      let unboxed_version = Variable.rename closure_bound_var in
-      let generic_function_stub =
-        tupled_function_call_stub param_variables unboxed_version
-      in
-      Variable.Map.add unboxed_version fun_decl
-        (Variable.Map.add closure_bound_var generic_function_stub map)
+      failwith "TO UPDATE"
+      (* let unboxed_version = Closure_id.wrap (Variable.rename closure_bound_var) in *)
+      (* let generic_function_stub = *)
+      (*   tupled_function_call_stub param_variables unboxed_version *)
+      (* in *)
+      (* Closure_id.Map.add unboxed_version fun_decl *)
+      (*   (Closure_id.Map.add closure_bound_var generic_function_stub map) *)
   in
   let function_decls =
     Flambda.create_function_declarations
       ~funs:
-        (List.fold_left close_one_function Variable.Map.empty
+        (List.fold_left close_one_function Closure_id.Map.empty
           (Function_decls.to_list function_declarations))
   in
   (* The closed representation of a set of functions is a "set of closures".
@@ -631,13 +647,13 @@ and close_functions t external_env function_declarations
               projection = None;
             }
           in
-          Variable.Map.add internal_var external_var map,
+          Var_within_closure.Map.add internal_var external_var map,
           required_bindinds)
-        all_free_idents (Variable.Map.empty, [])
+        all_free_idents (Var_within_closure.Map.empty, [])
     in
     Flambda.create_set_of_closures ~function_decls ~free_vars
       ~specialised_args:Variable.Map.empty
-      ~direct_call_surrogates:Variable.Map.empty,
+      ~direct_call_surrogates:Closure_id.Map.empty,
     required_bindinds
   in
   Set_of_closures set_of_closures,

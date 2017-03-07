@@ -220,7 +220,7 @@ val map_all_immutable_let_and_let_rec_bindings
 val fold_function_decls_ignoring_stubs
    : Flambda.set_of_closures
   -> init:'a
-  -> f:(fun_var:Variable.t
+  -> f:(closure_id:Closure_id.t
     -> function_decl:Flambda.function_declaration
     -> 'a
     -> 'a)

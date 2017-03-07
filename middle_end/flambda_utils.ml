@@ -25,30 +25,34 @@ let name_expr (named : Flambda.named) ~name : Flambda.t =
   Flambda.create_let var named (Var var)
 
 let find_declaration cf ({ funs } : Flambda.function_declarations) =
-  Variable.Map.find (Closure_id.unwrap cf) funs
+  Closure_id.Map.find cf funs
 
-let find_declaration_variable cf ({ funs } : Flambda.function_declarations) =
-  let var = Closure_id.unwrap cf in
-  if not (Variable.Map.mem var funs)
-  then raise Not_found
-  else var
+let find_declaration_variable cf (decl : Flambda.function_declarations) =
+  let declaration = find_declaration cf decl in
+  declaration.closure_var
 
-let find_free_variable cv ({ free_vars } : Flambda.set_of_closures) =
-  let var : Flambda.specialised_to =
-    Variable.Map.find (Var_within_closure.unwrap cv) free_vars
-  in
-  var.var
+let find_free_variable _cv ({ free_vars = _free_vars } : Flambda.set_of_closures) =
+  failwith "TO UPDATE"
+  (* let var : Flambda.specialised_to = *)
+  (*   Variable.Map.find (Var_within_closure.unwrap cv) free_vars *)
+  (* in *)
+  (* var.var *)
 
 let function_arity (f : Flambda.function_declaration) = List.length f.params
 
-let variables_bound_by_the_closure cf
-      (decls : Flambda.function_declarations) =
-  let func = find_declaration cf decls in
-  let params = Variable.Set.of_list func.params in
-  let functions = Variable.Map.keys decls.funs in
-  Variable.Set.diff
-    (Variable.Set.diff func.free_variables params)
-    functions
+let variables_bound_by_the_closure _cf
+    (_decls : Flambda.function_declarations) =
+  (* No variable is ever bound by the closure itself anymore except
+     the closure variable which is not part of the set this function
+     returns *)
+  Variable.Set.empty
+
+(* let func = find_declaration cf decls in *)
+  (* let params = Variable.Set.of_list func.params in *)
+  (* let functions = Variable.Map.keys decls.funs in *)
+  (* Variable.Set.diff *)
+  (*   (Variable.Set.diff func.free_variables params) *)
+  (*   functions *)
 
 let description_of_toplevel_node (expr : Flambda.t) =
   match expr with
@@ -196,8 +200,8 @@ and sameclosure (c1 : Flambda.function_declaration)
 
 and same_set_of_closures (c1 : Flambda.set_of_closures)
       (c2 : Flambda.set_of_closures) =
-  Variable.Map.equal sameclosure c1.function_decls.funs c2.function_decls.funs
-    && Variable.Map.equal Flambda.equal_specialised_to
+  Closure_id.Map.equal sameclosure c1.function_decls.funs c2.function_decls.funs
+    && Var_within_closure.Map.equal Flambda.equal_specialised_to
         c1.free_vars c2.free_vars
     && Variable.Map.equal Flambda.equal_specialised_to c1.specialised_args
         c2.specialised_args
@@ -279,7 +283,7 @@ let toplevel_substitution sb tree =
         Flambda.create_set_of_closures
           ~function_decls:set_of_closures.function_decls
           ~free_vars:
-            (Variable.Map.map (fun (spec_to : Flambda.specialised_to) ->
+            (Var_within_closure.Map.map (fun (spec_to : Flambda.specialised_to) ->
                 { spec_to with var = sb spec_to.var; })
               set_of_closures.free_vars)
           ~specialised_args:
@@ -342,7 +346,7 @@ let make_closure_declaration ~id ~body ~params ~stub : Flambda.t =
   let body = toplevel_substitution sb body in
   let bindings, free_vars =
     Variable.Map.fold (fun id id' (bindings, fv') ->
-        let var_within_closure = Variable.rename id in
+        let var_within_closure = Var_within_closure.wrap (Variable.rename id) in
         let spec_to : Flambda.specialised_to =
           { var = id;
             projection = None;
@@ -350,14 +354,14 @@ let make_closure_declaration ~id ~body ~params ~stub : Flambda.t =
         in
         let projection : Flambda.named =
           Project_var { closure; closure_id;
-                        var = Var_within_closure.wrap var_within_closure }
+                        var = var_within_closure }
         in
         (id', projection) :: bindings,
-        Variable.Map.add var_within_closure spec_to fv')
+        Var_within_closure.Map.add var_within_closure spec_to fv')
       (Variable.Map.filter
         (fun id _ -> not (Variable.Set.mem id param_set))
         sb)
-      ([], Variable.Map.empty)
+      ([], Var_within_closure.Map.empty)
   in
   let body = bind ~bindings ~body in
   let subst id = Variable.Map.find id sb in
@@ -365,6 +369,7 @@ let make_closure_declaration ~id ~body ~params ~stub : Flambda.t =
     Flambda.create_function_declaration ~params:(List.map subst params)
       ~body ~stub ~dbg:Debuginfo.none ~inline:Default_inline
       ~specialise:Default_specialise ~is_a_functor:false
+      ~closure_var:closure
   in
   let compilation_unit = Compilation_unit.get_current_exn () in
   let set_of_closures_var =
@@ -374,11 +379,11 @@ let make_closure_declaration ~id ~body ~params ~stub : Flambda.t =
   let set_of_closures =
     let function_decls =
       Flambda.create_function_declarations
-        ~funs:(Variable.Map.singleton id function_declaration)
+        ~funs:(Closure_id.Map.singleton closure_id function_declaration)
     in
     Flambda.create_set_of_closures ~function_decls ~free_vars
       ~specialised_args:Variable.Map.empty
-      ~direct_call_surrogates:Variable.Map.empty
+      ~direct_call_surrogates:Closure_id.Map.empty
   in
   let project_closure : Flambda.named =
     Project_closure {
@@ -470,8 +475,7 @@ let make_closure_map program =
   let map = ref Closure_id.Map.empty in
   let add_set_of_closures ~constant:_ : Flambda.set_of_closures -> unit = fun
     { function_decls } ->
-    Variable.Map.iter (fun var _ ->
-        let closure_id = Closure_id.wrap var in
+    Closure_id.Map.iter (fun closure_id _ ->
         map := Closure_id.Map.add closure_id function_decls !map)
       function_decls.funs
   in
@@ -483,8 +487,7 @@ let make_closure_map program =
 let make_closure_map' input =
   let map = ref Closure_id.Map.empty in
   let add_set_of_closures _ (function_decls : Flambda.function_declarations) =
-    Variable.Map.iter (fun var _ ->
-        let closure_id = Closure_id.wrap var in
+    Closure_id.Map.iter (fun closure_id _ ->
         map := Closure_id.Map.add closure_id function_decls !map)
       function_decls.funs
   in
@@ -523,12 +526,11 @@ let all_function_decls_indexed_by_set_of_closures_id program =
     (all_sets_of_closures_map program)
 
 let all_function_decls_indexed_by_closure_id program =
-  let aux_fun function_decls fun_var _ map =
-    let closure_id = Closure_id.wrap fun_var in
+  let aux_fun function_decls closure_id _ map =
     Closure_id.Map.add closure_id function_decls map
   in
   let aux _ ({ function_decls; _ } : Flambda.set_of_closures) map =
-    Variable.Map.fold (aux_fun function_decls) function_decls.funs map
+    Closure_id.Map.fold (aux_fun function_decls) function_decls.funs map
   in
   Set_of_closures_id.Map.fold aux (all_sets_of_closures_map program)
     Closure_id.Map.empty
@@ -580,7 +582,7 @@ let substitute_read_symbol_field_for_variables
         Flambda.create_set_of_closures
           ~function_decls:set_of_closures.function_decls
           ~free_vars:
-            (Variable.Map.map (fun (spec_to : Flambda.specialised_to) ->
+            (Var_within_closure.Map.map (fun (spec_to : Flambda.specialised_to) ->
                 { spec_to with var = sb spec_to.var; })
               set_of_closures.free_vars)
           ~specialised_args:
@@ -753,76 +755,76 @@ module Switch_storer =
       let make_key = make_key
     end)
 
-let fun_vars_referenced_in_decls
+let closure_id_referenced_in_decls
       (function_decls : Flambda.function_declarations) ~backend =
-  let fun_vars = Variable.Map.keys function_decls.funs in
-  let symbols_to_fun_vars =
+  let symbols_to_closure_id =
     let module Backend = (val backend : Backend_intf.S) in
-    Variable.Set.fold (fun fun_var symbols_to_fun_vars ->
-        let closure_id = Closure_id.wrap fun_var in
+    Closure_id.Map.fold (fun closure_id _ symbols_to_fun_vars ->
         let symbol = Backend.closure_symbol closure_id in
-        Symbol.Map.add symbol fun_var symbols_to_fun_vars)
-      fun_vars
+        Symbol.Map.add symbol closure_id symbols_to_fun_vars)
+      function_decls.funs
       Symbol.Map.empty
   in
-  Variable.Map.map (fun (func_decl : Flambda.function_declaration) ->
+  Closure_id.Map.mapi (fun closure_id (func_decl : Flambda.function_declaration) ->
       let from_symbols =
-        Symbol.Set.fold (fun symbol fun_vars' ->
-            match Symbol.Map.find symbol symbols_to_fun_vars with
-            | exception Not_found -> fun_vars'
-            | fun_var ->
-              assert (Variable.Set.mem fun_var fun_vars);
-              Variable.Set.add fun_var fun_vars')
+        Symbol.Set.fold (fun symbol closure_ids ->
+            match Symbol.Map.find symbol symbols_to_closure_id with
+            | exception Not_found -> closure_ids
+            | closure_id ->
+              Closure_id.Set.add closure_id closure_ids)
           func_decl.free_symbols
-          Variable.Set.empty
+          Closure_id.Set.empty
       in
       let from_variables =
-        Variable.Set.inter func_decl.free_variables fun_vars
+        if Variable.Set.mem func_decl.closure_var func_decl.free_variables then
+          Closure_id.Set.singleton closure_id
+        else
+          Closure_id.Set.empty
       in
-      Variable.Set.union from_symbols from_variables)
+      Closure_id.Set.union from_symbols from_variables)
     function_decls.funs
 
 let closures_required_by_entry_point ~(entry_point : Closure_id.t) ~backend
     (function_decls : Flambda.function_declarations) =
   let dependencies =
-    fun_vars_referenced_in_decls function_decls ~backend
+    closure_id_referenced_in_decls function_decls ~backend
   in
-  let set = ref Variable.Set.empty in
+  let set = ref Closure_id.Set.empty in
   let queue = Queue.create () in
   let add v =
-    if not (Variable.Set.mem v !set) then begin
-      set := Variable.Set.add v !set;
+    if not (Closure_id.Set.mem v !set) then begin
+      set := Closure_id.Set.add v !set;
       Queue.push v queue
     end
   in
-  add (Closure_id.unwrap entry_point);
+  add entry_point;
   while not (Queue.is_empty queue) do
     let fun_var = Queue.pop queue in
-    match Variable.Map.find fun_var dependencies with
+    match Closure_id.Map.find fun_var dependencies with
     | exception Not_found -> ()
     | fun_dependencies ->
-      Variable.Set.iter (fun dep ->
-          if Variable.Map.mem dep function_decls.funs then
+      Closure_id.Set.iter (fun dep ->
+          if Closure_id.Map.mem dep function_decls.funs then
             add dep)
         fun_dependencies
   done;
   !set
 
 let all_functions_parameters (function_decls : Flambda.function_declarations) =
-  Variable.Map.fold (fun _ ({ params } : Flambda.function_declaration) set ->
+  Closure_id.Map.fold (fun _ ({ params } : Flambda.function_declaration) set ->
       Variable.Set.union set (Variable.Set.of_list params))
     function_decls.funs Variable.Set.empty
 
 let all_free_symbols (function_decls : Flambda.function_declarations) =
-  Variable.Map.fold (fun _ (function_decl : Flambda.function_declaration)
+  Closure_id.Map.fold (fun _ (function_decl : Flambda.function_declaration)
           syms ->
       Symbol.Set.union syms function_decl.free_symbols)
     function_decls.funs Symbol.Set.empty
 
 let contains_stub (fun_decls : Flambda.function_declarations) =
   let number_of_stub_functions =
-    Variable.Map.cardinal
-      (Variable.Map.filter (fun _ { Flambda.stub } -> stub)
+    Closure_id.Map.cardinal
+      (Closure_id.Map.filter (fun _ { Flambda.stub } -> stub)
          fun_decls.funs)
   in
   number_of_stub_functions > 0
@@ -861,7 +863,7 @@ let parameters_specialised_to_the_same_variable
       (Variable.Map.map (fun ({ var; _ } : Flambda.specialised_to) -> var)
         specialised_args)
   in
-  Variable.Map.map (fun ({ params; _ } : Flambda.function_declaration) ->
+  Closure_id.Map.map (fun ({ params; _ } : Flambda.function_declaration) ->
       List.map (fun param ->
           match Variable.Map.find param specialised_args with
           | exception Not_found -> Not_specialised

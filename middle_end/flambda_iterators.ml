@@ -204,14 +204,14 @@ let iter_exprs_at_toplevel_of_program (program : Flambda.program) ~f =
   let rec loop (program : Flambda.program_body) =
     match program with
     | Let_symbol (_, Set_of_closures set_of_closures, program) ->
-      Variable.Map.iter (fun _ (function_decl : Flambda.function_declaration) ->
+      Closure_id.Map.iter (fun _ (function_decl : Flambda.function_declaration) ->
           f function_decl.body)
         set_of_closures.function_decls.funs;
       loop program
     | Let_rec_symbol (defs, program) ->
       List.iter (function
           | (_, Flambda.Set_of_closures set_of_closures) ->
-            Variable.Map.iter
+            Closure_id.Map.iter
               (fun _ (function_decl : Flambda.function_declaration) ->
                 f function_decl.body)
               set_of_closures.function_decls.funs
@@ -237,7 +237,7 @@ let iter_on_set_of_closures_of_program (program : Flambda.program) ~f =
     match program with
     | Let_symbol (_, Set_of_closures set_of_closures, program) ->
       f ~constant:true set_of_closures;
-      Variable.Map.iter (fun _ (function_decl : Flambda.function_declaration) ->
+      Closure_id.Map.iter (fun _ (function_decl : Flambda.function_declaration) ->
           iter_on_sets_of_closures (f ~constant:false) function_decl.body)
         set_of_closures.function_decls.funs;
       loop program
@@ -245,7 +245,7 @@ let iter_on_set_of_closures_of_program (program : Flambda.program) ~f =
       List.iter (function
           | (_, Flambda.Set_of_closures set_of_closures) ->
             f ~constant:true set_of_closures;
-            Variable.Map.iter
+            Closure_id.Map.iter
               (fun _ (function_decl : Flambda.function_declaration) ->
                 iter_on_sets_of_closures (f ~constant:false) function_decl.body)
               set_of_closures.function_decls.funs
@@ -398,12 +398,12 @@ let map_general ~toplevel f f_named tree =
       | Project_closure _ | Move_within_set_of_closures _ | Project_var _
       | Prim _ | Read_symbol_field _ -> named
       | Set_of_closures ({ function_decls; free_vars; specialised_args;
-          direct_call_surrogates }) ->
+          direct_call_surrogates; }) ->
         if toplevel then named
         else begin
           let done_something = ref false in
           let funs =
-            Variable.Map.map (fun (func_decl : Flambda.function_declaration) ->
+            Closure_id.Map.map (fun (func_decl : Flambda.function_declaration) ->
                 let new_body = aux func_decl.body in
                 if new_body == func_decl.body then begin
                   func_decl
@@ -417,6 +417,7 @@ let map_general ~toplevel f f_named tree =
                     ~inline:func_decl.inline
                     ~specialise:func_decl.specialise
                     ~is_a_functor:func_decl.is_a_functor
+                    ~closure_var:func_decl.closure_var
                 end)
               function_decls.funs
           in
@@ -494,7 +495,7 @@ let map_symbols_on_set_of_closures
     ~f =
   let done_something = ref false in
   let funs =
-    Variable.Map.map (fun (func_decl : Flambda.function_declaration) ->
+    Closure_id.Map.map (fun (func_decl : Flambda.function_declaration) ->
         let body = map_symbols func_decl.body ~f in
         if not (body == func_decl.body) then begin
           done_something := true;
@@ -506,7 +507,8 @@ let map_symbols_on_set_of_closures
           ~dbg:func_decl.dbg
           ~inline:func_decl.inline
           ~specialise:func_decl.specialise
-          ~is_a_functor:func_decl.is_a_functor)
+          ~is_a_functor:func_decl.is_a_functor
+          ~closure_var:func_decl.closure_var)
       function_decls.funs
   in
   if not !done_something then
@@ -587,7 +589,7 @@ let map_project_var_to_named_opt tree ~f =
 let map_function_bodies (set_of_closures : Flambda.set_of_closures) ~f =
   let done_something = ref false in
   let funs =
-    Variable.Map.map (fun (function_decl : Flambda.function_declaration) ->
+    Closure_id.Map.map (fun (function_decl : Flambda.function_declaration) ->
         let new_body = f function_decl.body in
         if new_body == function_decl.body then
           function_decl
@@ -600,6 +602,7 @@ let map_function_bodies (set_of_closures : Flambda.set_of_closures) ~f =
             ~inline:function_decl.inline
             ~specialise:function_decl.specialise
             ~is_a_functor:function_decl.is_a_functor
+            ~closure_var:function_decl.closure_var
         end)
       set_of_closures.function_decls.funs
   in
@@ -622,7 +625,7 @@ let map_sets_of_closures_of_program (program : Flambda.program)
       let done_something = ref false in
       let function_decls =
         let funs =
-          Variable.Map.map (fun
+          Closure_id.Map.map (fun
                   (function_decl : Flambda.function_declaration) ->
               let body = map_sets_of_closures ~f function_decl.body in
               if body == function_decl.body then
@@ -636,6 +639,7 @@ let map_sets_of_closures_of_program (program : Flambda.program)
                   ~inline:function_decl.inline
                   ~specialise:function_decl.specialise
                   ~is_a_functor:function_decl.is_a_functor
+                  ~closure_var:function_decl.closure_var
               end)
             set_of_closures.function_decls.funs
         in
@@ -724,7 +728,7 @@ let map_exprs_at_toplevel_of_program (program : Flambda.program)
     let map_constant_set_of_closures (set_of_closures:Flambda.set_of_closures) =
       let done_something = ref false in
       let funs =
-        Variable.Map.map (fun (function_decl : Flambda.function_declaration) ->
+        Closure_id.Map.map (fun (function_decl : Flambda.function_declaration) ->
             let body = f function_decl.body in
             if body == function_decl.body then
               function_decl
@@ -737,6 +741,7 @@ let map_exprs_at_toplevel_of_program (program : Flambda.program)
                 ~inline:function_decl.inline
                 ~specialise:function_decl.specialise
                 ~is_a_functor:function_decl.is_a_functor
+                ~closure_var:function_decl.closure_var
             end)
           set_of_closures.function_decls.funs
       in
@@ -828,7 +833,7 @@ let map_all_immutable_let_and_let_rec_bindings (expr : Flambda.t)
 
 let fold_function_decls_ignoring_stubs
       (set_of_closures : Flambda.set_of_closures) ~init ~f =
-  Variable.Map.fold (fun fun_var function_decl acc ->
-      f ~fun_var ~function_decl acc)
+  Closure_id.Map.fold (fun closure_id function_decl acc ->
+      f ~closure_id ~function_decl acc)
     set_of_closures.function_decls.funs
     init

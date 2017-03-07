@@ -28,7 +28,7 @@ module Env : sig
 
   val add_var : t -> Ident.t -> Variable.t -> t
   val add_vars : t -> Ident.t list -> Variable.t list -> t
-  val add_var_from_current_closure : t -> Ident.t -> Variable.t -> t
+  val add_var_from_current_closure : t -> Ident.t -> Var_within_closure.t -> t
 
   type variable_access =
     | Closure of Var_within_closure.t
@@ -99,5 +99,5 @@ module Function_decls : sig
      are not bound as parameters.
      It also contains the globals bindings of the provided environment. *)
   val closure_env_without_parameters
-      : Env.t -> t -> Env.t * Variable.t Ident.tbl
+      : Env.t -> t -> Env.t * Var_within_closure.t Ident.tbl
 end

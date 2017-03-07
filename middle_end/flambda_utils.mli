@@ -187,10 +187,10 @@ end
     to the "fun_var"s (if any) used in the body of the function associated
     with that "fun_var".
 *)
-val fun_vars_referenced_in_decls
+val closure_id_referenced_in_decls
    : Flambda.function_declarations
   -> backend:(module Backend_intf.S)
-  -> Variable.Set.t Variable.Map.t
+  -> Closure_id.Set.t Closure_id.Map.t
 
 (** Computes the set of closure_id in the set of closures that are
     required used (transitively) the entry_point *)
@@ -198,7 +198,7 @@ val closures_required_by_entry_point
    : entry_point:Closure_id.t
   -> backend:(module Backend_intf.S)
   -> Flambda.function_declarations
-  -> Variable.Set.t
+  -> Closure_id.Set.t
 
 val all_functions_parameters : Flambda.function_declarations -> Variable.Set.t
 
@@ -228,4 +228,4 @@ type specialised_to_same_as =
 val parameters_specialised_to_the_same_variable
    : function_decls:Flambda.function_declarations
   -> specialised_args:Flambda.specialised_to Variable.Map.t
-  -> specialised_to_same_as list Variable.Map.t
+  -> specialised_to_same_as list Closure_id.Map.t

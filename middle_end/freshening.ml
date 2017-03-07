@@ -137,7 +137,7 @@ let add_variable t id =
      let id', t = active_add_variable t id in
      id', Active t
 
-let active_add_variables' t ids =
+let _active_add_variables' t ids =
   List.fold_right (fun id (ids, t) ->
       let id', t = active_add_variable t id in
       id' :: ids, t) ids ([], t)
@@ -164,7 +164,7 @@ let add_mutable_variable t id =
      let id', t = active_add_mutable_variable t id in
      id', Active t
 
-let active_find_var_exn t id =
+let _active_find_var_exn t id =
   try Variable.Map.find id t.sb_var with
   | Not_found ->
       Misc.fatal_error (Format.asprintf "find_var: can't find %a@."
@@ -195,8 +195,9 @@ let rewrite_recursive_calls_with_symbols t
     in
     let closure_symbols_used = ref false in
     let closure_symbols =
-      Variable.Map.fold (fun var _ map ->
-        let closure_id = Closure_id.wrap var in
+      Closure_id.Map.fold (fun closure_id (decl:Flambda.function_declaration) map ->
+          (* let closure_id = Closure_id.wrap var in *)
+        let var = decl.closure_var in
         let sym = make_closure_symbol closure_id in
         if Symbol.Set.mem sym all_free_symbols then begin
           closure_symbols_used := true;
@@ -212,7 +213,7 @@ let rewrite_recursive_calls_with_symbols t
       function_declarations
     end else begin
       let funs =
-        Variable.Map.map (fun (ffun : Flambda.function_declaration) ->
+        Closure_id.Map.map (fun (ffun : Flambda.function_declaration) ->
           let body =
             Flambda_iterators.map_toplevel_named
               (* CR-someday pchambart: This may be worth deep substituting
@@ -226,7 +227,8 @@ let rewrite_recursive_calls_with_symbols t
           in
           Flambda.create_function_declaration ~params:ffun.params
             ~body ~stub:ffun.stub ~dbg:ffun.dbg ~inline:ffun.inline
-            ~specialise:ffun.specialise ~is_a_functor:ffun.is_a_functor)
+            ~specialise:ffun.specialise ~is_a_functor:ffun.is_a_functor
+            ~closure_var:ffun.closure_var)
           function_declarations.funs
       in
       Flambda.update_function_declarations function_declarations ~funs
@@ -260,7 +262,7 @@ module Project_var = struct
       let off_sb = Var_within_closure.Map.add off off' t.vars_within_closure in
       id', Active subst, { t with vars_within_closure = off_sb; }
 
-  let new_subst_fun t id subst =
+  let _new_subst_fun t id subst =
     let id' = Variable.rename id in
     let subst = add_sb_var subst id id' in
     let off = Closure_id.wrap id in
@@ -299,48 +301,51 @@ module Project_var = struct
     match subst with
     | Inactive -> func_decls, subst, t
     | Active subst ->
-      let subst_func_decl _fun_id (func_decl : Flambda.function_declaration)
-            subst =
-        let params, subst = active_add_variables' subst func_decl.params in
-        (* Since all parameters are distinct, even between functions, we can
-           just use a single substitution. *)
-        let body =
-          Flambda_utils.toplevel_substitution subst.sb_var func_decl.body
-        in
-        let function_decl =
-          Flambda.create_function_declaration ~params
-            ~body ~stub:func_decl.stub ~dbg:func_decl.dbg
-            ~inline:func_decl.inline ~specialise:func_decl.specialise
-            ~is_a_functor:func_decl.is_a_functor
-        in
-        function_decl, subst
-      in
-      let subst, t =
-        if only_freshen_parameters then
-          subst, t
-        else
-          Variable.Map.fold (fun orig_id _func_decl (subst, t) ->
-              let _id, subst, t = new_subst_fun t orig_id subst in
-              subst, t)
-            func_decls.funs
-            (subst, t)
-      in
-      let funs, subst =
-        Variable.Map.fold (fun orig_id func_decl (funs, subst) ->
-            let func_decl, subst = subst_func_decl orig_id func_decl subst in
-            let id =
-              if only_freshen_parameters then orig_id
-              else active_find_var_exn subst orig_id
-            in
-            let funs = Variable.Map.add id func_decl funs in
-            funs, subst)
-          func_decls.funs
-          (Variable.Map.empty, subst)
-      in
-      let function_decls =
-        Flambda.update_function_declarations func_decls ~funs
-      in
-      function_decls, Active subst, t
+      ignore only_freshen_parameters;
+      ignore subst;
+      failwith "TO UPDATE (or do nothing ?)"
+      (* let subst_func_decl _fun_id (func_decl : Flambda.function_declaration) *)
+      (*       subst = *)
+      (*   let params, subst = active_add_variables' subst func_decl.params in *)
+      (*   (\* Since all parameters are distinct, even between functions, we can *)
+      (*      just use a single substitution. *\) *)
+      (*   let body = *)
+      (*     Flambda_utils.toplevel_substitution subst.sb_var func_decl.body *)
+      (*   in *)
+      (*   let function_decl = *)
+      (*     Flambda.create_function_declaration ~params *)
+      (*       ~body ~stub:func_decl.stub ~dbg:func_decl.dbg *)
+      (*       ~inline:func_decl.inline ~specialise:func_decl.specialise *)
+      (*       ~is_a_functor:func_decl.is_a_functor *)
+      (*   in *)
+      (*   function_decl, subst *)
+      (* in *)
+      (* let subst, t = *)
+      (*   if only_freshen_parameters then *)
+      (*     subst, t *)
+      (*   else *)
+      (*     Closure_id.Map.fold (fun orig_id _func_decl (subst, t) -> *)
+      (*         let _id, subst, t = new_subst_fun t orig_id subst in *)
+      (*         subst, t) *)
+      (*       func_decls.funs *)
+      (*       (subst, t) *)
+      (* in *)
+      (* let funs, subst = *)
+      (*   Variable.Map.fold (fun orig_id func_decl (funs, subst) -> *)
+      (*       let func_decl, subst = subst_func_decl orig_id func_decl subst in *)
+      (*       let id = *)
+      (*         if only_freshen_parameters then orig_id *)
+      (*         else active_find_var_exn subst orig_id *)
+      (*       in *)
+      (*       let funs = Variable.Map.add id func_decl funs in *)
+      (*       funs, subst) *)
+      (*     func_decls.funs *)
+      (*     (Variable.Map.empty, subst) *)
+      (* in *)
+      (* let function_decls = *)
+      (*   Flambda.update_function_declarations func_decls ~funs *)
+      (* in *)
+      (* function_decls, Active subst, t *)
 
   let apply_closure_id t closure_id =
     try Closure_id.Map.find closure_id t.closure_id

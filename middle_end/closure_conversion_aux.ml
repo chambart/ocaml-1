@@ -51,7 +51,7 @@ module Env = struct
 
   let add_var_from_current_closure t id var =
     let variables =
-      Ident.add id (Closure (Var_within_closure.wrap var)) t.variables
+      Ident.add id (Closure var) t.variables
     in
     { t with variables }
 
@@ -204,7 +204,9 @@ module Function_decls = struct
     in
     (* For free variables. *)
     IdentSet.fold (fun id (env, local_env) ->
-        let variable = Variable.create (Ident.name id) in
+        let variable =
+          Var_within_closure.wrap (Variable.create (Ident.name id))
+        in
         Env.add_var_from_current_closure env id variable,
         Ident.add id variable local_env)
       t.all_free_idents (closure_env, Ident.empty)

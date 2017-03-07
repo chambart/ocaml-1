@@ -122,7 +122,7 @@ let lambda_smaller' lam ~than:threshold =
     | Const _ | Allocated_const _ -> incr size
     | Read_symbol_field _ -> incr size
     | Set_of_closures ({ function_decls = ffuns }) ->
-      Variable.Map.iter (fun _ (ffun : Flambda.function_declaration) ->
+      Closure_id.Map.iter (fun _ (ffun : Flambda.function_declaration) ->
           lambda_size ffun.body)
         ffuns.funs
     | Project_closure _ | Project_var _ ->
