@@ -17,3 +17,6 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 include Closure_element
+
+type with_variable = t * Variable.t
+module With_variable = Identifiable.Make (Identifiable.Pair (T) (Variable))

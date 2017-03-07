@@ -16,6 +16,7 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+(*
 (** A variable in a closure can either be used by the closure itself
     or by an inlined version of the function. *)
 let remove_unused_closure_variables ~remove_direct_call_surrogates program =
@@ -122,3 +123,8 @@ let remove_unused_closure_variables ~remove_direct_call_surrogates program =
     | e -> e
   in
   Flambda_iterators.map_named_of_program ~f:aux_named program
+*)
+
+[@@@ocaml.warning "+a-27"]
+let remove_unused_closure_variables ~remove_direct_call_surrogates program =
+  failwith "TO UPDATE"

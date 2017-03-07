@@ -517,7 +517,7 @@ let prepare_to_simplify_set_of_closures ~env
       ~function_decls ~freshen
       ~(only_for_function_decl : Flambda.function_declaration option) =
   let free_vars =
-    Variable.Map.map (fun (external_var : Flambda.specialised_to) ->
+    Var_within_closure.Map.map (fun (external_var : Flambda.specialised_to) ->
         let var =
           let var =
             Freshening.apply_variable (E.freshening env) external_var.var
@@ -580,7 +580,7 @@ let prepare_to_simplify_set_of_closures ~env
       Variable.Map.map_keys (Freshening.apply_variable (E.freshening env))
         specialised_args
     in
-    Freshening.freshen_projection_relation specialised_args
+    Freshening.freshen_projection_relation_variable specialised_args
       ~freshening:(E.freshening env)
       ~closure_freshening:freshening
   in
@@ -593,14 +593,14 @@ let prepare_to_simplify_set_of_closures ~env
         specialised_args)
   in
   let direct_call_surrogates =
-    Variable.Map.fold (fun existing surrogate surrogates ->
+    Closure_id.Map.fold (fun existing surrogate surrogates ->
         let existing =
           Freshening.Project_var.apply_closure_id freshening
-            (Closure_id.wrap existing)
+            existing
         in
         let surrogate =
           Freshening.Project_var.apply_closure_id freshening
-            (Closure_id.wrap surrogate)
+            surrogate
         in
         assert (not (Closure_id.Map.mem existing surrogates));
         Closure_id.Map.add existing surrogate surrogates)
@@ -614,8 +614,8 @@ let prepare_to_simplify_set_of_closures ~env
   (* we use the previous closure for evaluating the functions *)
   let internal_value_set_of_closures =
     let bound_vars =
-      Variable.Map.fold (fun id (_, desc) map ->
-          Var_within_closure.Map.add (Var_within_closure.wrap id) desc map)
+      Var_within_closure.Map.fold (fun id (_, desc) map ->
+          Var_within_closure.Map.add id desc map)
         free_vars Var_within_closure.Map.empty
     in
     A.create_value_set_of_closures ~function_decls ~bound_vars
@@ -626,12 +626,17 @@ let prepare_to_simplify_set_of_closures ~env
      This part of the environment is shared between all of the closures in
      the set of closures. *)
   let set_of_closures_env =
-    Variable.Map.fold (fun closure _ env ->
-        let approx =
-          A.value_closure ~closure_var:closure internal_value_set_of_closures
-            (Closure_id.wrap closure)
-        in
-        E.add env closure approx
+    Closure_id.Map.fold (fun closure decl env ->
+        ignore (closure,decl,env);
+        failwith "TO UPDATE: closure_var shouldn't be in the environment of every closure of the set"
+
+        (* let closure_var = decl.Flambda.closure_var in *)
+        (* let approx = *)
+        (*   A.value_closure ~closure_var *)
+        (*     internal_value_set_of_closures *)
+        (*     closure *)
+        (* in *)
+        (* E.add env closure_var approx *)
       )
       function_decls.funs env
   in

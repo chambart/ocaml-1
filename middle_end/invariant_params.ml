@@ -125,7 +125,11 @@ let transitive_closure state =
 let function_variable_alias
     (function_decls : Flambda.function_declarations)
     ~backend =
-  let fun_vars = Variable.Map.keys function_decls.funs in
+  let fun_vars =
+    Closure_id.Map.fold (fun _ decl acc ->
+        Variable.Set.add decl.Flambda.closure_var acc)
+      function_decls.funs Variable.Set.empty
+  in
   let symbols_to_fun_vars =
     let module Backend = (val backend : Backend_intf.S) in
     Variable.Set.fold (fun fun_var symbols_to_fun_vars ->
@@ -136,7 +140,7 @@ let function_variable_alias
       Symbol.Map.empty
   in
   let fun_var_bindings = ref Variable.Map.empty in
-  Variable.Map.iter (fun _ ( function_decl : Flambda.function_declaration ) ->
+  Closure_id.Map.iter (fun _ ( function_decl : Flambda.function_declaration ) ->
       Flambda_iterators.iter_all_toplevel_immutable_let_and_let_rec_bindings
         ~f:(fun var named ->
            (* CR-soon mshinwell: consider having the body passed to this
@@ -158,14 +162,23 @@ let function_variable_alias
 let analyse_functions ~backend ~param_to_param
       ~anything_to_param ~param_to_anywhere
       (decls : Flambda.function_declarations) =
+  let _ = transitive_closure in
+  let _ = function_variable_alias in
+  ignore backend;
+  ignore param_to_param;
+  ignore anything_to_param;
+  ignore param_to_anywhere;
+  ignore decls;
+  failwith "TO UPDATE"
+  (*
   let function_variable_alias = function_variable_alias ~backend decls in
   let param_indexes_by_fun_vars =
-    Variable.Map.map (fun (decl : Flambda.function_declaration) ->
+    Closure_id.Map.map (fun (decl : Flambda.function_declaration) ->
         Array.of_list decl.params)
       decls.funs
   in
   let find_callee_arg ~callee ~callee_pos =
-    match Variable.Map.find callee param_indexes_by_fun_vars with
+    match Closure_id.Map.find callee param_indexes_by_fun_vars with
     | exception Not_found -> None (* not a recursive call *)
     | arr ->
       (* Ignore overapplied parameters: they are applied to a different
@@ -180,7 +193,10 @@ let analyse_functions ~backend ~param_to_param
       | exception Not_found -> fun_var
       | fun_var -> fun_var
     in
-    if Variable.Map.mem fun_var decls.funs
+    if Closure_id.Map.exists
+        (fun _ decl ->
+           Variable.equal decl.Flambda.closure_var fun_var)
+        decls.funs
     then Variable.Tbl.add escaping_functions fun_var ();
   in
   let used_variables = Variable.Tbl.create 42 in
@@ -193,7 +209,7 @@ let analyse_functions ~backend ~param_to_param
     match find_callee_arg ~callee ~callee_pos with
     | None -> used_variable caller_arg (* not a recursive call *)
     | Some callee_arg ->
-      match Variable.Map.find caller decls.funs with
+      match Closure_id.Map.find caller decls.funs with
       | exception Not_found ->
         assert false
       | { params } ->
@@ -210,7 +226,7 @@ let analyse_functions ~backend ~param_to_param
         relation := new_relation
   in
   let arity ~callee =
-    match Variable.Map.find callee decls.funs with
+    match Closure_id.Map.find callee decls.funs with
     | exception Not_found -> 0
     | func -> Flambda_utils.function_arity func
   in
@@ -262,7 +278,7 @@ let analyse_functions ~backend ~param_to_param
          params)
     decls.funs;
   transitive_closure !relation
-
+*)
 
 (* A parameter [x] of the function [f] is considered as unchanging if
    during an 'external' (call from outside the set of closures) call of
@@ -327,7 +343,7 @@ let invariant_params_in_recursion (decls : Flambda.function_declarations)
           else not_unchanging)
       relation Variable.Set.empty
   in
-  let params = Variable.Map.fold (fun _
+  let params = Closure_id.Map.fold (fun _
         ({ params } : Flambda.function_declaration) set ->
       Variable.Set.union (Variable.Set.of_list params) set)
     decls.funs Variable.Set.empty
@@ -397,11 +413,11 @@ let unused_arguments (decls : Flambda.function_declarations) ~backend =
       decls
   in
   let arguments =
-    Variable.Map.fold
+    Closure_id.Map.fold
       (fun fun_var decl acc ->
          List.fold_left
            (fun acc param ->
-              match Variable.Pair.Map.find (fun_var, param) relation with
+              match Closure_id.With_variable.Map.find (fun_var, param) relation with
               | exception Not_found -> Variable.Set.add param acc
               | Implication _ -> Variable.Set.add param acc
               | Top -> acc)

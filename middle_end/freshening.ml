@@ -254,13 +254,16 @@ module Project_var = struct
   let new_subst_fv t id subst =
     match subst with
     | Inactive -> id, subst, t
-    | Active subst ->
-      let id' = Variable.rename id in
-      let subst = add_sb_var subst id id' in
-      let off = Var_within_closure.wrap id in
-      let off' = Var_within_closure.wrap id' in
-      let off_sb = Var_within_closure.Map.add off off' t.vars_within_closure in
-      id', Active subst, { t with vars_within_closure = off_sb; }
+    | Active _subst ->
+      (* Check that nothing is required *)
+      id, subst, t
+
+      (* let id' = Variable.rename id in *)
+      (* let subst = add_sb_var subst id id' in *)
+      (* let off = Var_within_closure.wrap id in *)
+      (* let off' = Var_within_closure.wrap id' in *)
+      (* let off_sb = Var_within_closure.Map.add off off' t.vars_within_closure in *)
+      (* id', Active subst, { t with vars_within_closure = off_sb; } *)
 
   let _new_subst_fun t id subst =
     let id' = Variable.rename id in
@@ -276,17 +279,17 @@ module Project_var = struct
       * a fresh ffunction_subst with only the substitution of free variables
    *)
   let subst_free_vars fv subst ~only_freshen_parameters
-      : (Flambda.specialised_to * _) Variable.Map.t * _ * _ =
-    Variable.Map.fold (fun id lam (fv, subst, t) ->
+      : (Flambda.specialised_to * _) Var_within_closure.Map.t * _ * _ =
+    Var_within_closure.Map.fold (fun id lam (fv, subst, t) ->
         let id, subst, t =
           if only_freshen_parameters then
             id, subst, t
           else
             new_subst_fv t id subst
         in
-        Variable.Map.add id lam fv, subst, t)
+        Var_within_closure.Map.add id lam fv, subst, t)
       fv
-      (Variable.Map.empty, subst, empty)
+      (Var_within_closure.Map.empty, subst, empty)
 
   (** Returns :
       * The function_declaration with renamed function identifiers
@@ -427,7 +430,7 @@ let freshen_projection (projection : Projection.t) ~freshening
     Field (field_index, apply_variable freshening var)
 
 let freshen_projection_relation relation ~freshening ~closure_freshening =
-  Variable.Map.map (fun (spec_to : Flambda.specialised_to) ->
+  Var_within_closure.Map.map (fun (spec_to : Flambda.specialised_to) ->
       let projection =
         match spec_to.projection with
         | None -> None
@@ -438,7 +441,7 @@ let freshen_projection_relation relation ~freshening ~closure_freshening =
     relation
 
 let freshen_projection_relation' relation ~freshening ~closure_freshening =
-  Variable.Map.map (fun ((spec_to : Flambda.specialised_to), data) ->
+  Var_within_closure.Map.map (fun ((spec_to : Flambda.specialised_to), data) ->
       let projection =
         match spec_to.projection with
         | None -> None
@@ -446,4 +449,15 @@ let freshen_projection_relation' relation ~freshening ~closure_freshening =
           Some (freshen_projection projection ~freshening ~closure_freshening)
       in
       { spec_to with projection; }, data)
+    relation
+
+let freshen_projection_relation_variable relation ~freshening ~closure_freshening =
+  Variable.Map.map (fun (spec_to : Flambda.specialised_to) ->
+      let projection =
+        match spec_to.projection with
+        | None -> None
+        | Some projection ->
+          Some (freshen_projection projection ~freshening ~closure_freshening)
+      in
+      { spec_to with projection; })
     relation

@@ -15,7 +15,7 @@
 (**************************************************************************)
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
-
+(*
 module ASA = Augment_specialised_args
 module W = ASA.What_to_specialise
 module E = Inline_and_simplify_aux.Env
@@ -85,3 +85,7 @@ module Transform = struct
 end
 
 include ASA.Make (Transform)
+*)
+
+let rewrite_set_of_closures =
+  failwith "TO UPDATE"

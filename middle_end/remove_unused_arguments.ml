@@ -18,7 +18,7 @@
 
 let pass_name = "remove-unused-arguments"
 let () = Clflags.all_passes := pass_name :: !Clflags.all_passes
-
+(*
 let rename_var var =
   Variable.rename var
     ~current_compilation_unit:(Compilation_unit.get_current_exn ())
@@ -228,3 +228,11 @@ let separate_unused_arguments_in_closures_expr tree ~backend =
 let separate_unused_arguments_in_closures program ~backend =
   Flambda_iterators.map_exprs_at_toplevel_of_program program ~f:(fun expr ->
     separate_unused_arguments_in_closures_expr expr ~backend)
+*)
+
+[@@@ocaml.warning "+a-27"]
+let separate_unused_arguments_in_set_of_closures set_of_closures ~backend =
+  failwith "TO UPDATE"
+
+let separate_unused_arguments_in_closures program ~backend =
+  failwith "TO UPDATE"

@@ -137,10 +137,10 @@ end
 (* CR-soon mshinwell for mshinwell: add comment *)
 val apply_function_decls_and_free_vars
    : t
-  -> (Flambda.specialised_to * 'a) Variable.Map.t
+  -> (Flambda.specialised_to * 'a) Var_within_closure.Map.t
   -> Flambda.function_declarations
   -> only_freshen_parameters:bool
-  -> (Flambda.specialised_to * 'a) Variable.Map.t
+  -> (Flambda.specialised_to * 'a) Var_within_closure.Map.t
     * Flambda.function_declarations
     * t
     * Project_var.t
@@ -153,13 +153,19 @@ val print : Format.formatter -> t -> unit
     range. *)
 (* CR-someday mshinwell: consider fixing that *)
 val freshen_projection_relation
+   : Flambda.specialised_to Var_within_closure.Map.t
+  -> freshening:t
+  -> closure_freshening:Project_var.t
+  -> Flambda.specialised_to Var_within_closure.Map.t
+
+val freshen_projection_relation'
+   : (Flambda.specialised_to * 'a) Var_within_closure.Map.t
+  -> freshening:t
+  -> closure_freshening:Project_var.t
+  -> (Flambda.specialised_to * 'a) Var_within_closure.Map.t
+
+val freshen_projection_relation_variable
    : Flambda.specialised_to Variable.Map.t
   -> freshening:t
   -> closure_freshening:Project_var.t
   -> Flambda.specialised_to Variable.Map.t
-
-val freshen_projection_relation'
-   : (Flambda.specialised_to * 'a) Variable.Map.t
-  -> freshening:t
-  -> closure_freshening:Project_var.t
-  -> (Flambda.specialised_to * 'a) Variable.Map.t

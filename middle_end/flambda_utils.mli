@@ -209,6 +209,8 @@ val contains_stub : Flambda.function_declarations -> bool
 (* Ensure that projection information is suitably erased from
    free_vars and specialised_args if we have deleted the variable being
    projected from. *)
+
+(* Check if this is still needed *)
 val clean_projections
    : which_variables : Flambda.specialised_to Variable.Map.t
   -> Flambda.specialised_to Variable.Map.t

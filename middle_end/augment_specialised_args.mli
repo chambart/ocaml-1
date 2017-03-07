@@ -15,7 +15,7 @@
 (**************************************************************************)
 
 (** Helper module for adding specialised arguments to sets of closures. *)
-
+(*
 module Definition : sig
   type t =
     | Existing_inner_free_var of Variable.t
@@ -63,3 +63,4 @@ module Make (T : S) : sig
     -> set_of_closures:Flambda.set_of_closures
     -> (Flambda.expr * Inlining_cost.Benefit.t) option
 end
+*)

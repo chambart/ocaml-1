@@ -15,7 +15,7 @@
 (**************************************************************************)
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
-
+(*
 module E = Inline_and_simplify_aux.Env
 module B = Inlining_cost.Benefit
 
@@ -60,13 +60,13 @@ module What_to_specialise = struct
     (* [definitions] is indexed by (fun_var, group) *)
     definitions : Definition.t list Variable.Pair.Map.t;
     set_of_closures : Flambda.set_of_closures;
-    make_direct_call_surrogates_for : Variable.Set.t;
+    make_direct_call_surrogates_for : Closure_id.Set.t;
   }
 
   let create ~set_of_closures =
     { definitions = Variable.Pair.Map.empty;
       set_of_closures;
-      make_direct_call_surrogates_for = Variable.Set.empty;
+      make_direct_call_surrogates_for = Closure_id.Set.empty;
     }
 
   let new_specialised_arg t ~fun_var ~group ~definition =
@@ -83,15 +83,15 @@ module What_to_specialise = struct
     { t with definitions; }
 
   let make_direct_call_surrogate_for t ~fun_var =
-    match Variable.Map.find fun_var t.set_of_closures.function_decls.funs with
+    match Closure_id.Map.find fun_var t.set_of_closures.function_decls.funs with
     | exception Not_found ->
       Misc.fatal_errorf "use_direct_call_surrogate_for: %a is not a fun_var \
           from the given set of closures"
-        Variable.print fun_var
+        Closure_id.print fun_var
     | _ ->
       { t with
         make_direct_call_surrogates_for =
-          Variable.Set.add fun_var t.make_direct_call_surrogates_for;
+          Closure_id.Set.add fun_var t.make_direct_call_surrogates_for;
       }
 end
 
@@ -179,7 +179,7 @@ module Processed_what_to_specialise = struct
         match definition with
         | Existing_inner_free_var existing_inner_var ->
           begin match
-            Variable.Map.find existing_inner_var
+            Var_within_closure.Map.find existing_inner_var
               t.set_of_closures.free_vars
           with
           | exception Not_found ->
@@ -752,3 +752,4 @@ module Make (T : S) = struct
         rewrite_set_of_closures_core ~env ~duplicate_function
           ~benefit:B.zero ~set_of_closures)
 end
+*)

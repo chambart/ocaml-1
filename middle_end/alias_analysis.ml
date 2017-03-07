@@ -83,8 +83,10 @@ let rec resolve_definition
   | Move_within_set_of_closures _ ->
     Variable var
   | Project_var {var} ->
-    fetch_variable definitions (Var_within_closure.unwrap var)
-      ~the_dead_constant
+    ignore var;
+    failwith "TO UPDATE"
+    (* fetch_variable definitions (Var_within_closure.unwrap var) *)
+    (*   ~the_dead_constant *)
   | Variable v ->
     fetch_variable definitions v
       ~the_dead_constant

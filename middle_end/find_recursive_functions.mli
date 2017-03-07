@@ -34,4 +34,4 @@
 val in_function_declarations
    : Flambda.function_declarations
   -> backend:(module Backend_intf.S)
-  -> Variable.Set.t
+  -> Closure_id.Set.t

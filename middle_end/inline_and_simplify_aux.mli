@@ -347,7 +347,7 @@ val prepare_to_simplify_set_of_closures
   -> function_decls:Flambda.function_declarations
   -> freshen:bool
   -> only_for_function_decl:Flambda.function_declaration option
-  -> (Flambda.specialised_to * Simple_value_approx.t) Variable.Map.t  (* fvs *)
+  -> (Flambda.specialised_to * Simple_value_approx.t) Var_within_closure.Map.t  (* fvs *)
     * Flambda.specialised_to Variable.Map.t         (* specialised arguments *)
     * Flambda.function_declarations
     * Simple_value_approx.t Variable.Map.t       (* parameter approximations *)

@@ -15,7 +15,7 @@
 (**************************************************************************)
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
-
+(*
 module B = Inlining_cost.Benefit
 
 let pass_name = "unbox-free-vars-of-closures"
@@ -67,7 +67,7 @@ let run ~env ~(set_of_closures : Flambda.set_of_closures) =
   else
     let definitions_indexed_by_new_inner_vars, _, free_vars, done_something =
       let all_existing_definitions =
-        Variable.Map.fold (fun _inner_var (outer_var : Flambda.specialised_to)
+        Var_within_closure.Map.fold (fun _inner_var (outer_var : Flambda.specialised_to)
               all_existing_definitions ->
             match outer_var.projection with
             | None -> all_existing_definitions
@@ -79,7 +79,7 @@ let run ~env ~(set_of_closures : Flambda.set_of_closures) =
       Flambda_iterators.fold_function_decls_ignoring_stubs set_of_closures
         ~init:(Variable.Map.empty, all_existing_definitions,
           set_of_closures.free_vars, false)
-        ~f:(fun ~fun_var:_ ~function_decl result ->
+        ~f:(fun ~closure_id:_ ~function_decl result ->
           let extracted =
             Extract_projections.from_function_decl ~env ~function_decl
               ~which_variables:set_of_closures.free_vars
@@ -173,3 +173,9 @@ let run ~env ~set_of_closures =
     ~print_input:Flambda.print_set_of_closures
     ~print_output:(fun ppf (expr, _) -> Flambda.print ppf expr)
     ~f:(fun () -> run ~env ~set_of_closures)
+*)
+
+let run ~env ~(set_of_closures : Flambda.set_of_closures) =
+  ignore env;
+  ignore set_of_closures;
+  failwith "TO UPDATE"

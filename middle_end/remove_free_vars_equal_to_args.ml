@@ -35,17 +35,22 @@ let rewrite_one_function_decl ~(function_decl : Flambda.function_declaration)
             subst
           | set ->
             (* Replace the free variables equal to a parameter *)
-            Variable.Set.fold (fun free_var subst ->
-                Variable.Map.add free_var param subst)
+            Var_within_closure.Set.fold (fun free_var subst ->
+                Var_within_closure.Map.add free_var param subst)
               set subst)
-      Variable.Map.empty function_decl.params
+      Var_within_closure.Map.empty function_decl.params
   in
-  if Variable.Map.is_empty params_for_equal_free_vars then
+  if Var_within_closure.Map.is_empty params_for_equal_free_vars then
     function_decl
   else
     let body =
-      Flambda_utils.toplevel_substitution
-        params_for_equal_free_vars
+      Flambda_iterators.map_toplevel_named (function
+          | Project_var { closure; var }
+            when
+              Variable.equal closure function_decl.closure_var
+              && Var_within_closure.Map.mem var params_for_equal_free_vars ->
+            Flambda.Expr (Flambda.Var (Var_within_closure.Map.find var params_for_equal_free_vars))
+          | named -> named)
         function_decl.body
     in
     Flambda.create_function_declaration
@@ -56,21 +61,22 @@ let rewrite_one_function_decl ~(function_decl : Flambda.function_declaration)
       ~inline:function_decl.inline
       ~specialise:function_decl.specialise
       ~is_a_functor:function_decl.is_a_functor
+      ~closure_var:function_decl.closure_var
 
 let rewrite_one_set_of_closures (set_of_closures : Flambda.set_of_closures) =
   let back_free_vars =
-    Variable.Map.fold (fun var (outside_var : Flambda.specialised_to) map ->
+    Var_within_closure.Map.fold (fun var (outside_var : Flambda.specialised_to) map ->
         let set =
           match Variable.Map.find outside_var.var map with
-          | exception Not_found -> Variable.Set.singleton var
-          | set -> Variable.Set.add var set
+          | exception Not_found -> Var_within_closure.Set.singleton var
+          | set -> Var_within_closure.Set.add var set
         in
         Variable.Map.add outside_var.var set map)
       set_of_closures.free_vars Variable.Map.empty
   in
   let done_something = ref false in
   let funs =
-    Variable.Map.map (fun function_decl ->
+    Closure_id.Map.map (fun function_decl ->
         let new_function_decl =
           rewrite_one_function_decl ~function_decl ~back_free_vars
             ~specialised_args:set_of_closures.specialised_args

@@ -16,6 +16,7 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+(*
 module A = Simple_value_approx
 module E = Inline_and_simplify_aux.Env
 
@@ -187,3 +188,9 @@ let from_function_decl ~env ~which_variables
       let projecting_from = Projection.projecting_from projection in
       not (Variable.Set.mem projecting_from used_which_variables))
     projections
+*)
+
+[@@@ocaml.warning "-27-60"]
+let from_function_decl ~env ~which_variables
+      ~(function_decl : Flambda.function_declaration) =
+  failwith "TO UPDATE"

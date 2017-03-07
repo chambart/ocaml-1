@@ -156,27 +156,30 @@ let inline_by_copying_function_body ~env ~r
      applied to another closure in the same set.
   *)
   let expr =
-    Variable.Map.fold (fun another_closure_in_the_same_set _ expr ->
-      let used =
-        Variable.Set.mem another_closure_in_the_same_set
-           function_decl.free_variables
-      in
-      if used then
-        Flambda.create_let another_closure_in_the_same_set
-          (Move_within_set_of_closures {
-            closure = lhs_of_application;
-            start_from = closure_id_being_applied;
-            move_to = Closure_id.wrap another_closure_in_the_same_set;
-          })
-          expr
-      else expr)
-      function_decls.funs
-      bindings_for_vars_bound_by_closure_and_params_to_args
+    ignore bindings_for_vars_bound_by_closure_and_params_to_args;
+    failwith "TO UPDATE"
+    (* Closure_id.Map.fold (fun another_closure_in_the_same_set _ expr -> *)
+    (*   let used = *)
+    (*     Variable.Set.mem another_closure_in_the_same_set *)
+    (*        function_decl.free_variables *)
+    (*   in *)
+    (*   if used then *)
+    (*     Flambda.create_let another_closure_in_the_same_set *)
+    (*       (Move_within_set_of_closures { *)
+    (*         closure = lhs_of_application; *)
+    (*         start_from = closure_id_being_applied; *)
+    (*         move_to = Closure_id.wrap another_closure_in_the_same_set; *)
+    (*       }) *)
+    (*       expr *)
+    (*   else expr) *)
+    (*   function_decls.funs *)
+    (*   bindings_for_vars_bound_by_closure_and_params_to_args *)
   in
   let env = E.activate_freshening (E.set_never_inline env) in
   let env = E.set_inline_debuginfo ~dbg env in
   simplify env r expr
 
+(*
 let inline_by_copying_function_declaration ~env ~r
     ~(function_decls : Flambda.function_declarations)
     ~lhs_of_application
@@ -284,8 +287,8 @@ let inline_by_copying_function_declaration ~env ~r
         function_decls
     in
     let funs =
-      Variable.Map.filter (fun func _ ->
-          Variable.Set.mem func required_functions)
+      Closure_id.Map.filter (fun func _ ->
+          Closure_id.Set.mem func required_functions)
         function_decls.funs
     in
     let free_vars, free_vars_for_lets, original_vars =
@@ -293,39 +296,40 @@ let inline_by_copying_function_declaration ~env ~r
          free variables in the set.  This means that we can reference them
          when some particular recursive call cannot be specialised.  See
          detailed comment below. *)
-      Variable.Map.fold (fun fun_var _fun_decl
+      Closure_id.Map.fold (fun closure_id _fun_decl
                 (free_vars, free_vars_for_lets, original_vars) ->
           let var = Variable.create "closure" in
           let original_closure : Flambda.named =
             Move_within_set_of_closures
               { closure = lhs_of_application;
                 start_from = closure_id_being_applied;
-                move_to = Closure_id.wrap fun_var;
+                move_to = closure_id;
               }
           in
-          let internal_var = Variable.rename ~append:"_original" fun_var in
+          let internal_var =
+            Variable.create "_original"
+            (* Variable.rename ~append:"_original" fun_var *)
+          in
           let free_vars =
             Variable.Map.add internal_var { Flambda. var; projection = None }
               free_vars
           in
           free_vars,
             (var, original_closure) :: free_vars_for_lets,
-            Variable.Map.add fun_var internal_var original_vars)
+            Closure_id.Map.add closure_id internal_var original_vars)
         funs
-        (free_vars, free_vars_for_lets, Variable.Map.empty)
+        (free_vars, free_vars_for_lets, Closure_id.Map.empty)
     in
     let direct_call_surrogates =
       Closure_id.Map.fold (fun existing surrogate surrogates ->
-          let existing = Closure_id.unwrap existing in
-          let surrogate = Closure_id.unwrap surrogate in
-          if Variable.Map.mem existing funs
-            && Variable.Map.mem surrogate funs
+          if Closure_id.Map.mem existing funs
+            && Closure_id.Map.mem surrogate funs
           then
-            Variable.Map.add existing surrogate surrogates
+            Closure_id.Map.add existing surrogate surrogates
           else
             surrogates)
         direct_call_surrogates
-        Variable.Map.empty
+        Closure_id.Map.empty
     in
     let function_decls =
       Flambda.update_function_declarations ~funs function_decls
@@ -363,7 +367,7 @@ let inline_by_copying_function_declaration ~env ~r
                   Variable.print param
                   Flambda.print_specialised_to spec_to
                   Closure_id.print closure_id_being_applied
-                  Variable.Set.print required_functions
+                  Closure_id.Set.print required_functions
                   (Variable.Map.print Flambda.print_specialised_to)
                     specialisable_renaming
                   (Variable.Map.print Variable.print)
@@ -421,18 +425,19 @@ let inline_by_copying_function_declaration ~env ~r
          second just performs the optimisation on a best-effort basis.
       *)
       let substitution, bindings =
-        Variable.Map.fold
-          (fun original_var var_within_closure (substitution, bindings) ->
-             let projection : Flambda.named =
-               Project_var {
-                 closure_id = Closure_id.wrap fun_var; closure = fun_var;
-                 var = Var_within_closure.wrap var_within_closure; }
-             in
-             let internal_var = Variable.rename var_within_closure in
-             Variable.Map.add original_var internal_var substitution,
-             (internal_var, projection) :: bindings)
-          original_vars
-          (Variable.Map.empty, [])
+        failwith "TO UPDATE"
+        (* Closure_id.Map.fold *)
+        (*   (fun original_var var_within_closure (substitution, bindings) -> *)
+        (*      let projection : Flambda.named = *)
+        (*        Project_var { *)
+        (*          closure_id = Closure_id.wrap fun_var; closure = fun_var; *)
+        (*          var = Var_within_closure.wrap var_within_closure; } *)
+        (*      in *)
+        (*      let internal_var = Variable.rename var_within_closure in *)
+        (*      Variable.Map.add original_var internal_var substitution, *)
+        (*      (internal_var, projection) :: bindings) *)
+        (*   original_vars *)
+        (*   (Variable.Map.empty, []) *)
       in
       let body_substituted =
         (* The use of [Freshening.rewrite_recursive_calls_with_symbols] above
@@ -547,3 +552,19 @@ let inline_by_copying_function_declaration ~env ~r
     in
     let env = E.activate_freshening (E.set_never_inline env) in
     Some (simplify env r expr)
+         *)
+
+[@@@ocaml.warning "-27"]
+let inline_by_copying_function_declaration ~env ~r
+    ~(function_decls : Flambda.function_declarations)
+    ~lhs_of_application
+    ~(inline_requested : Lambda.inline_attribute)
+    ~closure_id_being_applied
+    ~(function_decl : Flambda.function_declaration)
+    ~args ~args_approxs
+    ~(invariant_params:Variable.Set.t Variable.Map.t lazy_t)
+    ~(specialised_args : Flambda.specialised_to Variable.Map.t)
+    ~direct_call_surrogates ~dbg ~simplify =
+  let _ = new_var in
+  let _ = which_function_parameters_can_we_specialise in
+  failwith "TO UPDATE"

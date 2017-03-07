@@ -313,20 +313,23 @@ let specialise env r ~lhs_of_application
            ~backend:(E.backend env)
            function_decls
        in
-       let bound_vars_required =
-         Variable.Set.fold (fun fun_var bound_vars_required ->
-               let bound_vars =
-                 Flambda_utils.variables_bound_by_the_closure
-                   (Closure_id.wrap fun_var)
-                   function_decls
-               in
-               Variable.Set.union bound_vars bound_vars_required)
-           closures_required
-           Variable.Set.empty
-       in
-       Var_within_closure.Map.filter (fun var _approx ->
-           Variable.Set.mem (Var_within_closure.unwrap var) bound_vars_required)
-         value_set_of_closures.bound_vars)
+       (* let bound_vars_required = *)
+       (*   Closure_id.Set.fold (fun closure_id bound_vars_required -> *)
+       (*         let bound_vars = *)
+       (*           Flambda_utils.variables_bound_by_the_closure *)
+       (*             closure_id *)
+       (*             function_decls *)
+       (*         in *)
+       (*         Variable.Set.union bound_vars bound_vars_required) *)
+       (*     closures_required *)
+       (*     Variable.Set.empty *)
+       (* in *)
+       (* Var_within_closure.Map.filter (fun var _approx -> *)
+       (*     Var_within_closure.Set.mem var bound_vars_required) *)
+       (*   value_set_of_closures.bound_vars *)
+       ignore closures_required;
+       failwith "TO UPDATE"
+      )
   in
   let invariant_params = value_set_of_closures.invariant_params in
   let has_no_useful_approxes =
@@ -415,9 +418,7 @@ let specialise env r ~lhs_of_application
           (* CR-someday lwhite: could avoid calculating this if stats is turned
              off *)
           let closure_ids =
-            Closure_id.Set.of_list (
-              List.map Closure_id.wrap
-                (Variable.Set.elements (Variable.Map.keys function_decls.funs)))
+            Closure_id.Map.keys function_decls.funs
           in
           E.note_entering_specialised env ~closure_ids
         in
@@ -597,7 +598,7 @@ let for_call_site ~env ~r ~(function_decls : Flambda.function_declarations)
         in
         let recursive =
           lazy
-            (Variable.Set.mem fun_var
+            (Closure_id.Set.mem closure_id_being_applied
                ((Find_recursive_functions.in_function_declarations
                   function_decls
                   ~backend:(E.backend env))))
@@ -616,7 +617,7 @@ let for_call_site ~env ~r ~(function_decls : Flambda.function_declarations)
           (* If we didn't specialise then try inlining *)
           let size_from_approximation =
             match
-              Variable.Map.find fun_var (Lazy.force value_set_of_closures.size)
+              Closure_id.Map.find closure_id_being_applied (Lazy.force value_set_of_closures.size)
             with
             | size -> size
             | exception Not_found ->

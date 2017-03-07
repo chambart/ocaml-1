@@ -191,17 +191,6 @@ type filtered_switch_branches =
   | Must_be_taken of Flambda.t
   | Can_be_taken of (int * Flambda.t) list
 
-(* Determine whether a given closure ID corresponds directly to a variable
-   (bound to a closure) in the given environment.  This happens when the body
-   of a [let rec]-bound function refers to another in the same set of closures.
-   If we succeed in this process, we can change [Project_closure]
-   expressions into [Var] expressions, thus sharing closure projections. *)
-let reference_recursive_function_directly env closure_id =
-  let closure_id = Closure_id.unwrap closure_id in
-  match E.find_opt env closure_id with
-  | None -> None
-  | Some approx -> Some (Flambda.Expr (Var closure_id), approx)
-
 (* Simplify an expression that takes a set of closures and projects an
    individual closure from it. *)
 let simplify_project_closure env r ~(project_closure : Flambda.project_closure)
@@ -257,9 +246,6 @@ let simplify_project_closure env r ~(project_closure : Flambda.project_closure)
           let r = R.map_benefit r (B.remove_projection projection) in
           Expr (Var var), ret r var_approx)
       | None ->
-        match reference_recursive_function_directly env closure_id with
-        | Some (flam, approx) -> flam, ret r approx
-        | None ->
           let set_of_closures_var =
             match set_of_closures_var with
             | Some set_of_closures_var' when E.mem env set_of_closures_var' ->
@@ -331,9 +317,6 @@ let simplify_move_within_set_of_closures env r
           let r = R.map_benefit r (B.remove_projection projection) in
           Expr (Var var), ret r var_approx)
       | None ->
-        match reference_recursive_function_directly env move_to with
-        | Some (flam, approx) -> flam, ret r approx
-        | None ->
           if Closure_id.equal start_from move_to then
             (* Moving from one closure to itself is a no-op.  We can return an
                [Var] since we already have a variable bound to the closure. *)
@@ -472,13 +455,6 @@ let rec simplify_project_var env r ~(project_var : Flambda.project_var)
       | None ->
         let approx = A.approx_for_bound_var value_set_of_closures var in
         let expr : Flambda.named = Project_var { closure; closure_id; var; } in
-        let unwrapped = Var_within_closure.unwrap var in
-        let expr =
-          if E.mem env unwrapped then
-            Flambda.Expr (Var unwrapped)
-          else
-            expr
-        in
         simplify_named_using_approx_and_env env r expr approx
       end
     | Unresolved symbol ->
@@ -585,16 +561,16 @@ and simplify_set_of_closures original_env r
       ~set_of_closures ~function_decls ~only_for_function_decl:None
       ~freshen:true
   in
-  let simplify_function fun_var (function_decl : Flambda.function_declaration)
+  let simplify_function closure_id (function_decl : Flambda.function_declaration)
         (funs, used_params, r)
-        : Flambda.function_declaration Variable.Map.t * Variable.Set.t * R.t =
+        : Flambda.function_declaration Closure_id.Map.t * Variable.Set.t * R.t =
     let closure_env =
       Inline_and_simplify_aux.prepare_to_simplify_closure ~function_decl
         ~specialised_args ~parameter_approximations
         ~set_of_closures_env
     in
     let body, r =
-      E.enter_closure closure_env ~closure_id:(Closure_id.wrap fun_var)
+      E.enter_closure closure_env ~closure_id
         ~inline_inside:
           (Inlining_decision.should_inline_inside_declaration function_decl)
         ~dbg:function_decl.dbg
@@ -626,14 +602,15 @@ and simplify_set_of_closures original_env r
         ~body ~stub:function_decl.stub ~dbg:function_decl.dbg
         ~inline ~specialise:function_decl.specialise
         ~is_a_functor:function_decl.is_a_functor
+        ~closure_var:function_decl.closure_var
     in
     let used_params' = Flambda.used_params function_decl in
-    Variable.Map.add fun_var function_decl funs,
+    Closure_id.Map.add closure_id function_decl funs,
       Variable.Set.union used_params used_params', r
   in
   let funs, _used_params, r =
-    Variable.Map.fold simplify_function function_decls.funs
-      (Variable.Map.empty, Variable.Set.empty, r)
+    Closure_id.Map.fold simplify_function function_decls.funs
+      (Closure_id.Map.empty, Variable.Set.empty, r)
   in
   let function_decls =
     Flambda.update_function_declarations function_decls ~funs
@@ -653,14 +630,13 @@ and simplify_set_of_closures original_env r
   in
   let direct_call_surrogates =
     Closure_id.Map.fold (fun existing surrogate surrogates ->
-        Variable.Map.add (Closure_id.unwrap existing)
-          (Closure_id.unwrap surrogate) surrogates)
+        Closure_id.Map.add existing surrogate surrogates)
       internal_value_set_of_closures.direct_call_surrogates
-      Variable.Map.empty
+      Closure_id.Map.empty
   in
   let set_of_closures =
     Flambda.create_set_of_closures ~function_decls
-      ~free_vars:(Variable.Map.map fst free_vars)
+      ~free_vars:(Var_within_closure.Map.map fst free_vars)
       ~specialised_args
       ~direct_call_surrogates
   in
@@ -825,9 +801,11 @@ and simplify_partial_application env r ~lhs_of_application
       }
     in
     let closure_variable =
-      Variable.rename
-        ~append:"_partial_fun"
-        (Closure_id.unwrap closure_id_being_applied)
+      Variable.create
+        "_partial_fun"
+      (* Variable.rename *)
+      (*   ~append:"_partial_fun" *)
+      (*   (Closure_id.unwrap closure_id_being_applied) *)
     in
     Flambda_utils.make_closure_declaration ~id:closure_variable
       ~body
@@ -1383,47 +1361,52 @@ and simplify_list env r l =
 
 and duplicate_function ~env ~(set_of_closures : Flambda.set_of_closures)
       ~fun_var =
-  let function_decl =
-    match Variable.Map.find fun_var set_of_closures.function_decls.funs with
-    | exception Not_found ->
-      Misc.fatal_errorf "duplicate_function: cannot find function %a"
-        Variable.print fun_var
-    | function_decl -> function_decl
-  in
-  let env = E.activate_freshening (E.set_never_inline env) in
-  let _free_vars, specialised_args, function_decls, parameter_approximations,
-      _internal_value_set_of_closures, set_of_closures_env =
-    Inline_and_simplify_aux.prepare_to_simplify_set_of_closures ~env
-      ~set_of_closures ~function_decls:set_of_closures.function_decls
-      ~freshen:false ~only_for_function_decl:(Some function_decl)
-  in
-  let function_decl =
-    match Variable.Map.find fun_var function_decls.funs with
-    | exception Not_found ->
-      Misc.fatal_errorf "duplicate_function: cannot find function %a (2)"
-        Variable.print fun_var
-    | function_decl -> function_decl
-  in
-  let closure_env =
-    Inline_and_simplify_aux.prepare_to_simplify_closure ~function_decl
-      ~specialised_args ~parameter_approximations
-      ~set_of_closures_env
-  in
-  let body, _r =
-    E.enter_closure closure_env
-      ~closure_id:(Closure_id.wrap fun_var)
-      ~inline_inside:false
-      ~dbg:function_decl.dbg
-      ~f:(fun body_env ->
-        simplify body_env (R.create ()) function_decl.body)
-  in
-  let function_decl =
-    Flambda.create_function_declaration ~params:function_decl.params
-      ~body ~stub:function_decl.stub ~dbg:function_decl.dbg
-      ~inline:function_decl.inline ~specialise:function_decl.specialise
-      ~is_a_functor:function_decl.is_a_functor
-  in
-  function_decl, specialised_args
+  (* let function_decl = *)
+  (*   match Variable.Map.find fun_var set_of_closures.function_decls.funs with *)
+  (*   | exception Not_found -> *)
+  (*     Misc.fatal_errorf "duplicate_function: cannot find function %a" *)
+  (*       Variable.print fun_var *)
+  (*   | function_decl -> function_decl *)
+  (* in *)
+  (* let env = E.activate_freshening (E.set_never_inline env) in *)
+  (* let _free_vars, specialised_args, function_decls, parameter_approximations, *)
+  (*     _internal_value_set_of_closures, set_of_closures_env = *)
+  (*   Inline_and_simplify_aux.prepare_to_simplify_set_of_closures ~env *)
+  (*     ~set_of_closures ~function_decls:set_of_closures.function_decls *)
+  (*     ~freshen:false ~only_for_function_decl:(Some function_decl) *)
+  (* in *)
+  (* let function_decl = *)
+  (*   match Variable.Map.find fun_var function_decls.funs with *)
+  (*   | exception Not_found -> *)
+  (*     Misc.fatal_errorf "duplicate_function: cannot find function %a (2)" *)
+  (*       Variable.print fun_var *)
+  (*   | function_decl -> function_decl *)
+  (* in *)
+  (* let closure_env = *)
+  (*   Inline_and_simplify_aux.prepare_to_simplify_closure ~function_decl *)
+  (*     ~specialised_args ~parameter_approximations *)
+  (*     ~set_of_closures_env *)
+  (* in *)
+  (* let body, _r = *)
+  (*   E.enter_closure closure_env *)
+  (*     ~closure_id:(Closure_id.wrap fun_var) *)
+  (*     ~inline_inside:false *)
+  (*     ~dbg:function_decl.dbg *)
+  (*     ~f:(fun body_env -> *)
+  (*       simplify body_env (R.create ()) function_decl.body) *)
+  (* in *)
+  (* let function_decl = *)
+  (*   Flambda.create_function_declaration ~params:function_decl.params *)
+  (*     ~body ~stub:function_decl.stub ~dbg:function_decl.dbg *)
+  (*     ~inline:function_decl.inline ~specialise:function_decl.specialise *)
+  (*     ~is_a_functor:function_decl.is_a_functor *)
+  (* in *)
+  (* function_decl, specialised_args *)
+
+  ignore env;
+  ignore set_of_closures;
+  ignore fun_var;
+  failwith "TO UPDATE"
 
 let constant_defining_value_approx
     env
@@ -1449,7 +1432,7 @@ let constant_defining_value_approx
        cannot be the body of a currently inlined function), so we can
        keep the original set_of_closures in the approximation. *)
     assert(E.freshening env = Freshening.empty);
-    assert(Variable.Map.is_empty free_vars);
+    assert(Var_within_closure.Map.is_empty free_vars);
     assert(Variable.Map.is_empty specialised_args);
     let invariant_params =
       lazy (Invariant_params.invariant_params_in_recursion function_decls
@@ -1529,7 +1512,7 @@ let simplify_constant_defining_value
       in
       r, constant_defining_value, A.value_block tag (Array.of_list fields)
     | Set_of_closures set_of_closures ->
-      if Variable.Map.cardinal set_of_closures.free_vars <> 0 then begin
+      if Var_within_closure.Map.cardinal set_of_closures.free_vars <> 0 then begin
         Misc.fatal_errorf "Set of closures bound by [Let_symbol] is not \
                            closed: %a"
           Flambda.print_set_of_closures set_of_closures

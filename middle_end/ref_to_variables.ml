@@ -39,7 +39,7 @@ let variables_not_used_as_local_reference (tree:Flambda.t) =
       set := Variable.Set.union !set (Flambda.free_variables_named flam)
     | Set_of_closures set_of_closures ->
       set := Variable.Set.union !set (Flambda.free_variables_named flam);
-      Variable.Map.iter (fun _ (function_decl : Flambda.function_declaration) ->
+      Closure_id.Map.iter (fun _ (function_decl : Flambda.function_declaration) ->
           loop function_decl.body)
         set_of_closures.function_decls.funs
     | Expr e ->

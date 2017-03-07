@@ -25,3 +25,6 @@
     (viz. [Project_closure]). *)
 
 include module type of Closure_element
+
+type with_variable = t * Variable.t
+module With_variable : Identifiable.S with type t := with_variable
