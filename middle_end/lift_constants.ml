@@ -144,17 +144,25 @@ let assign_symbols_and_collect_constant_definitions
   collect_let_and_initialize_symbols program.program_body;
   let record_set_of_closure_equalities
         (set_of_closures : Flambda.set_of_closures) : unit =
-    ignore set_of_closures;
-    failwith "TO UPDATE";
+
+    (* NOTE Where and how to record that definition ? *)
+
     (* Var_within_closure.Map.iter (fun arg (var : Flambda.specialised_to) -> *)
-    (*     if not (Inconstant_idents.variable arg inconstants) then *)
+    (*     let variable_is_inconstant = *)
+    (*       Inconstant_idents.var_within_closure arg *)
+    (*         set_of_closures.function_decls.set_of_closures_id inconstants *)
+    (*     in *)
+    (*     if not variable_is_inconstant then *)
     (*       Variable.Tbl.add var_to_definition_tbl arg (AA.Variable var.var)) *)
     (*   set_of_closures.free_vars; *)
-    (* Variable.Map.iter (fun arg (spec_to : Flambda.specialised_to) -> *)
-    (*     if not (Inconstant_idents.variable arg inconstants) then *)
-    (*       Variable.Tbl.add var_to_definition_tbl arg *)
-    (*         (AA.Variable spec_to.var)) *)
-    (*   set_of_closures.specialised_args *)
+    Variable.Map.iter (fun arg (spec_to : Flambda.specialised_to) ->
+        ignore arg;
+        ignore spec_to;
+        failwith "TO UPDATE lift constants specialised args alias";
+        (* if not (Inconstant_idents.variable arg inconstants) then *)
+        (*   Variable.Tbl.add var_to_definition_tbl arg *)
+        (*     (AA.Variable spec_to.var) *))
+      set_of_closures.specialised_args
   in
   Flambda_iterators.iter_on_set_of_closures_of_program program
     ~f:(fun ~constant set_of_closures ->
@@ -632,6 +640,7 @@ let add_definitions_of_symbols constant_definitions initialize_symbol_tbl
     program components
 
 let introduce_free_variables_in_set_of_closures
+    inconstants
     (var_to_block_field_tbl :
       Flambda.constant_defining_value_block_field Variable.Tbl.t)
     ({ Flambda.function_decls; free_vars; specialised_args;
@@ -661,52 +670,52 @@ let introduce_free_variables_in_set_of_closures
   let done_something = ref false in
   let function_decls : Flambda.function_declarations =
     let _ = add_definition_and_make_substitution in
-    ignore function_decls;
-    ignore free_vars;
-    failwith "TO UPDATE";
-    (* Flambda.update_function_declarations function_decls *)
-    (*   ~funs:(Closure_id.Map.map *)
-    (*       (fun (func_decl : Flambda.function_declaration) -> *)
-    (*          let variables_to_bind = *)
-    (*            (\* Closures from the same set must not be bound. *\) *)
-    (*            Variable.Set.diff func_decl.free_variables *)
-    (*              (Variable.Map.keys function_decls.funs) *)
-    (*          in *)
-    (*          let body, subst = *)
-    (*            Variable.Set.fold add_definition_and_make_substitution *)
-    (*              variables_to_bind *)
-    (*              (func_decl.body, Variable.Map.empty) *)
-    (*          in *)
-    (*          if Variable.Map.is_empty subst then begin *)
-    (*            func_decl *)
-    (*          end else begin *)
-    (*            done_something := true; *)
-    (*            let body = Flambda_utils.toplevel_substitution subst body in *)
-    (*            Flambda.create_function_declaration *)
-    (*              ~params:func_decl.params *)
-    (*              ~body *)
-    (*              ~stub:func_decl.stub *)
-    (*              ~dbg:func_decl.dbg *)
-    (*              ~inline:func_decl.inline *)
-    (*              ~specialise:func_decl.specialise *)
-    (*              ~is_a_functor:func_decl.is_a_functor *)
-    (*          end) *)
-    (*       function_decls.funs) *)
+    Flambda.update_function_declarations function_decls
+      ~funs:(Closure_id.Map.map
+          (fun (func_decl : Flambda.function_declaration) ->
+             let variables_to_bind =
+               (* Closures from the same set must not be bound. *)
+               Variable.Set.remove
+                 func_decl.closure_var
+                 func_decl.free_variables
+             in
+             let body, subst =
+               Variable.Set.fold add_definition_and_make_substitution
+                 variables_to_bind
+                 (func_decl.body, Variable.Map.empty)
+             in
+             if Variable.Map.is_empty subst then begin
+               func_decl
+             end else begin
+               done_something := true;
+               let body = Flambda_utils.toplevel_substitution subst body in
+               Flambda.create_function_declaration
+                 ~params:func_decl.params
+                 ~body
+                 ~stub:func_decl.stub
+                 ~dbg:func_decl.dbg
+                 ~inline:func_decl.inline
+                 ~specialise:func_decl.specialise
+                 ~is_a_functor:func_decl.is_a_functor
+                 ~closure_var:func_decl.closure_var
+             end)
+          function_decls.funs)
   in
   let free_vars =
     (* Keep only those that are not rewritten to constants. *)
-    failwith "TO UPDATE"
-(*
     Var_within_closure.Map.filter (fun v _ ->
-        let keep = not (Variable.Tbl.mem var_to_block_field_tbl v) in
+        let inconstant =
+          Inconstant_idents.var_within_closure v
+            function_decls.set_of_closures_id inconstants
+        in
+        let keep = not inconstant in
         if not keep then done_something := true;
         keep)
       free_vars
-*)
   in
   let free_vars =
-    ignore free_vars;
-    failwith "TO UPDATE"
+    free_vars
+    (* Still needed. It needs some way to express it ? *)
     (* Flambda_utils.clean_projections ~which_variables:free_vars *)
   in
   let specialised_args =
@@ -745,6 +754,7 @@ let rewrite_project_var
   (* | Const const -> Const const *)
 
 let introduce_free_variables_in_sets_of_closures
+    inconstants
     (var_to_block_field_tbl:
       Flambda.constant_defining_value_block_field Variable.Tbl.t)
     (translate_definition : Flambda.constant_defining_value Symbol.Map.t) =
@@ -756,6 +766,7 @@ let introduce_free_variables_in_sets_of_closures
       | Set_of_closures set_of_closures ->
         Flambda.Set_of_closures
           (introduce_free_variables_in_set_of_closures
+             inconstants
              var_to_block_field_tbl
              set_of_closures))
     translate_definition
@@ -962,8 +973,8 @@ let lift_constants (program : Flambda.program) ~backend =
         : Alias_analysis.constant_defining_value Variable.Tbl.t)
   in
   let translated_definitions =
-    introduce_free_variables_in_sets_of_closures var_to_block_field_tbl
-      translated_definitions
+    introduce_free_variables_in_sets_of_closures inconstants
+      var_to_block_field_tbl translated_definitions
   in
   let constant_definitions =
     (* Add previous Let_symbol to the newly discovered ones *)
@@ -1002,7 +1013,7 @@ let lift_constants (program : Flambda.program) ~backend =
         | (Set_of_closures set_of_closures) as named ->
           let new_set_of_closures =
             introduce_free_variables_in_set_of_closures
-              var_to_block_field_tbl set_of_closures
+              inconstants var_to_block_field_tbl set_of_closures
           in
           if new_set_of_closures == set_of_closures then
             named
@@ -1026,7 +1037,7 @@ let lift_constants (program : Flambda.program) ~backend =
           in
           Flambda.Set_of_closures
             (introduce_free_variables_in_set_of_closures
-              var_to_block_field_tbl set_of_closures))
+              inconstants var_to_block_field_tbl set_of_closures))
     constant_definitions
   in
   let effect_tbl =

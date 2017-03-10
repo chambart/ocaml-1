@@ -298,7 +298,9 @@ let variable_and_symbol_invariants (program : Flambda.program) =
             (* Check that every variable free in the body of the function is
                bound by either the set of closures or the parameter list. *)
             let acceptable_free_variables =
-              Variable.Set.singleton function_decl.closure_var
+              Variable.Set.union
+                (Variable.Set.singleton function_decl.closure_var)
+                (Variable.Set.of_list function_decl.params)
             in
             let bad =
               Variable.Set.diff free_variables acceptable_free_variables

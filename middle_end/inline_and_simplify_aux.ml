@@ -622,26 +622,8 @@ let prepare_to_simplify_set_of_closures ~env
       ~invariant_params:(lazy Variable.Map.empty) ~specialised_args
       ~freshening ~direct_call_surrogates
   in
-  (* Populate the environment with the approximation of each closure.
-     This part of the environment is shared between all of the closures in
-     the set of closures. *)
-  let set_of_closures_env =
-    Closure_id.Map.fold (fun closure decl env ->
-        ignore (closure,decl,env);
-        failwith "TO UPDATE: closure_var shouldn't be in the environment of every closure of the set"
-
-        (* let closure_var = decl.Flambda.closure_var in *)
-        (* let approx = *)
-        (*   A.value_closure ~closure_var *)
-        (*     internal_value_set_of_closures *)
-        (*     closure *)
-        (* in *)
-        (* E.add env closure_var approx *)
-      )
-      function_decls.funs env
-  in
   free_vars, specialised_args, function_decls, parameter_approximations,
-    internal_value_set_of_closures, set_of_closures_env
+    internal_value_set_of_closures, env
 
 (* This adds only the minimal set of approximations to the closures.
    It is not strictly necessary to have this restriction, but it helps
@@ -662,6 +644,8 @@ let populate_closure_approximations
   env
 
 let prepare_to_simplify_closure ~(function_decl : Flambda.function_declaration)
+      ~closure_id
+      ~internal_value_set_of_closures
       ~specialised_args ~parameter_approximations
       ~set_of_closures_env =
   let closure_env =
@@ -687,4 +671,10 @@ let prepare_to_simplify_closure ~(function_decl : Flambda.function_declaration)
     add_projections ~closure_env ~which_variables:specialised_args
       ~map:(fun spec_to -> spec_to)
   in
-  closure_env
+  let closure_var = function_decl.closure_var in
+  let approx =
+    A.value_closure ~closure_var
+      internal_value_set_of_closures
+      closure_id
+  in
+  E.add closure_env closure_var approx

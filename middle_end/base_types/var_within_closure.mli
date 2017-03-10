@@ -22,3 +22,6 @@
     identifiers. *)
 
 include module type of Closure_element
+
+type with_set = t * Set_of_closures_id.t
+module With_set : Identifiable.S with type t := with_set

@@ -62,7 +62,7 @@ end
 type dep =
   | Closure of Set_of_closures_id.t
   | Var of Variable.t
-  | Var_within_closure of Var_within_closure.t
+  | Var_within_closure of (Var_within_closure.t * Set_of_closures_id.t)
   | Symbol of Symbol.t
   | Symbol_field of Symbol_field.t
 
@@ -73,6 +73,7 @@ type state =
 type result = {
   id : state Variable.Tbl.t;
   closure : state Set_of_closures_id.Tbl.t;
+  var_within_closure : state Var_within_closure.With_set.Tbl.t;
 }
 
 module type Param = sig
@@ -88,8 +89,8 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
 
   (* Sets representing NC *)
   let variables : state Variable.Tbl.t = Variable.Tbl.create 42
-  let var_within_closures : state Var_within_closure.Tbl.t =
-    Var_within_closure.Tbl.create 42
+  let var_within_closures : state Var_within_closure.With_set.Tbl.t =
+    Var_within_closure.With_set.Tbl.create 42
   let closures : state Set_of_closures_id.Tbl.t =
     Set_of_closures_id.Tbl.create 42
   let symbols : state Symbol.Tbl.t = Symbol.Tbl.create 42
@@ -115,21 +116,13 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
         Variable.Tbl.add variables id Not_constant
       end
     | Var_within_closure id -> begin
-      ignore id;
-      failwith "TO UPDATE";
-      (* A var within closure can have multiple declaration points, we
-         cannot replace the old one, it needs to be an union.
-         For more precision and avoid this problem, it could be a couple
-         Var_within_closure * Set_of_closures_id *)
-
-
-      (* match Var_within_closure.Tbl.find var_within_closures id with *)
-      (* | Not_constant -> () *)
-      (* | Implication deps -> *)
-      (*   Var_within_closure.Tbl.replace var_within_closures id Not_constant; *)
-      (*   Queue.push deps mark_queue *)
-      (* | exception Not_found -> *)
-      (*   Var_within_closure.Tbl.add var_within_closures id Not_constant *)
+      match Var_within_closure.With_set.Tbl.find var_within_closures id with
+      | Not_constant -> ()
+      | Implication deps ->
+        Var_within_closure.With_set.Tbl.replace var_within_closures id Not_constant;
+        Queue.push deps mark_queue
+      | exception Not_found ->
+        Var_within_closure.With_set.Tbl.add var_within_closures id Not_constant
       end
     | Closure cl -> begin
       match Set_of_closures_id.Tbl.find closures cl with
@@ -192,15 +185,15 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
         Variable.Tbl.add variables id (Implication curr);
       end
     | Var_within_closure id -> begin
-      match Var_within_closure.Tbl.find var_within_closures id with
+      match Var_within_closure.With_set.Tbl.find var_within_closures id with
       | Not_constant ->
         mark_deps curr;
         complete_marking ();
       | Implication deps ->
         let deps = List.rev_append curr deps in
-        Var_within_closure.Tbl.replace var_within_closures id (Implication deps)
+        Var_within_closure.With_set.Tbl.replace var_within_closures id (Implication deps)
       | exception Not_found ->
-        Var_within_closure.Tbl.add var_within_closures id (Implication curr);
+        Var_within_closure.With_set.Tbl.add var_within_closures id (Implication curr);
       end
     | Closure cl -> begin
       match Set_of_closures_id.Tbl.find closures cl with
@@ -455,7 +448,7 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
     Var_within_closure.Map.iter (fun inner_id (var : Flambda.specialised_to) ->
         register_implication ~in_nc:(Var var.var)
           ~implies_in_nc:[
-            Var_within_closure inner_id;
+            Var_within_closure (inner_id, function_decls.set_of_closures_id);
             Closure function_decls.set_of_closures_id
           ])
       free_vars;
@@ -508,6 +501,7 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
     mark_program program;
     { id = variables;
       closure = closures;
+      var_within_closure = var_within_closures;
     }
 end
 
@@ -529,6 +523,12 @@ let variable var { id; _ } =
 
 let closure cl { closure; _ } =
   match Set_of_closures_id.Tbl.find closure cl with
+  | Not_constant -> true
+  | Implication _ -> false
+  | exception Not_found -> false
+
+let var_within_closure var cl { var_within_closure; _ } =
+  match Var_within_closure.With_set.Tbl.find var_within_closure (var,cl) with
   | Not_constant -> true
   | Implication _ -> false
   | exception Not_found -> false

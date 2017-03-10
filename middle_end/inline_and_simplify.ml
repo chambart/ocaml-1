@@ -566,6 +566,8 @@ and simplify_set_of_closures original_env r
         : Flambda.function_declaration Closure_id.Map.t * Variable.Set.t * R.t =
     let closure_env =
       Inline_and_simplify_aux.prepare_to_simplify_closure ~function_decl
+        ~closure_id
+        ~internal_value_set_of_closures
         ~specialised_args ~parameter_approximations
         ~set_of_closures_env
     in

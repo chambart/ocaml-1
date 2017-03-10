@@ -317,66 +317,71 @@ let analyse_functions ~backend ~param_to_param
 
  *)
 
-let invariant_params_in_recursion (decls : Flambda.function_declarations)
-      ~backend =
-  let param_to_param ~caller ~caller_arg ~callee ~callee_arg relation =
-    implies relation (caller, caller_arg) (callee, callee_arg)
-  in
-  let anything_to_param ~callee ~callee_arg relation =
-    top relation (callee, callee_arg)
-  in
-  let param_to_anywhere ~caller:_ ~caller_arg:_ relation = relation in
-  let relation =
-    analyse_functions ~backend ~param_to_param
-      ~anything_to_param ~param_to_anywhere
-      decls
-  in
-  let not_unchanging =
-    Variable.Pair.Map.fold (fun (func, var) set not_unchanging ->
-        match set with
-        | Top -> Variable.Set.add var not_unchanging
-        | Implication set ->
-          if Variable.Pair.Set.exists (fun (func', var') ->
-              Variable.equal func func' && not (Variable.equal var var'))
-              set
-          then Variable.Set.add var not_unchanging
-          else not_unchanging)
-      relation Variable.Set.empty
-  in
-  let params = Closure_id.Map.fold (fun _
-        ({ params } : Flambda.function_declaration) set ->
-      Variable.Set.union (Variable.Set.of_list params) set)
-    decls.funs Variable.Set.empty
-  in
-  let unchanging = Variable.Set.diff params not_unchanging in
-  let aliased_to =
-    Variable.Pair.Map.fold (fun (_, var) set aliases ->
-        match set with
-        | Implication set
-          when Variable.Set.mem var unchanging ->
-            Variable.Pair.Set.fold (fun (_, caller_args) aliases ->
-                if Variable.Set.mem caller_args unchanging then
-                  let alias_set =
-                    match Variable.Map.find caller_args aliases with
-                    | exception Not_found ->
-                      Variable.Set.singleton var
-                    | alias_set ->
-                      Variable.Set.add var alias_set
-                  in
-                  Variable.Map.add caller_args alias_set aliases
-                else
-                  aliases)
-              set aliases
-        | Top | Implication _ -> aliases)
-      relation Variable.Map.empty
-  in
-  (* We complete the set of aliases such that there does not miss any
-     unchanging param *)
-  Variable.Map.of_set (fun var ->
-      match Variable.Map.find var aliased_to with
-      | exception Not_found -> Variable.Set.empty
-      | set -> set)
-    unchanging
+(* let invariant_params_in_recursion (decls : Flambda.function_declarations) *)
+(*       ~backend = *)
+(*   let param_to_param ~caller ~caller_arg ~callee ~callee_arg relation = *)
+(*     implies relation (caller, caller_arg) (callee, callee_arg) *)
+(*   in *)
+(*   let anything_to_param ~callee ~callee_arg relation = *)
+(*     top relation (callee, callee_arg) *)
+(*   in *)
+(*   let param_to_anywhere ~caller:_ ~caller_arg:_ relation = relation in *)
+(*   let relation = *)
+(*     analyse_functions ~backend ~param_to_param *)
+(*       ~anything_to_param ~param_to_anywhere *)
+(*       decls *)
+(*   in *)
+(*   let not_unchanging = *)
+(*     Variable.Pair.Map.fold (fun (func, var) set not_unchanging -> *)
+(*         match set with *)
+(*         | Top -> Variable.Set.add var not_unchanging *)
+(*         | Implication set -> *)
+(*           if Variable.Pair.Set.exists (fun (func', var') -> *)
+(*               Variable.equal func func' && not (Variable.equal var var')) *)
+(*               set *)
+(*           then Variable.Set.add var not_unchanging *)
+(*           else not_unchanging) *)
+(*       relation Variable.Set.empty *)
+(*   in *)
+(*   let params = Closure_id.Map.fold (fun _ *)
+(*         ({ params } : Flambda.function_declaration) set -> *)
+(*       Variable.Set.union (Variable.Set.of_list params) set) *)
+(*     decls.funs Variable.Set.empty *)
+(*   in *)
+(*   let unchanging = Variable.Set.diff params not_unchanging in *)
+(*   let aliased_to = *)
+(*     Variable.Pair.Map.fold (fun (_, var) set aliases -> *)
+(*         match set with *)
+(*         | Implication set *)
+(*           when Variable.Set.mem var unchanging -> *)
+(*             Variable.Pair.Set.fold (fun (_, caller_args) aliases -> *)
+(*                 if Variable.Set.mem caller_args unchanging then *)
+(*                   let alias_set = *)
+(*                     match Variable.Map.find caller_args aliases with *)
+(*                     | exception Not_found -> *)
+(*                       Variable.Set.singleton var *)
+(*                     | alias_set -> *)
+(*                       Variable.Set.add var alias_set *)
+(*                   in *)
+(*                   Variable.Map.add caller_args alias_set aliases *)
+(*                 else *)
+(*                   aliases) *)
+(*               set aliases *)
+(*         | Top | Implication _ -> aliases) *)
+(*       relation Variable.Map.empty *)
+(*   in *)
+(*   (\* We complete the set of aliases such that there does not miss any *)
+(*      unchanging param *\) *)
+(*   Variable.Map.of_set (fun var -> *)
+(*       match Variable.Map.find var aliased_to with *)
+(*       | exception Not_found -> Variable.Set.empty *)
+(*       | set -> set) *)
+(*     unchanging *)
+
+let invariant_params_in_recursion (_ : Flambda.function_declarations)
+    ~backend:_ =
+  Format.printf "UPDATE invariant_params_in_recursion@.";
+  Variable.Map.empty
 
 let invariant_param_sources decls ~backend =
   let param_to_param ~caller ~caller_arg ~callee ~callee_arg relation =

@@ -34,3 +34,11 @@ val variable : Variable.t -> result -> bool
 (** [closure cl res] returns [true] if [cl] is marked as inconstant
     in [res]. *)
 val closure : Set_of_closures_id.t -> result -> bool
+
+(** [var_within_closure var cl res] returns [true] if the variable [var]
+    is marked as inconstant for the closure [cl] in [res]. *)
+val var_within_closure
+   : Var_within_closure.t
+   -> Set_of_closures_id.t
+   -> result
+   -> bool

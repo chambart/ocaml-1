@@ -17,3 +17,6 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 include Closure_element
+
+type with_set = t * Set_of_closures_id.t
+module With_set = Identifiable.Make (Identifiable.Pair (T) (Set_of_closures_id))
