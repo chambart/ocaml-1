@@ -86,6 +86,3 @@ end
 
 include ASA.Make (Transform)
 *)
-
-let rewrite_set_of_closures =
-  failwith "TO UPDATE"

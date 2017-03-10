@@ -920,8 +920,9 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
        free variables and which things are specialised arguments before
        unboxing them. *)
     match
-      Unbox_closures.rewrite_set_of_closures ~env
-        ~duplicate_function ~set_of_closures
+      failwith "TO UPDATE"
+      (* Unbox_closures.rewrite_set_of_closures ~env *)
+      (*   ~duplicate_function ~set_of_closures *)
     with
     | Some (expr, benefit) ->
       let r = R.add_benefit r benefit in
@@ -934,8 +935,9 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
       | None ->
         (* CR-soon mshinwell: should maybe add one allocation for the stub *)
         match
-          Unbox_specialised_args.rewrite_set_of_closures ~env
-            ~duplicate_function ~set_of_closures
+          failwith "TO UPDATE"
+          (* Unbox_specialised_args.rewrite_set_of_closures ~env *)
+          (*   ~duplicate_function ~set_of_closures *)
         with
         | Some (expr, benefit) ->
           let r = R.add_benefit r benefit in
