@@ -37,7 +37,7 @@ let add_closure_offsets
         + 1  (* arity *)
         + (if arity > 1 then 1 else 0)  (* partial application code pointer *)
     in
-    let closure_id = Closure_id.wrap id in
+    let closure_id = id in
     if Closure_id.Map.mem closure_id map then begin
       Misc.fatal_errorf "Closure_offsets.add_closure_offsets: function \
           offset for %a would be defined multiple times"
@@ -47,7 +47,7 @@ let add_closure_offsets
     (map, env_pos)
   in
   let function_offsets, free_variable_pos =
-    Variable.Map.fold assign_function_offset
+    Closure_id.Map.fold assign_function_offset
       function_decls.funs (function_offsets, -1)
   in
   (* Adds the mapping of free variables to their offset.  Recall that
@@ -58,8 +58,7 @@ let add_closure_offsets
      accesses. *)
   (* CR-someday mshinwell: As discussed with lwhite, maybe this isn't
      ideal, and the self accesses should be explicitly marked too. *)
-  let assign_free_variable_offset var _ (map, pos) =
-    let var_within_closure = Var_within_closure.wrap var in
+  let assign_free_variable_offset var_within_closure _ (map, pos) =
     if Var_within_closure.Map.mem var_within_closure map then begin
       Misc.fatal_errorf "Closure_offsets.add_closure_offsets: free variable \
           offset for %a would be defined multiple times"
@@ -69,7 +68,7 @@ let add_closure_offsets
     (map, pos + 1)
   in
   let free_variable_offsets, _ =
-    Variable.Map.fold assign_free_variable_offset
+    Var_within_closure.Map.fold assign_free_variable_offset
       free_vars (free_variable_offsets, free_variable_pos)
   in
   { function_offsets;

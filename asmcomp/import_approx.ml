@@ -19,40 +19,41 @@
 module A = Simple_value_approx
 
 let import_set_of_closures =
-  let import_function_declarations (clos : Flambda.function_declarations)
-        : Flambda.function_declarations =
-    (* CR-soon mshinwell for pchambart: Do we still need to do this
-       rewriting?  I'm wondering if maybe we don't have to any more. *)
-    let sym_to_fun_var_map (clos : Flambda.function_declarations) =
-      Variable.Map.fold (fun fun_var _ acc ->
-           let closure_id = Closure_id.wrap fun_var in
-           let sym = Compilenv.closure_symbol closure_id in
-           Symbol.Map.add sym fun_var acc)
-        clos.funs Symbol.Map.empty
-    in
-    let sym_map = sym_to_fun_var_map clos in
-    let f_named (named : Flambda.named) =
-      match named with
-      | Symbol sym ->
-        begin try Flambda.Expr (Var (Symbol.Map.find sym sym_map)) with
-        | Not_found -> named
-        end
-      | named -> named
-    in
-    let funs =
-      Variable.Map.map (fun (function_decl : Flambda.function_declaration) ->
-          let body =
-            Flambda_iterators.map_toplevel_named f_named function_decl.body
-          in
-          Flambda.create_function_declaration ~params:function_decl.params
-            ~body ~stub:function_decl.stub ~dbg:function_decl.dbg
-            ~inline:function_decl.inline
-            ~specialise:function_decl.specialise
-            ~is_a_functor:function_decl.is_a_functor)
-        clos.funs
-    in
-    Flambda.update_function_declarations clos ~funs
-  in
+  (* let import_function_declarations (clos : Flambda.function_declarations) *)
+  (*       : Flambda.function_declarations = *)
+  (*   (\* CR-soon mshinwell for pchambart: Do we still need to do this *)
+  (*      rewriting?  I'm wondering if maybe we don't have to any more. *\) *)
+  (*   let sym_to_fun_var_map (clos : Flambda.function_declarations) = *)
+  (*     Closure_id.Map.fold *)
+  (*       (fun closure_id (decl:Flambda.function_declaration) acc -> *)
+  (*          let sym = Compilenv.closure_symbol closure_id in *)
+  (*          Symbol.Map.add sym decl.closure_var acc) *)
+  (*       clos.funs Symbol.Map.empty *)
+  (*   in *)
+  (*   let sym_map = sym_to_fun_var_map clos in *)
+  (*   let f_named (named : Flambda.named) = *)
+  (*     match named with *)
+  (*     | Symbol sym -> *)
+  (*       begin try Flambda.Expr (Var (Symbol.Map.find sym sym_map)) with *)
+  (*       | Not_found -> named *)
+  (*       end *)
+  (*     | named -> named *)
+  (*   in *)
+  (*   let funs = *)
+  (*     Closure_id.Map.map (fun (function_decl : Flambda.function_declaration) -> *)
+  (*         let body = *)
+  (*           Flambda_iterators.map_toplevel_named f_named function_decl.body *)
+  (*         in *)
+  (*         Flambda.create_function_declaration ~params:function_decl.params *)
+  (*           ~body ~stub:function_decl.stub ~dbg:function_decl.dbg *)
+  (*           ~inline:function_decl.inline *)
+  (*           ~specialise:function_decl.specialise *)
+  (*           ~is_a_functor:function_decl.is_a_functor *)
+  (*           ~closure_var:function_decl.closure_var) *)
+  (*       clos.funs *)
+  (*   in *)
+  (*   Flambda.update_function_declarations clos ~funs *)
+  (* in *)
   let aux set_of_closures_id =
     ignore (Compilenv.approx_for_global
       (Set_of_closures_id.get_compilation_unit set_of_closures_id));
@@ -67,7 +68,11 @@ let import_set_of_closures =
     match function_declarations with
     | None -> None
     | Some function_declarations ->
-      Some (import_function_declarations function_declarations)
+      (* NOTE: We do not import function declarations.
+         i.e. we do not map symbols to local variable. This might still
+         be needed, but needs updating *)
+      Some function_declarations
+      (* Some (import_function_declarations function_declarations) *)
   in
   Set_of_closures_id.Tbl.memoize Compilenv.imported_sets_of_closures_table aux
 

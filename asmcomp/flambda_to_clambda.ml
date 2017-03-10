@@ -459,14 +459,13 @@ and to_clambda_direct_apply t func args direct_func dbg env : Clambda.ulambda =
    6th field of 'env' and in the body of fun_b the 1st field.
 *)
 and to_clambda_set_of_closures t env
-      (({ function_decls; free_vars } : Flambda.set_of_closures)
-        as set_of_closures) : Clambda.ulambda =
-  let all_functions = Variable.Map.bindings function_decls.funs in
+    ({ function_decls; free_vars } : Flambda.set_of_closures)
+  : Clambda.ulambda =
+  let all_functions = Closure_id.Map.bindings function_decls.funs in
   let env_var = Ident.create "env" in
   let to_clambda_function
         (closure_id, (function_decl : Flambda.function_declaration))
         : Clambda.ufunction =
-    let closure_id = Closure_id.wrap closure_id in
     let fun_offset =
       Closure_id.Map.find closure_id t.current_unit.fun_offset_table
     in
@@ -476,35 +475,18 @@ and to_clambda_set_of_closures t env
          Note that we must not forget the information about which allocated
          constants contain which unboxed values. *)
       let env = Env.keep_only_symbols env in
-      (* Add the Clambda expressions for the free variables of the function
-         to the environment. *)
-      let add_env_free_variable id _ env =
-        let var_offset =
-          try
-            Var_within_closure.Map.find
-              (Var_within_closure.wrap id) t.current_unit.fv_offset_table
-          with Not_found ->
-            Misc.fatal_errorf "Clambda.to_clambda_set_of_closures: offset for \
-                free variable %a is unknown.  Set of closures: %a"
-              Variable.print id
-              Flambda.print_set_of_closures set_of_closures
-        in
-        let pos = var_offset - fun_offset in
-        Env.add_subst env id
-          (Uprim (Pfield pos, [Clambda.Uvar env_var], Debuginfo.none))
-      in
-      let env = Variable.Map.fold add_env_free_variable free_vars env in
       (* Add the Clambda expressions for all functions defined in the current
          set of closures to the environment.  The various functions may be
          retrieved by moving within the runtime closure, starting from the
          current function's closure. *)
-      let add_env_function pos env (id, _) =
+      let add_env_function pos env
+          (id, (function_decl:Flambda.function_declaration)) =
         let offset =
-          Closure_id.Map.find (Closure_id.wrap id)
+          Closure_id.Map.find id
             t.current_unit.fun_offset_table
         in
         let exp : Clambda.ulambda = Uoffset (Uvar env_var, offset - pos) in
-        Env.add_subst env id exp
+        Env.add_subst env function_decl.closure_var exp
       in
       List.fold_left (add_env_function fun_offset) env all_functions
     in
@@ -524,7 +506,7 @@ and to_clambda_set_of_closures t env
   in
   let funs = List.map to_clambda_function all_functions in
   let free_vars =
-    Variable.Map.bindings (Variable.Map.map (
+    Var_within_closure.Map.bindings (Var_within_closure.Map.map (
       fun (free_var : Flambda.specialised_to) ->
         subst_var env free_var.var) free_vars)
   in
@@ -533,7 +515,7 @@ and to_clambda_set_of_closures t env
 and to_clambda_closed_set_of_closures t env symbol
       ({ function_decls; } : Flambda.set_of_closures)
       : Clambda.ustructured_constant =
-  let functions = Variable.Map.bindings function_decls.funs in
+  let functions = Closure_id.Map.bindings function_decls.funs in
   let to_clambda_function (id, (function_decl : Flambda.function_declaration))
         : Clambda.ufunction =
     (* All that we need in the environment, for translating one closure from
@@ -541,10 +523,11 @@ and to_clambda_closed_set_of_closures t env symbol
        the various closures in the set.  Such closures will always be
        referenced via symbols. *)
     let env =
-      List.fold_left (fun env (var, _) ->
-          let closure_id = Closure_id.wrap var in
+      List.fold_left
+        (fun env (closure_id, (function_decl:Flambda.function_declaration)) ->
           let symbol = Compilenv.closure_symbol closure_id in
-          Env.add_subst env var (to_clambda_symbol env symbol))
+          Env.add_subst env function_decl.closure_var
+            (to_clambda_symbol env symbol))
         (Env.keep_only_symbols env)
         functions
     in
@@ -554,7 +537,7 @@ and to_clambda_closed_set_of_closures t env symbol
           env, id :: params)
         function_decl.params (env, [])
     in
-    { label = Compilenv.function_label (Closure_id.wrap id);
+    { label = Compilenv.function_label id;
       arity = Flambda_utils.function_arity function_decl;
       params;
       body = to_clambda t env_body function_decl.body;

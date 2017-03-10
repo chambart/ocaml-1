@@ -319,7 +319,7 @@ and descr_of_named (env : Env.t) (named : Flambda.named)
 and describe_set_of_closures env (set : Flambda.set_of_closures)
       : Export_info.value_set_of_closures =
   let bound_vars_approx =
-    Variable.Map.map (fun (external_var : Flambda.specialised_to) ->
+    Var_within_closure.Map.map (fun (external_var : Flambda.specialised_to) ->
         Env.find_approx env external_var.var)
       set.free_vars
   in
@@ -342,37 +342,39 @@ and describe_set_of_closures env (set : Flambda.set_of_closures)
     let initial_value_set_of_closures =
       { Export_info.
         set_of_closures_id = set.function_decls.set_of_closures_id;
-        bound_vars = Var_within_closure.wrap_map bound_vars_approx;
+        bound_vars = bound_vars_approx;
         results =
-          Closure_id.wrap_map
-            (Variable.Map.map (fun _ -> Export_info.Value_unknown)
-              set.function_decls.funs);
+          Closure_id.Map.map (fun _ -> Export_info.Value_unknown)
+            set.function_decls.funs;
         aliased_symbol = None;
       }
     in
-    Variable.Map.mapi (fun fun_var _function_decl ->
+    Closure_id.Map.fold (fun closure_id
+                          (function_decl:Flambda.function_declaration) map ->
         let descr : Export_info.descr =
           Value_closure
-            { closure_id = Closure_id.wrap fun_var;
+            { closure_id;
               set_of_closures = initial_value_set_of_closures;
             }
         in
-        Export_info.Value_id (Env.new_descr env descr))
-      set.function_decls.funs
+        Variable.Map.add function_decl.closure_var
+          (Export_info.Value_id (Env.new_descr env descr))
+          map)
+      set.function_decls.funs Variable.Map.empty
   in
   let closure_env =
     Env.add_approx_maps env
-      [closures_approx; bound_vars_approx; specialised_args_approx]
+      [closures_approx; specialised_args_approx]
   in
   let results =
     let result_approx _var (function_decl : Flambda.function_declaration) =
       approx_of_expr closure_env function_decl.body
     in
-    Variable.Map.mapi result_approx set.function_decls.funs
+    Closure_id.Map.mapi result_approx set.function_decls.funs
   in
   { set_of_closures_id = set.function_decls.set_of_closures_id;
-    bound_vars = Var_within_closure.wrap_map bound_vars_approx;
-    results = Closure_id.wrap_map results;
+    bound_vars = bound_vars_approx;
+    results;
     aliased_symbol = None;
   }
 
