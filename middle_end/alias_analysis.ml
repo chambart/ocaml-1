@@ -82,11 +82,13 @@ let rec resolve_definition
   | Const _
   | Move_within_set_of_closures _ ->
     Variable var
-  | Project_var {var} ->
-    ignore var;
-    failwith "TO UPDATE"
-    (* fetch_variable definitions (Var_within_closure.unwrap var) *)
-    (*   ~the_dead_constant *)
+  | Project_var {closure; var} ->
+    begin match fetch_variable definitions closure ~the_dead_constant with
+    | Symbol _s ->
+      failwith "TO UPDATE"
+    | Variable v ->
+      fetch_variable_project_var definitions v var ~the_dead_constant
+    end
   | Variable v ->
     fetch_variable definitions v
       ~the_dead_constant
@@ -108,6 +110,45 @@ and fetch_variable
   match Variable.Tbl.find definitions.variable var with
   | exception Not_found -> Variable var
   | def -> resolve_definition definitions var def ~the_dead_constant
+
+and fetch_set_of_closures_variable
+    (definitions: definitions)
+    (var: Variable.t) =
+  match Variable.Tbl.find definitions.variable var with
+  | exception Not_found ->
+    Misc.fatal_errorf "No definition for set_of_closures %a" Variable.print var
+  | Move_within_set_of_closures _
+  | Project_closure _
+  | Symbol _ | Variable _ | Project_var _ | Field _ | Symbol_field _
+  | Const _ | Allocated_const _ | Block _ ->
+    assert false
+  | Set_of_closures set ->
+    set
+
+and fetch_variable_project_var
+    (definitions: definitions)
+    (var: Variable.t)
+    (project: Var_within_closure.t)
+    ~the_dead_constant : allocation_point =
+  match Variable.Tbl.find definitions.variable var with
+  | Move_within_set_of_closures _ ->
+    failwith "TODO"
+  | Project_closure { set_of_closures } -> begin
+    let set = fetch_set_of_closures_variable definitions set_of_closures in
+    match Var_within_closure.Map.find project set.Flambda.free_vars with
+    | exception Not_found ->
+      failwith "TODO"
+    | free_var ->
+      fetch_variable definitions free_var.var ~the_dead_constant
+    end
+  | exception Not_found ->
+    Misc.fatal_errorf "No definition for projection to %a" Variable.print var
+  | Symbol _ | Variable _ | Project_var _ | Field _ | Symbol_field _ ->
+    (* Must have been resolved *)
+    assert false
+  | Const _ | Allocated_const _ | Block _
+  | Set_of_closures _ ->
+    Symbol the_dead_constant
 
 and fetch_variable_field
     (definitions: definitions)

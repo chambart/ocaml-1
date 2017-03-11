@@ -640,7 +640,6 @@ let add_definitions_of_symbols constant_definitions initialize_symbol_tbl
     program components
 
 let introduce_free_variables_in_set_of_closures
-    inconstants
     (var_to_block_field_tbl :
       Flambda.constant_defining_value_block_field Variable.Tbl.t)
     ({ Flambda.function_decls; free_vars; specialised_args;
@@ -703,12 +702,8 @@ let introduce_free_variables_in_set_of_closures
   in
   let free_vars =
     (* Keep only those that are not rewritten to constants. *)
-    Var_within_closure.Map.filter (fun v _ ->
-        let inconstant =
-          Inconstant_idents.var_within_closure v
-            function_decls.set_of_closures_id inconstants
-        in
-        let keep = not inconstant in
+    Var_within_closure.Map.filter (fun v ({ var } : Flambda.specialised_to) ->
+        let keep = not (Variable.Tbl.mem var_to_block_field_tbl var) in
         if not keep then done_something := true;
         keep)
       free_vars
@@ -754,7 +749,6 @@ let rewrite_project_var
   (* | Const const -> Const const *)
 
 let introduce_free_variables_in_sets_of_closures
-    inconstants
     (var_to_block_field_tbl:
       Flambda.constant_defining_value_block_field Variable.Tbl.t)
     (translate_definition : Flambda.constant_defining_value Symbol.Map.t) =
@@ -766,7 +760,6 @@ let introduce_free_variables_in_sets_of_closures
       | Set_of_closures set_of_closures ->
         Flambda.Set_of_closures
           (introduce_free_variables_in_set_of_closures
-             inconstants
              var_to_block_field_tbl
              set_of_closures))
     translate_definition
@@ -973,7 +966,7 @@ let lift_constants (program : Flambda.program) ~backend =
         : Alias_analysis.constant_defining_value Variable.Tbl.t)
   in
   let translated_definitions =
-    introduce_free_variables_in_sets_of_closures inconstants
+    introduce_free_variables_in_sets_of_closures
       var_to_block_field_tbl translated_definitions
   in
   let constant_definitions =
@@ -1013,7 +1006,7 @@ let lift_constants (program : Flambda.program) ~backend =
         | (Set_of_closures set_of_closures) as named ->
           let new_set_of_closures =
             introduce_free_variables_in_set_of_closures
-              inconstants var_to_block_field_tbl set_of_closures
+              var_to_block_field_tbl set_of_closures
           in
           if new_set_of_closures == set_of_closures then
             named
@@ -1037,7 +1030,7 @@ let lift_constants (program : Flambda.program) ~backend =
           in
           Flambda.Set_of_closures
             (introduce_free_variables_in_set_of_closures
-              inconstants var_to_block_field_tbl set_of_closures))
+               var_to_block_field_tbl set_of_closures))
     constant_definitions
   in
   let effect_tbl =
