@@ -232,7 +232,8 @@ let separate_unused_arguments_in_closures program ~backend =
 
 [@@@ocaml.warning "+a-27"]
 let separate_unused_arguments_in_set_of_closures set_of_closures ~backend =
-  failwith "TO UPDATE"
+  Format.printf "TO UPDATE: remove unused arguments@.";
+  None
 
 let separate_unused_arguments_in_closures program ~backend =
-  failwith "TO UPDATE"
+  failwith "TO UPDATE: separate_unused_arguments_in_set_of_closures"

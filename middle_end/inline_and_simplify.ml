@@ -928,7 +928,8 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
        free variables and which things are specialised arguments before
        unboxing them. *)
     match
-      failwith "TO UPDATE"
+      Format.printf "TO UPDATE unbox_closures@.";
+      None
       (* Unbox_closures.rewrite_set_of_closures ~env *)
       (*   ~duplicate_function ~set_of_closures *)
     with
@@ -943,7 +944,8 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
       | None ->
         (* CR-soon mshinwell: should maybe add one allocation for the stub *)
         match
-          failwith "TO UPDATE"
+          Format.printf "TO UPDATE: Unbox_specialised_args@.";
+          None
           (* Unbox_specialised_args.rewrite_set_of_closures ~env *)
           (*   ~duplicate_function ~set_of_closures *)
         with

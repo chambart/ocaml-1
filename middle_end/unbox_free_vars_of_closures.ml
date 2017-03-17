@@ -178,4 +178,5 @@ let run ~env ~set_of_closures =
 let run ~env ~(set_of_closures : Flambda.set_of_closures) =
   ignore env;
   ignore set_of_closures;
-  failwith "TO UPDATE"
+  Format.printf "TO UPDATE: unbox_free_vars_of_closures@.";
+  None
