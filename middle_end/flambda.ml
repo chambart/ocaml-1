@@ -1027,7 +1027,7 @@ let create_function_declarations ~funs =
   in
   { set_of_closures_id;
     set_of_closures_origin;
-    funs;
+    funs = funs set_of_closures_id;
   }
 
 let update_function_declarations function_decls ~funs =

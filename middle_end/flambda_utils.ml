@@ -354,6 +354,7 @@ let make_closure_declaration ~id ~body ~params ~stub : Flambda.t =
         in
         let projection : Flambda.named =
           Project_var { closure; closure_id;
+                        set_of_closures_id = None;
                         var = var_within_closure }
         in
         (id', projection) :: bindings,
@@ -379,7 +380,8 @@ let make_closure_declaration ~id ~body ~params ~stub : Flambda.t =
   let set_of_closures =
     let function_decls =
       Flambda.create_function_declarations
-        ~funs:(Closure_id.Map.singleton closure_id function_declaration)
+        ~funs:(fun _ ->
+           Closure_id.Map.singleton closure_id function_declaration)
     in
     Flambda.create_set_of_closures ~function_decls ~free_vars
       ~specialised_args:Variable.Map.empty

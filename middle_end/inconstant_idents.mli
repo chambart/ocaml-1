@@ -35,10 +35,19 @@ val variable : Variable.t -> result -> bool
     in [res]. *)
 val closure : Set_of_closures_id.t -> result -> bool
 
-(** [var_within_closure var cl res] returns [true] if the variable [var]
+(*
+(** [var_within_closure_and_set var cl res] returns [true] if the variable [var]
     is marked as inconstant for the closure [cl] in [res]. *)
-val var_within_closure
+val var_within_closure_and_set
    : Var_within_closure.t
    -> Set_of_closures_id.t
+   -> result
+   -> bool
+*)
+
+(** [var_within_closure var res] returns [true] if the variable [var]
+    is marked as inconstant, or there are multiple closures declaring [var]. *)
+val var_within_closure
+   : Var_within_closure.t
    -> result
    -> bool

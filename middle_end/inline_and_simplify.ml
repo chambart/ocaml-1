@@ -441,10 +441,12 @@ let rec simplify_project_var env r ~(project_var : Flambda.project_var)
           Var_within_closure.print var
       end;
       let projection : Projection.t =
+        Format.printf "TO UPDATE simplify_project_var@.";
         Project_var {
           closure;
           closure_id;
           var;
+          set_of_closures_id = None; (* TO UPDATE *)
         }
       in
       begin match E.find_projection env ~projection with
@@ -454,7 +456,11 @@ let rec simplify_project_var env r ~(project_var : Flambda.project_var)
           Expr (Var var), ret r var_approx)
       | None ->
         let approx = A.approx_for_bound_var value_set_of_closures var in
-        let expr : Flambda.named = Project_var { closure; closure_id; var; } in
+        let expr : Flambda.named =
+          Format.printf "TO UPDATE simplify_project_var@.";
+          Project_var { set_of_closures_id = None; (* TO UPDATE *)
+                        closure; closure_id; var; }
+        in
         simplify_named_using_approx_and_env env r expr approx
       end
     | Unresolved symbol ->

@@ -32,6 +32,7 @@ type move_within_set_of_closures = {
 type project_var = {
   closure : Variable.t;
   closure_id : Closure_id.t;
+  set_of_closures_id : Set_of_closures_id.t option;
   var : Var_within_closure.t;
 }
 
@@ -85,10 +86,17 @@ let print_move_within_set_of_closures ppf
     Variable.print move_within_set_of_closures.closure
 
 let print_project_var ppf (project_var : project_var) =
-  Format.fprintf ppf "@[<2>(project_var@ %a@ from %a=%a)@]"
+  let set_of_closures_id_option ppf = function
+    | None ->
+      Format.pp_print_string ppf "unknown_set_of_closure_id"
+    | Some set_of_closures_id ->
+      Set_of_closures_id.print ppf set_of_closures_id
+  in
+  Format.fprintf ppf "@[<2>(project_var@ %a@ from %a=%a %a)@]"
     Var_within_closure.print project_var.var
     Closure_id.print project_var.closure_id
     Variable.print project_var.closure
+    set_of_closures_id_option project_var.set_of_closures_id
 
 type t =
   | Project_var of project_var

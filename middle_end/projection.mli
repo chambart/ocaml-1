@@ -40,6 +40,7 @@ type move_within_set_of_closures = {
 type project_var = {
   closure : Variable.t;  (** must yield a closure *)
   closure_id : Closure_id.t;
+  set_of_closures_id : Set_of_closures_id.t option;
   var : Var_within_closure.t;
 }
 

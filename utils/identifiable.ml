@@ -144,6 +144,8 @@ module Make_set (T : Thing) = struct
     | t :: q -> List.fold_left (fun acc e -> add e acc) (singleton t) q
 
   let map f s = of_list (List.map f (elements s))
+
+  let (+=) set elt = set := add elt !set
 end
 
 module Make_tbl (T : Thing) = struct
@@ -193,6 +195,7 @@ module type S = sig
     val to_string : t -> string
     val of_list : elt list -> t
     val map : (elt -> elt) -> t -> t
+    val (+=) : t ref -> elt -> unit
   end
 
   module Map : sig

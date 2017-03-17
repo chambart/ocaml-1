@@ -29,7 +29,7 @@ module Env = struct
     mutable_variables : Mutable_variable.t Ident.tbl;
     static_exceptions : Static_exception.t Numbers.Int.Map.t;
     globals : Symbol.t Numbers.Int.Map.t;
-    current_closure : (Variable.t * Closure_id.t) option;
+    current_closure : (Variable.t * Closure_id.t * Set_of_closures_id.t) option;
     at_toplevel : bool;
   }
 
@@ -71,8 +71,8 @@ module Env = struct
   let find_mutable_var_exn t id =
     Ident.find_same id t.mutable_variables
 
-  let set_current_closure t var closure_id =
-    { t with current_closure = Some (var, closure_id) }
+  let set_current_closure t var closure_id set_of_closures_id =
+    { t with current_closure = Some (var, closure_id, set_of_closures_id) }
 
   let current_closure t =
     match t.current_closure with

@@ -175,11 +175,12 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
     begin match Env.find_var_exn env id with
     | Variable var -> Var var
     | Closure var_within_closure ->
-      let closure, closure_id =
+      let closure, closure_id, set_of_closures_id =
         Env.current_closure env
       in
       name_expr ~name:(Ident.name id)
-        (Project_var { closure; closure_id; var = var_within_closure })
+        (Project_var { set_of_closures_id = Some set_of_closures_id;
+                       closure; closure_id; var = var_within_closure })
     | exception Not_found ->
       match Env.find_mutable_var_exn env id with
       | mut_var -> name_expr (Read_mutable mut_var) ~name:"read_mutable"
@@ -568,13 +569,14 @@ and close_functions t external_env function_declarations
       external_env function_declarations
   in
   let all_free_idents = Function_decls.all_free_idents function_declarations in
-  let close_one_function map decl =
+  let close_one_function set_of_closures_id map decl =
     let closure_bound_var = Function_decl.closure_bound_var decl in
     let closure_id = Closure_id.wrap closure_bound_var in
     let closure_env_without_parameters =
       Env.set_current_closure
         closure_env_without_parameters
         closure_bound_var (Closure_id.wrap closure_bound_var)
+        set_of_closures_id
     in
     let body = Function_decl.body decl in
     let loc = Function_decl.loc decl in
@@ -619,8 +621,10 @@ and close_functions t external_env function_declarations
   let function_decls =
     Flambda.create_function_declarations
       ~funs:
-        (List.fold_left close_one_function Closure_id.Map.empty
-          (Function_decls.to_list function_declarations))
+      (fun set_of_closures_id ->
+        (List.fold_left (close_one_function set_of_closures_id)
+           Closure_id.Map.empty
+           (Function_decls.to_list function_declarations)))
   in
   (* The closed representation of a set of functions is a "set of closures".
      (For avoidance of doubt, the runtime representation of the *whole set* is
@@ -634,12 +638,14 @@ and close_functions t external_env function_declarations
             | Variable var -> var, required_bindinds
             | Closure var_within_closure ->
               let variable = Variable.create_with_same_name_as_ident var in
-              let closure, closure_id =
+              let closure, closure_id, set_of_closures_id =
                 Env.current_closure external_env
               in
               variable,
               (variable,
-               Flambda.Project_var { closure; closure_id; var = var_within_closure })
+               Flambda.Project_var {
+                 set_of_closures_id = Some set_of_closures_id;
+                 closure; closure_id; var = var_within_closure })
               :: required_bindinds
           in
           let external_var : Flambda.specialised_to =

@@ -44,6 +44,7 @@ type definitions = {
   variable : constant_defining_value Variable.Tbl.t;
   initialize_symbol : initialize_symbol_field list Symbol.Tbl.t;
   symbol : Flambda.constant_defining_value Symbol.Tbl.t;
+  var_within_closures : Variable.t Var_within_closure.With_set.Tbl.t;
 }
 
 let print_constant_defining_value ppf = function
@@ -85,7 +86,7 @@ let rec resolve_definition
   | Project_var {closure; var} ->
     begin match fetch_variable definitions closure ~the_dead_constant with
     | Symbol _s ->
-      failwith "TO UPDATE"
+      failwith "TO UPDATE resolve_definition"
     | Variable v ->
       fetch_variable_project_var definitions v var ~the_dead_constant
     end
@@ -199,8 +200,13 @@ and fetch_symbol_field
   | Allocated_const _ | Set_of_closures _ | Project_closure _ ->
     Symbol the_dead_constant
 
-let run variable initialize_symbol symbol ~the_dead_constant =
-  let definitions = { variable; initialize_symbol; symbol; } in
+let run variable initialize_symbol symbol var_within_closures
+    ~the_dead_constant =
+  let definitions = {
+    variable; initialize_symbol;
+    var_within_closures; symbol;
+  }
+  in
   Variable.Tbl.fold (fun var definition result ->
       let definition =
         resolve_definition definitions var definition ~the_dead_constant

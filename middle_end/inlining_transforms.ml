@@ -57,13 +57,15 @@ let which_function_parameters_can_we_specialise ~params ~args
     user-specified function as an [Flambda.named] value that projects the
     variable from its closure. *)
 let fold_over_projections_of_vars_bound_by_closure ~closure_id_being_applied
-      ~lhs_of_application ~function_decls ~init ~f =
+      ~lhs_of_application ~(function_decls:Flambda.function_declarations)
+      ~init ~f =
   Variable.Set.fold (fun var acc ->
       let expr : Flambda.named =
         Project_var {
           closure = lhs_of_application;
           closure_id = closure_id_being_applied;
           var = Var_within_closure.wrap var;
+          set_of_closures_id = Some function_decls.set_of_closures_id;
         }
       in
       f ~acc ~var ~expr)

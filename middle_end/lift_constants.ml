@@ -702,7 +702,7 @@ let introduce_free_variables_in_set_of_closures
   in
   let free_vars =
     (* Keep only those that are not rewritten to constants. *)
-    Var_within_closure.Map.filter (fun v ({ var } : Flambda.specialised_to) ->
+    Var_within_closure.Map.filter (fun _ ({ var } : Flambda.specialised_to) ->
         let keep = not (Variable.Tbl.mem var_to_block_field_tbl var) in
         if not keep then done_something := true;
         keep)
@@ -735,18 +735,14 @@ let introduce_free_variables_in_set_of_closures
       ~specialised_args ~direct_call_surrogates
 
 let rewrite_project_var
+      (bound_variable : Variable.t)
       (var_to_block_field_tbl
         : Flambda.constant_defining_value_block_field Variable.Tbl.t)
-      (project_var : Flambda.project_var) ~original : Flambda.named =
-  ignore var_to_block_field_tbl;
-  ignore project_var;
-  ignore original;
-  failwith "TO UPDATE"
-  (* let var = Var_within_closure.unwrap project_var.var in *)
-  (* match Variable.Tbl.find var_to_block_field_tbl var with *)
-  (* | exception Not_found -> original *)
-  (* | Symbol sym -> Symbol sym *)
-  (* | Const const -> Const const *)
+      (_project_var : Flambda.project_var) ~original : Flambda.named =
+  match Variable.Tbl.find var_to_block_field_tbl bound_variable with
+  | exception Not_found -> original
+  | Symbol sym -> Symbol sym
+  | Const const -> Const const
 
 let introduce_free_variables_in_sets_of_closures
     (var_to_block_field_tbl:
@@ -894,6 +890,20 @@ let project_closure_map symbol_definition_map =
     symbol_definition_map
     Symbol.Map.empty
 
+let collect_var_within_closures program =
+  let tbl = Var_within_closure.With_set.Tbl.create 10 in
+  let f ~constant:_ (set_of_closures:Flambda.set_of_closures) =
+    let set_of_closures_id =
+      set_of_closures.function_decls.set_of_closures_id
+    in
+    Var_within_closure.Map.iter (fun var (spec_to:Flambda.specialised_to) ->
+        Var_within_closure.With_set.Tbl.add tbl (var, set_of_closures_id)
+          spec_to.var)
+      set_of_closures.free_vars
+  in
+  Flambda_iterators.iter_on_set_of_closures_of_program program ~f;
+  tbl
+
 let the_dead_constant_index = ref 0
 
 let lift_constants (program : Flambda.program) ~backend =
@@ -923,10 +933,12 @@ let lift_constants (program : Flambda.program) ~backend =
     assign_symbols_and_collect_constant_definitions ~backend ~program
       ~inconstants
   in
+  let var_within_closures_tbl = collect_var_within_closures program in
   let aliases =
     Alias_analysis.run var_to_definition_tbl
       initialize_symbol_to_definition_tbl
       let_symbol_to_definition_tbl
+      var_within_closures_tbl
       ~the_dead_constant
   in
   replace_definitions_in_initialize_symbol_and_effects
@@ -1002,7 +1014,8 @@ let lift_constants (program : Flambda.program) ~backend =
      rewrite any subsequent [Project_var] expressions that project that
      variable. *)
   let rewrite_expr expr =
-    Flambda_iterators.map_named (function
+    Flambda_iterators.map_all_immutable_let_and_let_rec_bindings
+      ~f:(fun var -> function
         | (Set_of_closures set_of_closures) as named ->
           let new_set_of_closures =
             introduce_free_variables_in_set_of_closures
@@ -1013,7 +1026,7 @@ let lift_constants (program : Flambda.program) ~backend =
           else
             Set_of_closures new_set_of_closures
         | (Project_var project_var) as original ->
-          rewrite_project_var var_to_block_field_tbl project_var ~original
+          rewrite_project_var var var_to_block_field_tbl project_var ~original
         | (Symbol _ | Const _ | Allocated_const _ | Project_closure _
         | Move_within_set_of_closures _ | Prim _ | Expr _
         | Read_mutable _ | Read_symbol_field _) as named -> named)

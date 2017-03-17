@@ -37,8 +37,9 @@ module Env : sig
   val find_var : t -> Ident.t -> variable_access
   val find_var_exn : t -> Ident.t -> variable_access
 
-  val set_current_closure : t -> Variable.t -> Closure_id.t -> t
-  val current_closure : t -> Variable.t * Closure_id.t
+  val set_current_closure
+      : t -> Variable.t -> Closure_id.t -> Set_of_closures_id.t -> t
+  val current_closure : t -> Variable.t * Closure_id.t * Set_of_closures_id.t
 
   val add_mutable_var : t -> Ident.t -> Mutable_variable.t -> t
   val find_mutable_var_exn : t -> Ident.t -> Mutable_variable.t

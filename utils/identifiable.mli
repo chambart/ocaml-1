@@ -44,6 +44,7 @@ module type S = sig
     val to_string : t -> string
     val of_list : elt list -> t
     val map : (elt -> elt) -> t -> t
+    val (+=) : t ref -> elt -> unit
   end
 
   module Map : sig

@@ -54,6 +54,7 @@ val run
    : constant_defining_value Variable.Tbl.t
   -> initialize_symbol_field list Symbol.Tbl.t
   -> Flambda.constant_defining_value Symbol.Tbl.t
+  -> Variable.t Var_within_closure.With_set.Tbl.t
   -> the_dead_constant:Symbol.t
   -> allocation_point Variable.Map.t
 

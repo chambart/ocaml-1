@@ -567,7 +567,7 @@ val create_function_declaration
 
 (** Create a set of function declarations given the individual declarations. *)
 val create_function_declarations
-   : funs:function_declaration Closure_id.Map.t
+   : funs:(Set_of_closures_id.t -> function_declaration Closure_id.Map.t)
   -> function_declarations
 
 (** Create a set of function declarations based on another set of function
