@@ -35,7 +35,7 @@ let constant_dependencies (const:Flambda.constant_defining_value) =
     in
     Symbol.Set.of_list symbol_fields
   | Set_of_closures set_of_closures -> closure_dependencies set_of_closures
-  | Project_closure (s, _) -> Symbol.Set.singleton s
+  | Project_closure (s, _, _) -> Symbol.Set.singleton s
 
 let let_rec_dep defs dep =
   let add_deps l dep =

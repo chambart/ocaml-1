@@ -17,9 +17,9 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 type for_one_or_more_units = {
-  fun_offset_table : int Closure_id.Map.t;
-  fv_offset_table : int Var_within_closure.Map.t;
-  closures : Flambda.function_declarations Closure_id.Map.t;
+  fun_offset_table : int Closure_id.With_set.Map.t;
+  fv_offset_table : int Var_within_closure.With_set.Map.t;
+  closures : Flambda.function_declarations Closure_id.With_set.Map.t;
   constant_sets_of_closures : Set_of_closures_id.Set.t;
 }
 
@@ -33,39 +33,39 @@ type ('a, 'b) declaration_position =
   | Imported_unit of 'b
   | Not_declared
 
-let get_fun_offset t closure_id =
+let get_fun_offset t closure_id set_id =
   let fun_offset_table =
     if Closure_id.in_compilation_unit closure_id (Compilenv.current_unit ())
     then t.current_unit.fun_offset_table
     else t.imported_units.fun_offset_table
   in
-  try Closure_id.Map.find closure_id fun_offset_table
+  try Closure_id.With_set.Map.find (closure_id, set_id) fun_offset_table
   with Not_found ->
     Misc.fatal_errorf "Flambda_to_clambda: missing offset for closure %a"
-      Closure_id.print closure_id
+      Closure_id.With_set.print (closure_id, set_id)
 
-let get_fv_offset t var_within_closure =
+let get_fv_offset t var_within_closure set_id =
   let fv_offset_table =
     if Var_within_closure.in_compilation_unit var_within_closure
         (Compilenv.current_unit ())
     then t.current_unit.fv_offset_table
     else t.imported_units.fv_offset_table
   in
-  try Var_within_closure.Map.find var_within_closure fv_offset_table
+  try Var_within_closure.With_set.Map.find (var_within_closure, set_id) fv_offset_table
   with Not_found ->
     Misc.fatal_errorf "Flambda_to_clambda: missing offset for variable %a"
       Var_within_closure.print var_within_closure
 
-let function_declaration_position t closure_id =
+let function_declaration_position t closure_id set_id =
   try
-    Current_unit (Closure_id.Map.find closure_id t.current_unit.closures)
+    Current_unit (Closure_id.With_set.Map.find (closure_id, set_id) t.current_unit.closures)
   with Not_found ->
     try
-      Imported_unit (Closure_id.Map.find closure_id t.imported_units.closures)
+      Imported_unit (Closure_id.With_set.Map.find (closure_id, set_id) t.imported_units.closures)
     with Not_found -> Not_declared
 
-let is_function_constant t closure_id =
-  match function_declaration_position t closure_id with
+let is_function_constant t closure_id set_id =
+  match function_declaration_position t closure_id set_id with
   | Current_unit { set_of_closures_id } ->
     Set_of_closures_id.Set.mem set_of_closures_id
       t.current_unit.constant_sets_of_closures
@@ -253,7 +253,8 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
       List.map (fun (id, var, def) -> id, to_clambda_named t env var def) defs
     in
     Uletrec (defs, to_clambda t env body)
-  | Apply { func; args; kind = Direct direct_func; dbg = dbg } ->
+  | Apply { func; args;
+            kind = Direct (direct_func, set_of_closures_id); dbg = dbg } ->
     (* The closure _parameter_ of the function is added by cmmgen.
        At the call site, for a direct call, the closure argument must be
        explicitly added (by [to_clambda_direct_apply]); there is no special
@@ -261,7 +262,7 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
        For an indirect call, we do not need to do anything here; Cmmgen will
        do the equivalent of the previous paragraph when it generates a direct
        call to [caml_apply]. *)
-    to_clambda_direct_apply t func args direct_func dbg env
+    to_clambda_direct_apply t func args direct_func set_of_closures_id dbg env
   | Apply { func; args; kind = Indirect; dbg = dbg } ->
     let callee = subst_var env func in
     Ugeneric_apply (check_closure callee (Flambda.Expr (Var func)),
@@ -367,27 +368,51 @@ and to_clambda_named t env var (named : Flambda.named) : Clambda.ulambda =
     Uprim (Pfield field, [to_clambda_symbol env symbol], Debuginfo.none)
   | Set_of_closures set_of_closures ->
     to_clambda_set_of_closures t env set_of_closures
-  | Project_closure { set_of_closures; closure_id } ->
+  | Project_closure
+      { set_of_closures; closure_id; set_of_closures_id } ->
     (* Note that we must use [build_uoffset] to ensure that we do not generate
        a [Uoffset] construction in the event that the offset is zero, otherwise
        we might break pattern matches in Cmmgen (in particular for the
        compilation of "let rec"). *)
+    let set_id =
+      match set_of_closures_id with
+      | None ->
+        failwith "TODO handle unknown set_of_closures_id"
+      | Some set_of_closures_id ->
+        set_of_closures_id
+    in
     check_closure (
       build_uoffset
         (check_closure (subst_var env set_of_closures)
            (Flambda.Expr (Var set_of_closures)))
-        (get_fun_offset t closure_id))
+        (get_fun_offset t closure_id set_id))
       named
-  | Move_within_set_of_closures { closure; start_from; move_to } ->
+  | Move_within_set_of_closures
+      { closure; start_from; move_to; set_of_closures_id } ->
+    let set_id =
+      match set_of_closures_id with
+      | None ->
+        failwith "TODO handle unknown set_of_closures_id"
+      | Some set_of_closures_id ->
+        set_of_closures_id
+    in
     check_closure (build_uoffset
       (check_closure (subst_var env closure)
          (Flambda.Expr (Var closure)))
-      ((get_fun_offset t move_to) - (get_fun_offset t start_from)))
+      ((get_fun_offset t move_to set_id)
+       - (get_fun_offset t start_from set_id)))
       named
-  | Project_var { closure; var; closure_id } ->
+  | Project_var { closure; var; closure_id; set_of_closures_id } ->
+    let set_id =
+      match set_of_closures_id with
+      | None ->
+        failwith "TODO handle unknown set_of_closures_id"
+      | Some set_of_closures_id ->
+        set_of_closures_id
+    in
     let ulam = subst_var env closure in
-    let fun_offset = get_fun_offset t closure_id in
-    let var_offset = get_fv_offset t var in
+    let fun_offset = get_fun_offset t closure_id set_id in
+    let var_offset = get_fv_offset t var set_id in
     let pos = var_offset - fun_offset in
     Uprim (Pfield pos,
       [check_field (check_closure ulam (Expr (Var closure))) pos (Some named)],
@@ -422,8 +447,16 @@ and to_clambda_switch t env cases num_keys default =
   | [| |] -> [| |], [| |]  (* May happen when [default] is [None]. *)
   | _ -> index, actions
 
-and to_clambda_direct_apply t func args direct_func dbg env : Clambda.ulambda =
-  let closed = is_function_constant t direct_func in
+and to_clambda_direct_apply t func args direct_func set_of_closures_id dbg env
+      : Clambda.ulambda =
+  let set_id =
+    match set_of_closures_id with
+    | None ->
+      failwith "TODO handle unknown set_of_closures_id"
+    | Some set_of_closures_id ->
+      set_of_closures_id
+  in
+  let closed = is_function_constant t direct_func set_id in
   let label = Compilenv.function_label direct_func in
   let uargs =
     let uargs = subst_vars env args in
@@ -467,7 +500,9 @@ and to_clambda_set_of_closures t env
         (closure_id, (function_decl : Flambda.function_declaration))
         : Clambda.ufunction =
     let fun_offset =
-      Closure_id.Map.find closure_id t.current_unit.fun_offset_table
+      Closure_id.With_set.Map.find
+        (closure_id, function_decls.set_of_closures_id)
+        t.current_unit.fun_offset_table
     in
     let env =
       (* Inside the body of the function, we cannot access variables
@@ -482,7 +517,8 @@ and to_clambda_set_of_closures t env
       let add_env_function pos env
           (id, (function_decl:Flambda.function_declaration)) =
         let offset =
-          Closure_id.Map.find id
+          Closure_id.With_set.Map.find
+            (id, function_decls.set_of_closures_id)
             t.current_unit.fun_offset_table
         in
         let exp : Clambda.ulambda = Uoffset (Uvar env_var, offset - pos) in

@@ -245,13 +245,16 @@ let variable_and_symbol_invariants (program : Flambda.program) =
       assert (index >= 0)  (* CR-someday mshinwell: add proper error *)
     | Set_of_closures set_of_closures ->
       loop_set_of_closures env set_of_closures
-    | Project_closure { set_of_closures; closure_id; } ->
+    | Project_closure { set_of_closures; closure_id; set_of_closures_id; } ->
       check_variable_is_bound env set_of_closures;
-      ignore_closure_id closure_id
-    | Move_within_set_of_closures { closure; start_from; move_to; } ->
+      ignore_closure_id closure_id;
+      ignore_option ignore_set_of_closures_id set_of_closures_id
+    | Move_within_set_of_closures
+        { closure; start_from; move_to; set_of_closures_id; } ->
       check_variable_is_bound env closure;
       ignore_closure_id start_from;
       ignore_closure_id move_to;
+      ignore_option ignore_set_of_closures_id set_of_closures_id
     | Project_var { set_of_closures_id; closure; closure_id; var; } ->
       check_variable_is_bound env closure;
       ignore_closure_id closure_id;
@@ -417,8 +420,9 @@ let variable_and_symbol_invariants (program : Flambda.program) =
         assert false; (* TODO: correct error *)
       if not (Variable.Map.is_empty set_of_closures.specialised_args) then
         assert false; (* TODO: correct error *)
-    | Flambda.Project_closure (symbol,closure_id) ->
+    | Flambda.Project_closure (symbol,closure_id, set_of_closures_id) ->
       ignore_closure_id closure_id;
+      ignore_set_of_closures_id set_of_closures_id;
       check_symbol_is_bound env symbol
   in
   let rec loop_program_body env (program : Flambda.program_body) =
@@ -556,7 +560,8 @@ let used_closure_ids (program:Flambda.program) =
     match flam with
     | Project_closure { closure_id; _} ->
       used := Closure_id.Set.add closure_id !used;
-    | Move_within_set_of_closures { closure = _; start_from; move_to; } ->
+    | Move_within_set_of_closures
+        { set_of_closures_id=_; closure = _; start_from; move_to; } ->
       used := Closure_id.Set.add start_from !used;
       used := Closure_id.Set.add move_to !used
     | Project_var { set_of_closures_id=_; closure = _; closure_id; var = _ } ->

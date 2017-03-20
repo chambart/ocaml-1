@@ -18,7 +18,7 @@
 
 type call_kind =
   | Indirect
-  | Direct of Closure_id.t
+  | Direct of Closure_id.t * Set_of_closures_id.t option
 
 type const =
   | Int of int
@@ -148,7 +148,7 @@ and constant_defining_value =
   | Allocated_const of Allocated_const.t
   | Block of Tag.t * constant_defining_value_block_field list
   | Set_of_closures of set_of_closures  (* [free_vars] must be empty *)
-  | Project_closure of Symbol.t * Closure_id.t
+  | Project_closure of Symbol.t * Closure_id.t * Set_of_closures_id.t
 
 and constant_defining_value_block_field =
   | Symbol of Symbol.t
@@ -194,7 +194,14 @@ let rec lam ppf (flam : t) =
     let direct ppf () =
       match kind with
       | Indirect -> ()
-      | Direct closure_id -> fprintf ppf "*[%a]" Closure_id.print closure_id
+      | Direct (closure_id, set_of_closures_id) ->
+        match set_of_closures_id with
+        | None ->
+          fprintf ppf "*[%a]" Closure_id.print closure_id
+        | Some set_of_closures_id ->
+          fprintf ppf "*[%a from %a]"
+            Closure_id.print closure_id
+            Set_of_closures_id.print set_of_closures_id
     in
     let inline ppf () =
       match inline with
@@ -453,9 +460,10 @@ let print_constant_defining_value ppf (const : constant_defining_value) =
   | Set_of_closures set_of_closures ->
     fprintf ppf "@[<2>(Set_of_closures (@ %a))@]" print_set_of_closures
       set_of_closures
-  | Project_closure (set_of_closures, closure_id) ->
-    fprintf ppf "(Project_closure (%a, %a))" Symbol.print set_of_closures
+  | Project_closure (set_of_closures, closure_id, set_of_closures_id) ->
+    fprintf ppf "(Project_closure (%a, %a from %a))" Symbol.print set_of_closures
       Closure_id.print closure_id
+      Set_of_closures_id.print set_of_closures_id
 
 let rec print_program_body ppf (program : program_body) =
   match program with
@@ -957,7 +965,7 @@ let free_symbols_allocated_constant_helper symbols
   | Set_of_closures set_of_closures ->
     symbols := Symbol.Set.union !symbols
       (free_symbols_named (Set_of_closures set_of_closures))
-  | Project_closure (s, _) ->
+  | Project_closure (s, _, _) ->
     symbols := Symbol.Set.add s !symbols
 
 let free_symbols_program (program : program) =
@@ -1030,9 +1038,16 @@ let create_function_declarations ~funs =
     funs = funs set_of_closures_id;
   }
 
-let update_function_declarations function_decls ~funs =
+let update_function_declarations ?do_not_freshen_set_of_closure_id
+    function_decls ~funs =
   let compilation_unit = Compilation_unit.get_current_exn () in
-  let set_of_closures_id = Set_of_closures_id.create compilation_unit in
+  let set_of_closures_id =
+    match do_not_freshen_set_of_closure_id with
+    | Some () ->
+      function_decls.set_of_closures_id
+    | None ->
+      Set_of_closures_id.create compilation_unit
+  in
   let set_of_closures_origin = function_decls.set_of_closures_origin in
   { set_of_closures_id;
     set_of_closures_origin;
@@ -1161,11 +1176,14 @@ module Constant_defining_value = struct
       | Set_of_closures set1, Set_of_closures set2 ->
         Set_of_closures_id.compare set1.function_decls.set_of_closures_id
           set2.function_decls.set_of_closures_id
-      | Project_closure (set1, closure_id1),
-          Project_closure (set2, closure_id2) ->
+      | Project_closure (set1, closure_id1, set_of_closure_id1),
+          Project_closure (set2, closure_id2, set_of_closure_id2) ->
         let c = Symbol.compare set1 set2 in
         if c <> 0 then c
-        else Closure_id.compare closure_id1 closure_id2
+        else
+          let c = Closure_id.compare closure_id1 closure_id2 in
+          if c <> 0 then c
+          else Set_of_closures_id.compare set_of_closure_id1 set_of_closure_id2
       | Allocated_const _, Block _ -> -1
       | Allocated_const _, Set_of_closures _ -> -1
       | Allocated_const _, Project_closure _ -> -1

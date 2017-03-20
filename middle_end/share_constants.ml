@@ -42,8 +42,8 @@ let update_constant_for_sharing sharing_symbol_tbl const
       Flambda_iterators.map_symbols_on_set_of_closures
         ~f:substitute_symbol set_of_closures
     )
-  | Project_closure (sym, closure_id) ->
-    Project_closure (substitute_symbol sym, closure_id)
+  | Project_closure (sym, closure_id, set_of_closures_id) ->
+    Project_closure (substitute_symbol sym, closure_id, set_of_closures_id)
 
 let cannot_share (const : Flambda.constant_defining_value) =
   match const with

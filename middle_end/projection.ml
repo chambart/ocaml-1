@@ -21,12 +21,14 @@
 type project_closure = {
   set_of_closures : Variable.t;
   closure_id : Closure_id.t;
+  set_of_closures_id : Set_of_closures_id.t option;
 }
 
 type move_within_set_of_closures = {
   closure : Variable.t;
   start_from : Closure_id.t;
   move_to : Closure_id.t;
+  set_of_closures_id : Set_of_closures_id.t option;
 }
 
 type project_var = {
@@ -92,7 +94,7 @@ let print_project_var ppf (project_var : project_var) =
     | Some set_of_closures_id ->
       Set_of_closures_id.print ppf set_of_closures_id
   in
-  Format.fprintf ppf "@[<2>(project_var@ %a@ from %a=%a %a)@]"
+  Format.fprintf ppf "@[<2>(project_var@ %a@ from %a=%a@ in %a)@]"
     Var_within_closure.print project_var.var
     Closure_id.print project_var.closure_id
     Variable.print project_var.closure

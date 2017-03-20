@@ -78,15 +78,15 @@ and approx =
 type t = private {
   sets_of_closures : Flambda.function_declarations Set_of_closures_id.Map.t;
   (** Code of exported functions indexed by set of closures IDs. *)
-  closures : Flambda.function_declarations Closure_id.Map.t;
+  closures : Flambda.function_declarations Closure_id.With_set.Map.t;
   (** Code of exported functions indexed by closure IDs. *)
   values : descr Export_id.Map.t Compilation_unit.Map.t;
   (** Structure of exported values. *)
   symbol_id : Export_id.t Symbol.Map.t;
   (** Associates symbols and values. *)
-  offset_fun : int Closure_id.Map.t;
+  offset_fun : int Closure_id.With_set.Map.t;
   (** Positions of function pointers in their closures. *)
-  offset_fv : int Var_within_closure.Map.t;
+  offset_fv : int Var_within_closure.With_set.Map.t;
   (** Positions of value pointers in their closures. *)
   constant_sets_of_closures : Set_of_closures_id.Set.t;
   (* CR-soon mshinwell for pchambart: Add comment *)
@@ -101,11 +101,11 @@ val empty : t
 (** Create a new export information structure. *)
 val create
    : sets_of_closures:Flambda.function_declarations Set_of_closures_id.Map.t
-  -> closures:Flambda.function_declarations Closure_id.Map.t
+  -> closures:Flambda.function_declarations Closure_id.With_set.Map.t
   -> values:descr Export_id.Map.t Compilation_unit.Map.t
   -> symbol_id:Export_id.t Symbol.Map.t
-  -> offset_fun:int Closure_id.Map.t
-  -> offset_fv:int Var_within_closure.Map.t
+  -> offset_fun:int Closure_id.With_set.Map.t
+  -> offset_fv:int Var_within_closure.With_set.Map.t
   -> constant_sets_of_closures:Set_of_closures_id.Set.t
   -> invariant_params:Variable.Set.t Variable.Map.t Set_of_closures_id.Map.t
   -> t
@@ -121,8 +121,8 @@ val create
     [Flambda_to_clambda] pass. *)
 val add_clambda_info
    : t
-  -> offset_fun:int Closure_id.Map.t
-  -> offset_fv:int Var_within_closure.Map.t
+  -> offset_fun:int Closure_id.With_set.Map.t
+  -> offset_fv:int Var_within_closure.With_set.Map.t
   -> constant_sets_of_closures:Set_of_closures_id.Set.t
   -> t
 

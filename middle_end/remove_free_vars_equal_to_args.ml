@@ -92,6 +92,7 @@ let rewrite_one_set_of_closures (set_of_closures : Flambda.set_of_closures) =
   else
     let function_decls =
       Flambda.update_function_declarations
+        ~do_not_freshen_set_of_closure_id:()
         set_of_closures.function_decls ~funs
     in
     let set_of_closures =

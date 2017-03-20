@@ -222,7 +222,7 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
     (* CR-soon mshinwell: some of this is now very similar to the let rec case
        below *)
     let set_of_closures_var = Variable.create ("set_of_closures_" ^ name) in
-    let set_of_closures, required_bindings =
+    let set_of_closures, required_bindings, set_of_closures_id =
       let decl =
         Function_decl.create ~let_rec_ident:None ~closure_bound_var ~kind
           ~params ~body ~attr ~loc
@@ -230,7 +230,8 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
       close_functions t env (Function_decls.create [decl])
     in
     let project_closure : Flambda.project_closure =
-      { set_of_closures = set_of_closures_var;
+      { set_of_closures_id = Some set_of_closures_id;
+        set_of_closures = set_of_closures_var;
         closure_id = Closure_id.wrap closure_bound_var;
       }
     in
@@ -305,7 +306,7 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
         end
       in
       let set_of_closures_var = Variable.create name in
-      let set_of_closures, required_bindings =
+      let set_of_closures, required_bindings, set_of_closures_id =
         close_functions t env (Function_decls.create function_declarations)
       in
       let body =
@@ -318,7 +319,8 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
                closures. *)
             (Flambda.create_let let_bound_var
               (Project_closure {
-                set_of_closures = set_of_closures_var;
+                 set_of_closures_id = Some set_of_closures_id;
+                 set_of_closures = set_of_closures_var;
                 closure_id = Closure_id.wrap closure_bound_var;
               })
               body))
@@ -563,7 +565,7 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
     set of closures.  (The set will often only contain a single function;
     the only case where it cannot is for "let rec".) *)
 and close_functions t external_env function_declarations
-  : Flambda.named * (Variable.t * Flambda.named) list  =
+  : Flambda.named * (Variable.t * Flambda.named) list * Set_of_closures_id.t =
   let closure_env_without_parameters, ident_to_variables =
     Function_decls.closure_env_without_parameters
       external_env function_declarations
@@ -663,7 +665,8 @@ and close_functions t external_env function_declarations
     required_bindinds
   in
   Set_of_closures set_of_closures,
-  required_bindinds
+  required_bindinds,
+  function_decls.set_of_closures_id
 
 and close_list t sb l = List.map (close t sb) l
 
@@ -681,12 +684,13 @@ and close_let_bound_expression t ?let_rec_ident let_bound_var env
     let set_of_closures_var =
       Variable.rename let_bound_var ~append:"_set_of_closures"
     in
-    let set_of_closures, required_bindings =
+    let set_of_closures, required_bindings, set_of_closures_id =
       close_functions t env (Function_decls.create [decl])
     in
     let project_closure : Flambda.project_closure =
       { set_of_closures = set_of_closures_var;
         closure_id = Closure_id.wrap closure_bound_var;
+        set_of_closures_id = Some set_of_closures_id;
       }
     in
     Expr

@@ -21,3 +21,6 @@ include Variable
 let wrap t = t
 
 let wrap_map t = t
+
+type with_set = t * Set_of_closures_id.t
+module With_set = Identifiable.Make (Identifiable.Pair (T) (Set_of_closures_id))

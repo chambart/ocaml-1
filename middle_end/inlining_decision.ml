@@ -518,7 +518,9 @@ let for_call_site ~env ~r ~(function_decls : Flambda.function_declarations)
     Flambda.Apply {
       func = lhs_of_application;
       args;
-      kind = Direct closure_id_being_applied;
+      kind =
+        Direct (closure_id_being_applied,
+                Some function_decls.set_of_closures_id);
       dbg;
       inline = inline_requested;
       specialise = specialise_requested;

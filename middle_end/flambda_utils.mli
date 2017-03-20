@@ -115,13 +115,13 @@ val might_raise_static_exn : Flambda.named -> Static_exception.t -> bool
     all sets of closures in the given program. *)
 val make_closure_map
    : Flambda.program
-  -> Flambda.function_declarations Closure_id.Map.t
+  -> Flambda.function_declarations Closure_id.With_set.Map.t
 
 (** Like [make_closure_map], but takes a mapping from set of closures IDs to
     function declarations, instead of a [program]. *)
 val make_closure_map'
    : Flambda.function_declarations Set_of_closures_id.Map.t
-  -> Flambda.function_declarations Closure_id.Map.t
+  -> Flambda.function_declarations Closure_id.With_set.Map.t
 
 (** The definitions of all constants that have been lifted out to [Let_symbol]
     or [Let_rec_symbol] constructions. *)
@@ -154,7 +154,7 @@ val all_function_decls_indexed_by_set_of_closures_id
 
 val all_function_decls_indexed_by_closure_id
    : Flambda.program
-  -> Flambda.function_declarations Closure_id.Map.t
+  -> Flambda.function_declarations Closure_id.With_set.Map.t
 
 val make_variable_symbol : Variable.t -> Symbol.t
 val make_variables_symbol : Variable.t list -> Symbol.t

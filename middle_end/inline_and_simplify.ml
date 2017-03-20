@@ -206,6 +206,7 @@ let simplify_project_closure env r ~(project_closure : Flambda.project_closure)
          missing; as such, we cannot have rewritten the function and don't
          need to do any freshening. *)
       Project_closure {
+        set_of_closures_id = project_closure.set_of_closures_id;
         set_of_closures;
         closure_id = project_closure.closure_id;
       }, ret r (A.value_unresolved value)
@@ -213,11 +214,13 @@ let simplify_project_closure env r ~(project_closure : Flambda.project_closure)
       (* CR-soon mshinwell: see CR comment in e.g. simple_value_approx.ml
          [check_approx_for_closure_allowing_unresolved] *)
       Project_closure {
+        set_of_closures_id = project_closure.set_of_closures_id;
         set_of_closures;
         closure_id = project_closure.closure_id;
       }, ret r (A.value_unknown Other)
     | Unknown_because_of_unresolved_value value ->
       Project_closure {
+        set_of_closures_id = project_closure.set_of_closures_id;
         set_of_closures;
         closure_id = project_closure.closure_id;
       }, ret r (A.value_unknown (Unresolved_value value))
@@ -226,12 +229,16 @@ let simplify_project_closure env r ~(project_closure : Flambda.project_closure)
         A.freshen_and_check_closure_id value_set_of_closures
           project_closure.closure_id
       in
+      let set_of_closures_id =
+        value_set_of_closures.function_decls.set_of_closures_id
+      in
       let projecting_from =
         match set_of_closures_var with
         | None -> None
         | Some set_of_closures_var ->
           let projection : Projection.t =
             Project_closure {
+              set_of_closures_id = Some set_of_closures_id;
               set_of_closures = set_of_closures_var;
               closure_id;
             }
@@ -256,7 +263,8 @@ let simplify_project_closure env r ~(project_closure : Flambda.project_closure)
             A.value_closure ?set_of_closures_var value_set_of_closures
               closure_id
           in
-          Project_closure { set_of_closures; closure_id; }, ret r approx)
+          Project_closure { set_of_closures_id = Some set_of_closures_id;
+                            set_of_closures; closure_id; }, ret r approx)
 
 (* Simplify an expression that, given one closure within some set of
    closures, returns another closure (possibly the same one) within the
@@ -274,6 +282,7 @@ let simplify_move_within_set_of_closures env r
         Flambda.print_move_within_set_of_closures move_within_set_of_closures
     | Unresolved sym ->
       Move_within_set_of_closures {
+          set_of_closures_id = move_within_set_of_closures.set_of_closures_id;
           closure;
           start_from = move_within_set_of_closures.start_from;
           move_to = move_within_set_of_closures.move_to;
@@ -281,6 +290,7 @@ let simplify_move_within_set_of_closures env r
         ret r (A.value_unresolved sym)
     | Unknown ->
       Move_within_set_of_closures {
+          set_of_closures_id = move_within_set_of_closures.set_of_closures_id;
           closure;
           start_from = move_within_set_of_closures.start_from;
           move_to = move_within_set_of_closures.move_to;
@@ -290,6 +300,7 @@ let simplify_move_within_set_of_closures env r
       (* For example: a move upon a (move upon a closure whose .cmx file
          is missing). *)
       Move_within_set_of_closures {
+          set_of_closures_id = move_within_set_of_closures.set_of_closures_id;
           closure;
           start_from = move_within_set_of_closures.start_from;
           move_to = move_within_set_of_closures.move_to;
@@ -302,6 +313,9 @@ let simplify_move_within_set_of_closures env r
            new names, but with previously fresh names *)
         A.freshen_and_check_closure_id value_set_of_closures
       in
+      let set_of_closures_id =
+        value_set_of_closures.function_decls.set_of_closures_id
+      in
       let move_to = freshen move_within_set_of_closures.move_to in
       let start_from = freshen move_within_set_of_closures.start_from in
       let projection : Projection.t =
@@ -309,6 +323,7 @@ let simplify_move_within_set_of_closures env r
           closure;
           start_from;
           move_to;
+          set_of_closures_id = Some set_of_closures_id;
         }
       in
       match E.find_projection env ~projection with
@@ -330,6 +345,7 @@ let simplify_move_within_set_of_closures env r
               let project_closure : Flambda.project_closure =
                 { set_of_closures = set_of_closures_var;
                   closure_id = move_to;
+                  set_of_closures_id = Some set_of_closures_id;
                 }
               in
               let approx =
@@ -344,6 +360,7 @@ let simplify_move_within_set_of_closures env r
                 let project_closure : Flambda.project_closure =
                   { set_of_closures = set_of_closures_var;
                     closure_id = move_to;
+                    set_of_closures_id = Some set_of_closures_id;
                   }
                 in
                 let project_closure_var = Variable.create "project_closure" in
@@ -366,7 +383,8 @@ let simplify_move_within_set_of_closures env r
                 (* The set of closures is not available in scope, and we
                    have no other information by which to simplify the move. *)
                 let move_within : Flambda.move_within_set_of_closures =
-                  { closure; start_from; move_to; }
+                  { closure; start_from; move_to;
+                    set_of_closures_id = Some set_of_closures_id; }
                 in
                 let approx = A.value_closure value_set_of_closures move_to in
                 Move_within_set_of_closures move_within, ret r approx)
@@ -430,6 +448,9 @@ let rec simplify_project_var env r ~(project_var : Flambda.project_var)
       let var = F.apply_var_within_closure freshening project_var.var in
       let closure_id = F.apply_closure_id freshening project_var.closure_id in
       let closure_id_in_approx = value_closure.closure_id in
+      let set_of_closures_id =
+        value_set_of_closures.function_decls.set_of_closures_id
+      in
       if not (Closure_id.equal closure_id closure_id_in_approx) then begin
         Misc.fatal_errorf "When simplifying [Project_var], the closure ID %a \
             in the approximation of the set of closures did not match the \
@@ -441,12 +462,11 @@ let rec simplify_project_var env r ~(project_var : Flambda.project_var)
           Var_within_closure.print var
       end;
       let projection : Projection.t =
-        Format.printf "TO UPDATE simplify_project_var@.";
         Project_var {
           closure;
           closure_id;
           var;
-          set_of_closures_id = None; (* TO UPDATE *)
+          set_of_closures_id = Some set_of_closures_id;
         }
       in
       begin match E.find_projection env ~projection with
@@ -457,8 +477,7 @@ let rec simplify_project_var env r ~(project_var : Flambda.project_var)
       | None ->
         let approx = A.approx_for_bound_var value_set_of_closures var in
         let expr : Flambda.named =
-          Format.printf "TO UPDATE simplify_project_var@.";
-          Project_var { set_of_closures_id = None; (* TO UPDATE *)
+          Project_var { set_of_closures_id = Some set_of_closures_id;
                         closure; closure_id; var; }
         in
         simplify_named_using_approx_and_env env r expr approx
@@ -621,7 +640,9 @@ and simplify_set_of_closures original_env r
       (Closure_id.Map.empty, Variable.Set.empty, r)
   in
   let function_decls =
-    Flambda.update_function_declarations function_decls ~funs
+    Flambda.update_function_declarations function_decls
+      ~do_not_freshen_set_of_closure_id:()
+      ~funs
   in
   let invariant_params =
     lazy (Invariant_params.invariant_params_in_recursion function_decls
@@ -693,6 +714,8 @@ and simplify_apply env r ~(apply : Flambda.apply) : Flambda.t * R.t =
                 { closure = lhs_of_application;
                   start_from = closure_id_being_applied;
                   move_to = surrogate;
+                  set_of_closures_id = Some
+                      value_set_of_closures.function_decls.set_of_closures_id;
                 }
               in
               let approx_for_surrogate =
@@ -802,7 +825,8 @@ and simplify_partial_application env r ~lhs_of_application
       Apply {
         func = lhs_of_application;
         args = freshened_params;
-        kind = Direct closure_id_being_applied;
+        kind = Direct (closure_id_being_applied, None);
+        (* This will be updated by simplify, None is ok *)
         dbg;
         inline = Default_inline;
         specialise = Default_specialise;
@@ -1459,7 +1483,8 @@ let constant_defining_value_approx
         ~direct_call_surrogates:Closure_id.Map.empty
     in
     A.value_set_of_closures value_set_of_closures
-  | Project_closure (set_of_closures_symbol, closure_id) -> begin
+  | Project_closure (set_of_closures_symbol, closure_id, _set_of_closures_id) ->
+    begin
       match E.find_symbol_opt env set_of_closures_symbol with
       | None ->
         A.value_unresolved (Symbol set_of_closures_symbol)
@@ -1469,6 +1494,7 @@ let constant_defining_value_approx
         in
         match checked_approx with
         | Ok (_, value_set_of_closures) ->
+          (* CR pchambart: There is probably no need for freshening anymore *)
           let closure_id =
             A.freshen_and_check_closure_id value_set_of_closures closure_id
           in
@@ -1534,7 +1560,7 @@ let simplify_constant_defining_value
       in
       r, ((Set_of_closures set_of_closures) : Flambda.constant_defining_value),
         R.approx r
-    | Project_closure (set_of_closures_symbol, closure_id) ->
+    | Project_closure (set_of_closures_symbol, closure_id, _set_of_closures_id) ->
       (* No simplifications are necessary here. *)
       let set_of_closures_approx =
         E.find_symbol_exn env set_of_closures_symbol
@@ -1542,6 +1568,7 @@ let simplify_constant_defining_value
       let closure_approx =
         match A.check_approx_for_set_of_closures set_of_closures_approx with
         | Ok (_, value_set_of_closures) ->
+          (* CR pchambart: There is probably no need for freshening anymore *)
           let closure_id =
             A.freshen_and_check_closure_id value_set_of_closures closure_id
           in

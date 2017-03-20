@@ -391,6 +391,7 @@ let make_closure_declaration ~id ~body ~params ~stub : Flambda.t =
     Project_closure {
         set_of_closures = set_of_closures_var;
         closure_id;
+        set_of_closures_id = None;
       }
   in
   let project_closure_var =
@@ -474,11 +475,14 @@ let might_raise_static_exn flam stexn =
   with Exit -> true
 
 let make_closure_map program =
-  let map = ref Closure_id.Map.empty in
+  let map = ref Closure_id.With_set.Map.empty in
   let add_set_of_closures ~constant:_ : Flambda.set_of_closures -> unit = fun
     { function_decls } ->
     Closure_id.Map.iter (fun closure_id _ ->
-        map := Closure_id.Map.add closure_id function_decls !map)
+        map :=
+          Closure_id.With_set.Map.add
+            (closure_id, function_decls.set_of_closures_id)
+            function_decls !map)
       function_decls.funs
   in
   Flambda_iterators.iter_on_set_of_closures_of_program
@@ -487,10 +491,13 @@ let make_closure_map program =
   !map
 
 let make_closure_map' input =
-  let map = ref Closure_id.Map.empty in
+  let map = ref Closure_id.With_set.Map.empty in
   let add_set_of_closures _ (function_decls : Flambda.function_declarations) =
     Closure_id.Map.iter (fun closure_id _ ->
-        map := Closure_id.Map.add closure_id function_decls !map)
+        map :=
+          Closure_id.With_set.Map.add
+            (closure_id, function_decls.set_of_closures_id)
+            function_decls !map)
       function_decls.funs
   in
   Set_of_closures_id.Map.iter add_set_of_closures input;
@@ -528,14 +535,16 @@ let all_function_decls_indexed_by_set_of_closures_id program =
     (all_sets_of_closures_map program)
 
 let all_function_decls_indexed_by_closure_id program =
-  let aux_fun function_decls closure_id _ map =
-    Closure_id.Map.add closure_id function_decls map
+  let aux_fun (function_decls:Flambda.function_declarations) closure_id _ map =
+    Closure_id.With_set.Map.add
+      (closure_id, function_decls.set_of_closures_id)
+      function_decls map
   in
   let aux _ ({ function_decls; _ } : Flambda.set_of_closures) map =
     Closure_id.Map.fold (aux_fun function_decls) function_decls.funs map
   in
   Set_of_closures_id.Map.fold aux (all_sets_of_closures_map program)
-    Closure_id.Map.empty
+    Closure_id.With_set.Map.empty
 
 let make_variable_symbol var =
   Symbol.create (Compilation_unit.get_current_exn ())

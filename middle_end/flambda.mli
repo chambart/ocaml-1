@@ -21,7 +21,7 @@
 (** Whether the callee in a function application is known at compile time. *)
 type call_kind =
   | Indirect
-  | Direct of Closure_id.t
+  | Direct of Closure_id.t * Set_of_closures_id.t option
 
 (** Simple constants.  ("Structured constants" are rewritten to invocations
     of [Pmakeblock] so that they easily take part in optimizations.) *)
@@ -368,7 +368,7 @@ and constant_defining_value =
   | Set_of_closures of set_of_closures
     (** A closed (and thus constant) set of closures.  (That is to say,
         [free_vars] must be empty.) *)
-  | Project_closure of Symbol.t * Closure_id.t
+  | Project_closure of Symbol.t * Closure_id.t * Set_of_closures_id.t
     (** Selection of one closure from a constant set of closures.
         Analogous to the equivalent operation on expressions. *)
 
@@ -573,7 +573,8 @@ val create_function_declarations
 (** Create a set of function declarations based on another set of function
     declarations. *)
 val update_function_declarations
-   : function_declarations
+   : ?do_not_freshen_set_of_closure_id:unit
+  -> function_declarations
   -> funs:function_declaration Closure_id.Map.t
   -> function_declarations
 

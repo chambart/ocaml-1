@@ -81,7 +81,7 @@ let assign_symbols_and_collect_constant_definitions
             Variable.Tbl.add var_to_symbol_tbl fun_var closure_symbol;
             let project_closure =
               Alias_analysis.Project_closure
-                { set_of_closures = var; closure_id }
+                { set_of_closures_id = None; set_of_closures = var; closure_id }
             in
             Variable.Tbl.add var_to_definition_tbl fun_var
               project_closure)
@@ -471,10 +471,20 @@ let translate_definition_and_resolve_alias inconstants
     Misc.fatal_errorf "Lift_constants.translate_definition_and_resolve_alias: \
         Array with non-Pfloatarray kind: %a"
       Alias_analysis.print_constant_defining_value definition
-  | Project_closure { set_of_closures; closure_id } ->
+  | Project_closure { set_of_closures; closure_id; set_of_closures_id } ->
+    let set_of_closures_id =
+      match set_of_closures_id with
+      | None ->
+        Misc.fatal_errorf "Lift_constants.translate_definition_and_resolve_alias: \
+            Constant Project_closure without set_of_closures_id %a"
+          Alias_analysis.print_constant_defining_value definition
+          set_of_closures_id
+      | Some set_of_closures_id ->
+        set_of_closures_id
+    in
     begin match Variable.Map.find set_of_closures aliases with
     | Symbol s ->
-      Some (Flambda.Project_closure (s, closure_id))
+      Some (Flambda.Project_closure (s, closure_id, set_of_closures_id))
     (* If a closure projection is a constant, the set of closures must
        be assigned to a symbol. *)
     | exception Not_found ->
@@ -482,12 +492,22 @@ let translate_definition_and_resolve_alias inconstants
     | Variable v ->
       match Variable.Tbl.find var_to_symbol_tbl v with
       | s ->
-        Some (Flambda.Project_closure (s, closure_id))
+        Some (Flambda.Project_closure (s, closure_id, set_of_closures_id))
       | exception Not_found ->
         Format.eprintf "var: %a@." Variable.print v;
         assert false
     end
-  | Move_within_set_of_closures { closure; move_to } ->
+  | Move_within_set_of_closures { closure; move_to; set_of_closures_id } ->
+    let set_of_closures_id =
+      match set_of_closures_id with
+      | None ->
+        Misc.fatal_errorf "Lift_constants.translate_definition_and_resolve_alias: \
+            Constant Move_within_set_of_closures without set_of_closures_id %a"
+          Alias_analysis.print_constant_defining_value definition
+          set_of_closures_id
+      | Some set_of_closures_id ->
+        set_of_closures_id
+    in
     let set_of_closure_symbol =
       find_original_set_of_closure
         aliases
@@ -496,7 +516,8 @@ let translate_definition_and_resolve_alias inconstants
         project_closure_map
         closure
     in
-    Some (Flambda.Project_closure (set_of_closure_symbol, move_to))
+    Some (Flambda.Project_closure
+            (set_of_closure_symbol, move_to, set_of_closures_id))
   | Set_of_closures set_of_closures ->
     let set_of_closures =
       translate_set_of_closures
@@ -550,7 +571,7 @@ let constant_dependencies ~backend:_
     Symbol.Set.of_list symbol_fields
   | Set_of_closures set_of_closures ->
     Flambda.free_symbols_named (Set_of_closures set_of_closures)
-  | Project_closure (s, _) ->
+  | Project_closure (s, _, _) ->
     Symbol.Set.singleton s
 
 let program_graph ~backend imported_symbols symbol_to_constant
@@ -669,7 +690,8 @@ let introduce_free_variables_in_set_of_closures
   let done_something = ref false in
   let function_decls : Flambda.function_declarations =
     let _ = add_definition_and_make_substitution in
-    Flambda.update_function_declarations function_decls
+    Flambda.update_function_declarations ~do_not_freshen_set_of_closure_id:()
+      function_decls
       ~funs:(Closure_id.Map.map
           (fun (func_decl : Flambda.function_declaration) ->
              let variables_to_bind =
@@ -788,11 +810,12 @@ let program_symbols ~backend (program : Flambda.program) =
   let add_project_closure_definitions def_symbol
         (const : Flambda.constant_defining_value) =
     match const with
-    | Set_of_closures { function_decls = { funs } } ->
+    | Set_of_closures { function_decls = { funs; set_of_closures_id } } ->
         Closure_id.Map.iter (fun closure_id _ ->
             let closure_symbol = closure_symbol ~backend closure_id in
             let project_closure =
-              Flambda.Project_closure (def_symbol, closure_id)
+              Flambda.Project_closure
+                (def_symbol, closure_id, set_of_closures_id)
             in
             Symbol.Tbl.add symbol_definition_tbl closure_symbol
               project_closure)
@@ -881,7 +904,7 @@ let replace_definitions_in_initialize_symbol_and_effects
 let project_closure_map symbol_definition_map =
   Symbol.Map.fold (fun sym (const : Flambda.constant_defining_value) acc ->
       match const with
-      | Project_closure (set_of_closures, _) ->
+      | Project_closure (set_of_closures, _, _) ->
         Symbol.Map.add sym set_of_closures acc
       | Set_of_closures _ ->
         Symbol.Map.add sym sym acc
@@ -988,16 +1011,20 @@ let lift_constants (program : Flambda.program) ~backend =
         (c1:Flambda.constant_defining_value)
         (c2:Flambda.constant_defining_value) ->
         match c1, c2 with
-        | Project_closure (s1, closure_id1),
-          Project_closure (s2, closure_id2) when
+        | Project_closure (s1, closure_id1, set_of_closures_id1),
+          Project_closure (s2, closure_id2, set_of_closures_id2) when
             Symbol.equal s1 s2 &&
-            Closure_id.equal closure_id1 closure_id2 ->
+            Closure_id.equal closure_id1 closure_id2 &&
+            Set_of_closures_id.equal set_of_closures_id1 set_of_closures_id2 ->
           Some c1
-        | Project_closure (s1, closure_id1),
-          Project_closure (s2, closure_id2) ->
-          Format.eprintf "not equal project closure@. s %a %a@. cid %a %a@."
+        | Project_closure (s1, closure_id1, set_of_closures_id1),
+          Project_closure (s2, closure_id2, set_of_closures_id2) ->
+          Format.eprintf "not equal project closure@. s %a %a@. cid %a %a \
+              sid %a %a@."
             Symbol.print s1 Symbol.print s2
-            Closure_id.print closure_id1 Closure_id.print closure_id2;
+            Closure_id.print closure_id1 Closure_id.print closure_id2
+            Set_of_closures_id.print set_of_closures_id1
+            Set_of_closures_id.print set_of_closures_id2;
           assert false
         | _ ->
           assert false

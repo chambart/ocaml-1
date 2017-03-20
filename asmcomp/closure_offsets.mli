@@ -20,8 +20,8 @@
     environment entries. *)
 
 type result = private {
-  function_offsets : int Closure_id.Map.t;
-  free_variable_offsets : int Var_within_closure.Map.t;
+  function_offsets : int Closure_id.With_set.Map.t;
+  free_variable_offsets : int Var_within_closure.With_set.Map.t;
 }
 
 val compute : Flambda.program -> result
@@ -37,8 +37,8 @@ val compute : Flambda.program -> result
     describe arise, we always have access to the necessary closure offsets. *)
 val compute_reexported_offsets
    : Flambda.program
-  -> current_unit_offset_fun:int Closure_id.Map.t
-  -> current_unit_offset_fv:int Var_within_closure.Map.t
-  -> imported_units_offset_fun:int Closure_id.Map.t
-  -> imported_units_offset_fv:int Var_within_closure.Map.t
-  -> int Closure_id.Map.t * int Var_within_closure.Map.t
+  -> current_unit_offset_fun:int Closure_id.With_set.Map.t
+  -> current_unit_offset_fv:int Var_within_closure.With_set.Map.t
+  -> imported_units_offset_fun:int Closure_id.With_set.Map.t
+  -> imported_units_offset_fv:int Var_within_closure.With_set.Map.t
+  -> int Closure_id.With_set.Map.t * int Var_within_closure.With_set.Map.t

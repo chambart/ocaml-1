@@ -416,13 +416,15 @@ let freshen_projection (projection : Projection.t) ~freshening
       closure_id = Project_var.apply_closure_id closure_freshening closure_id;
       var = Project_var.apply_var_within_closure closure_freshening var;
     }
-  | Project_closure { set_of_closures; closure_id; } ->
+  | Project_closure { set_of_closures; closure_id; set_of_closures_id; } ->
     Project_closure {
+      set_of_closures_id;
       set_of_closures = apply_variable freshening set_of_closures;
       closure_id = Project_var.apply_closure_id closure_freshening closure_id;
     }
-  | Move_within_set_of_closures { closure; start_from; move_to; } ->
+  | Move_within_set_of_closures { closure; start_from; move_to; set_of_closures_id; } ->
     Move_within_set_of_closures {
+      set_of_closures_id;
       closure = apply_variable freshening closure;
       start_from = Project_var.apply_closure_id closure_freshening start_from;
       move_to = Project_var.apply_closure_id closure_freshening move_to;

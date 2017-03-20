@@ -22,6 +22,7 @@
 type project_closure = {
   set_of_closures : Variable.t; (** must yield a set of closures *)
   closure_id : Closure_id.t;
+  set_of_closures_id : Set_of_closures_id.t option;
 }
 
 (** The selection of one closure given another closure in the same set of
@@ -32,6 +33,7 @@ type move_within_set_of_closures = {
   closure : Variable.t;  (** must yield a closure *)
   start_from : Closure_id.t;
   move_to : Closure_id.t;
+  set_of_closures_id : Set_of_closures_id.t option;
 }
 
 (** The selection from a closure of a variable bound by said closure.

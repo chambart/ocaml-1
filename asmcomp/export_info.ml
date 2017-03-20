@@ -134,22 +134,22 @@ let equal_descr (d1:descr) (d2:descr) : bool =
 
 type t = {
   sets_of_closures : Flambda.function_declarations Set_of_closures_id.Map.t;
-  closures : Flambda.function_declarations Closure_id.Map.t;
+  closures : Flambda.function_declarations Closure_id.With_set.Map.t;
   values : descr Export_id.Map.t Compilation_unit.Map.t;
   symbol_id : Export_id.t Symbol.Map.t;
-  offset_fun : int Closure_id.Map.t;
-  offset_fv : int Var_within_closure.Map.t;
+  offset_fun : int Closure_id.With_set.Map.t;
+  offset_fv : int Var_within_closure.With_set.Map.t;
   constant_sets_of_closures : Set_of_closures_id.Set.t;
   invariant_params : Variable.Set.t Variable.Map.t Set_of_closures_id.Map.t;
 }
 
 let empty : t = {
   sets_of_closures = Set_of_closures_id.Map.empty;
-  closures = Closure_id.Map.empty;
+  closures = Closure_id.With_set.Map.empty;
   values = Compilation_unit.Map.empty;
   symbol_id = Symbol.Map.empty;
-  offset_fun = Closure_id.Map.empty;
-  offset_fv = Var_within_closure.Map.empty;
+  offset_fun = Closure_id.With_set.Map.empty;
+  offset_fv = Var_within_closure.With_set.Map.empty;
   constant_sets_of_closures = Set_of_closures_id.Set.empty;
   invariant_params = Set_of_closures_id.Map.empty;
 }
@@ -168,8 +168,8 @@ let create ~sets_of_closures ~closures ~values ~symbol_id
   }
 
 let add_clambda_info t ~offset_fun ~offset_fv ~constant_sets_of_closures =
-  assert (Closure_id.Map.cardinal t.offset_fun = 0);
-  assert (Var_within_closure.Map.cardinal t.offset_fv = 0);
+  assert (Closure_id.With_set.Map.cardinal t.offset_fun = 0);
+  assert (Var_within_closure.With_set.Map.cardinal t.offset_fv = 0);
   assert (Set_of_closures_id.Set.cardinal t.constant_sets_of_closures = 0);
   { t with offset_fun; offset_fv; constant_sets_of_closures; }
 
@@ -189,11 +189,11 @@ let merge (t1 : t) (t2 : t) : t =
     sets_of_closures =
       Set_of_closures_id.Map.disjoint_union t1.sets_of_closures
         t2.sets_of_closures;
-    closures = Closure_id.Map.disjoint_union t1.closures t2.closures;
+    closures = Closure_id.With_set.Map.disjoint_union t1.closures t2.closures;
     symbol_id = Symbol.Map.disjoint_union ~print:Export_id.print t1.symbol_id t2.symbol_id;
-    offset_fun = Closure_id.Map.disjoint_union
+    offset_fun = Closure_id.With_set.Map.disjoint_union
         ~eq:int_eq t1.offset_fun t2.offset_fun;
-    offset_fv = Var_within_closure.Map.disjoint_union
+    offset_fv = Var_within_closure.With_set.Map.disjoint_union
         ~eq:int_eq t1.offset_fv t2.offset_fv;
     constant_sets_of_closures =
       Set_of_closures_id.Set.union t1.constant_sets_of_closures
@@ -339,13 +339,13 @@ let print_approx ppf ((t,root_symbols) : t * Symbol.t list) =
 
 let print_offsets ppf (t : t) =
   Format.fprintf ppf "@[<v 2>offset_fun:@ ";
-  Closure_id.Map.iter (fun cid off ->
+  Closure_id.With_set.Map.iter (fun cid off ->
       Format.fprintf ppf "%a -> %i@ "
-        Closure_id.print cid off) t.offset_fun;
+        Closure_id.With_set.print cid off) t.offset_fun;
   Format.fprintf ppf "@]@ @[<v 2>offset_fv:@ ";
-  Var_within_closure.Map.iter (fun vid off ->
+  Var_within_closure.With_set.Map.iter (fun vid off ->
       Format.fprintf ppf "%a -> %i@ "
-        Var_within_closure.print vid off) t.offset_fv;
+        Var_within_closure.With_set.print vid off) t.offset_fv;
   Format.fprintf ppf "@]@ "
 
 let print_functions ppf (t : t) =

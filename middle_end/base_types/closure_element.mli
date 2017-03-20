@@ -28,3 +28,6 @@ val get_compilation_unit : t -> Compilation_unit.t
 val unique_name : t -> string
 
 val output_full : out_channel -> t -> unit
+
+type with_set = t * Set_of_closures_id.t
+module With_set : Identifiable.S with type t := with_set

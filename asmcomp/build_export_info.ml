@@ -220,7 +220,7 @@ let rec approx_of_expr (env : Env.t) (flam : Flambda.t) : Export_info.approx =
   | Apply { func; kind; _ } ->
     begin match kind with
     | Indirect -> Value_unknown
-    | Direct closure_id' ->
+    | Direct (closure_id', _set_of_closures_id) ->
       match Env.get_descr env (Env.find_approx env func) with
       | Some (Value_closure
           { closure_id; set_of_closures = { results; _ }; }) ->
@@ -408,7 +408,7 @@ let describe_constant_defining_value env export_id symbol
         }
     in
     Env.record_descr env export_id descr
-  | Project_closure (sym, closure_id) ->
+  | Project_closure (sym, closure_id, _set_of_closures_id) ->
     begin match Env.get_symbol_descr env sym with
     | Some (Value_set_of_closures set_of_closures) ->
       if not (Closure_id.Map.mem closure_id set_of_closures.results) then begin
@@ -546,8 +546,8 @@ let build_export_info ~(backend : (module Backend_intf.S))
     in
     Export_info.create ~values
       ~symbol_id:(Env.Global.symbol_to_export_id_map env)
-      ~offset_fun:Closure_id.Map.empty
-      ~offset_fv:Var_within_closure.Map.empty
+      ~offset_fun:Closure_id.With_set.Map.empty
+      ~offset_fv:Var_within_closure.With_set.Map.empty
       ~sets_of_closures ~closures
       ~constant_sets_of_closures:Set_of_closures_id.Set.empty
       ~invariant_params
