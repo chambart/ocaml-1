@@ -613,7 +613,7 @@ module Make (T : S) = struct
             for_one_function.new_inner_to_new_outer_vars)
         in
         let new_params =
-          List.map Parameter.wrap new_params
+          List.map (fun var -> Parameter.wrap var) new_params
         in
         function_decl.params @ new_params
       in

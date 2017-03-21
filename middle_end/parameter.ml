@@ -22,9 +22,13 @@
 
 type parameter = {
   var : Variable.t;
+  inline_attribute : Lambda.inline_pattern;
 }
 
-let wrap var = { var }
+let wrap ?(inline_attribute=Lambda.Default) var = {
+  var;
+  inline_attribute;
+}
 
 let var p = p.var
 
@@ -32,20 +36,30 @@ module M =
   Identifiable.Make (struct
     type t = parameter
 
-    let compare { var = var1 } { var = var2 } =
+    let compare
+        { var = var1; inline_attribute = _ }
+        { var = var2; inline_attribute = _ } =
       Variable.compare var1 var2
 
-    let equal { var = var1 } { var = var2 } =
+    let equal
+        { var = var1; inline_attribute = _ }
+        { var = var2; inline_attribute = _ } =
       Variable.equal var1 var2
 
-    let hash { var } =
+    let hash { var; inline_attribute = _ } =
       Variable.hash var
 
-    let print ppf { var } =
-      Variable.print ppf var
+    let print ppf { var; inline_attribute } =
+      match inline_attribute with
+      | Default ->
+        Variable.print ppf var
+      | _ ->
+        Format.fprintf ppf "%a[@@inline: %a]"
+          Variable.print var
+          Printlambda.inline_pattern inline_attribute
 
-    let output o { var } =
-      Variable.output o var
+    let output o param =
+      output_string o (Format.asprintf "%a" print param)
   end)
 
 module T = M.T
@@ -58,11 +72,16 @@ module Set = struct
   let vars l = Variable.Set.of_list (List.map var l)
 end
 
-let rename ?current_compilation_unit ?append p =
-  { var = Variable.rename ?current_compilation_unit ?append p.var }
+let rename ?current_compilation_unit ?append p = {
+  var = Variable.rename ?current_compilation_unit ?append p.var;
+  inline_attribute = p.inline_attribute;
+}
 
-let map_var f { var } = { var = f var }
+let map_var f { var; inline_attribute } = {
+  var = f var;
+  inline_attribute;
+}
 
 module List = struct
-  let vars params = List.map (fun { var } -> var) params
+  let vars params = List.map (fun param -> param.var) params
 end

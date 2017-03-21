@@ -23,7 +23,7 @@ type t
 type parameter = t
 
 (** Make a parameter from a variable with default attributes *)
-val wrap : Variable.t -> t
+val wrap : ?inline_attribute:Lambda.inline_pattern -> Variable.t -> t
 
 val var : t -> Variable.t
 

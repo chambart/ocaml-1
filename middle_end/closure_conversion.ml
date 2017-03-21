@@ -565,7 +565,18 @@ and close_functions t external_env function_declarations : Flambda.named =
        not marked as stub but certainly should *)
     let stub = Function_decl.stub decl in
     let param_vars = List.map (Env.find_var closure_env) params in
-    let params = List.map Parameter.wrap param_vars in
+    let inline_attribute_on_arguments =
+      match Function_decl.inline decl with
+      | Inline_on_argument lst -> lst
+      | _ ->
+        List.map (fun _ : Lambda.inline_pattern -> Default) param_vars
+    in
+    let params =
+      List.map2 (fun var inline_attribute ->
+        Parameter.wrap ~inline_attribute var)
+        param_vars
+        inline_attribute_on_arguments
+    in
     let closure_bound_var = Function_decl.closure_bound_var decl in
     let body = close t closure_env body in
     let fun_decl =

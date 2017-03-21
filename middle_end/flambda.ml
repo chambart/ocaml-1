@@ -357,11 +357,8 @@ and print_named ppf (named : named) =
     (* lam ppf expr *)
 
 and print_function_declaration ppf var (f : function_declaration) =
-  let param ppf p =
-    Variable.print ppf (Parameter.var p)
-  in
   let params ppf =
-    List.iter (fprintf ppf "@ %a" param) in
+    List.iter (fprintf ppf "@ %a" Parameter.print) in
   let stub =
     if f.stub then
       " *stub*"
