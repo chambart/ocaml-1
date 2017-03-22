@@ -1561,22 +1561,32 @@ let simplify_constant_defining_value
       r, ((Set_of_closures set_of_closures) : Flambda.constant_defining_value),
         R.approx r
     | Project_closure (set_of_closures_symbol, closure_id, _set_of_closures_id) ->
-      (* No simplifications are necessary here. *)
+      (* No simplifications are necessary here. But if the set_of_closures
+         comes from this unit, the set_of_closures_id must be updated *)
       let set_of_closures_approx =
         E.find_symbol_exn env set_of_closures_symbol
       in
-      let closure_approx =
+      let closure_approx, constant_defining_value =
         match A.check_approx_for_set_of_closures set_of_closures_approx with
         | Ok (_, value_set_of_closures) ->
           (* CR pchambart: There is probably no need for freshening anymore *)
           let closure_id =
             A.freshen_and_check_closure_id value_set_of_closures closure_id
           in
-          A.value_closure value_set_of_closures closure_id
-        | Unresolved sym -> A.value_unresolved sym
-        | Unknown -> A.value_unknown Other
+          let set_of_closures_id =
+            value_set_of_closures.function_decls.set_of_closures_id
+          in
+          let constant_defining_value : Flambda.constant_defining_value =
+            Project_closure (set_of_closures_symbol, closure_id, set_of_closures_id)
+          in
+          A.value_closure value_set_of_closures closure_id,
+          constant_defining_value
+        | Unresolved sym ->
+          A.value_unresolved sym, constant_defining_value
+        | Unknown ->
+          A.value_unknown Other, constant_defining_value
         | Unknown_because_of_unresolved_value value ->
-          A.value_unknown (Unresolved_value value)
+          A.value_unknown (Unresolved_value value), constant_defining_value
         | Wrong ->
           Misc.fatal_errorf "Wrong approximation for [Project_closure] \
                              when being used as a [constant_defining_value]: %a"

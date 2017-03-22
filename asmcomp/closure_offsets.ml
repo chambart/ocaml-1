@@ -106,7 +106,12 @@ let compute_reexported_offsets program
       | offset' -> assert (offset = offset')
       end
     | exception Not_found ->
-      assert (Closure_id.With_set.Map.mem closure_id current_unit_offset_fun)
+      if not (Closure_id.With_set.Map.mem closure_id current_unit_offset_fun) then
+        Misc.fatal_errorf "Closure_offsets.compute_reexported_offsets \
+                           missing closure_id offset information: \
+                           %a in %a"
+          Closure_id.With_set.print closure_id
+          (Closure_id.With_set.Map.print Format.pp_print_int) current_unit_offset_fun
   in
   let used_var_within_closure var =
     match Var_within_closure.With_set.Map.find var imported_units_offset_fv with
