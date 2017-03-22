@@ -81,7 +81,8 @@ let assign_symbols_and_collect_constant_definitions
             Variable.Tbl.add var_to_symbol_tbl fun_var closure_symbol;
             let project_closure =
               Alias_analysis.Project_closure
-                { set_of_closures_id = None; set_of_closures = var; closure_id }
+                { set_of_closures_id = Some set_of_closures_id;
+                  set_of_closures = var; closure_id }
             in
             Variable.Tbl.add var_to_definition_tbl fun_var
               project_closure)

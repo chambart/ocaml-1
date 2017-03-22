@@ -31,7 +31,8 @@ module Env : sig
   val add_var_from_current_closure : t -> Ident.t -> Var_within_closure.t -> t
 
   type variable_access =
-    | Closure of Var_within_closure.t
+    | Project_var of Var_within_closure.t
+    | Move_within_set_of_closures of Closure_id.t
     | Variable of Variable.t
 
   val find_var : t -> Ident.t -> variable_access
@@ -72,6 +73,7 @@ module Function_decls : sig
       -> t
 
     val let_rec_ident : t -> Ident.t
+    val closure_id : t -> Closure_id.t
     val closure_bound_var : t -> Variable.t
     val kind : t -> Lambda.function_kind
     val params : t -> Ident.t list
@@ -99,6 +101,9 @@ module Function_decls : sig
      is the set of all identifiers free in the bodies of the declarations that
      are not bound as parameters.
      It also contains the globals bindings of the provided environment. *)
-  val closure_env_without_parameters
+  val closure_env_without_parameters_and_functions
       : Env.t -> t -> Env.t * Var_within_closure.t Ident.tbl
+
+  val add_let_rec_bound_functions_to_env
+      : Env.t -> Function_decl.t -> t -> Env.t
 end

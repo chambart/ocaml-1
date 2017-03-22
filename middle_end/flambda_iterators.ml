@@ -610,7 +610,9 @@ let map_function_bodies (set_of_closures : Flambda.set_of_closures) ~f =
     set_of_closures
   else
     let function_decls =
-      Flambda.update_function_declarations set_of_closures.function_decls ~funs
+      Flambda.update_function_declarations
+        ~do_not_freshen_set_of_closure_id:()
+        set_of_closures.function_decls ~funs
     in
     Flambda.create_set_of_closures
       ~function_decls

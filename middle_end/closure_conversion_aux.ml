@@ -21,7 +21,8 @@ module IdentSet = Lambda.IdentSet
 module Env = struct
 
   type variable_access =
-    | Closure of Var_within_closure.t
+    | Project_var of Var_within_closure.t
+    | Move_within_set_of_closures of Closure_id.t
     | Variable of Variable.t
 
   type t = {
@@ -51,7 +52,13 @@ module Env = struct
 
   let add_var_from_current_closure t id var =
     let variables =
-      Ident.add id (Closure var) t.variables
+      Ident.add id (Project_var var) t.variables
+    in
+    { t with variables }
+
+  let add_closure_from_current_set t id closure_id =
+    let variables =
+      Ident.add id (Move_within_set_of_closures closure_id) t.variables
     in
     { t with variables }
 
@@ -110,6 +117,7 @@ module Function_decls = struct
   module Function_decl = struct
     type t = {
       let_rec_ident : Ident.t;
+      closure_id : Closure_id.t;
       closure_bound_var : Variable.t;
       kind : Lambda.function_kind;
       params : Ident.t list;
@@ -127,6 +135,7 @@ module Function_decls = struct
         | Some let_rec_ident -> let_rec_ident
       in
       { let_rec_ident;
+        closure_id = Closure_id.wrap closure_bound_var;
         closure_bound_var;
         kind;
         params;
@@ -138,6 +147,7 @@ module Function_decls = struct
 
     let let_rec_ident t = t.let_rec_ident
     let closure_bound_var t = t.closure_bound_var
+    let closure_id t = t.closure_id
     let kind t = t.kind
     let params t = t.params
     let body t = t.body
@@ -194,14 +204,8 @@ module Function_decls = struct
 
   let all_free_idents t = t.all_free_idents
 
-  let closure_env_without_parameters external_env t =
-    let closure_env =
-      (* For "let rec"-bound functions. *)
-      List.fold_right (fun function_decl env ->
-          Env.add_var env (Function_decl.let_rec_ident function_decl)
-            (Function_decl.closure_bound_var function_decl))
-        t.function_decls (Env.clear_local_bindings external_env)
-    in
+  let closure_env_without_parameters_and_functions external_env t =
+    let closure_env = Env.clear_local_bindings external_env in
     (* For free variables. *)
     IdentSet.fold (fun id (env, local_env) ->
         let variable =
@@ -210,4 +214,14 @@ module Function_decls = struct
         Env.add_var_from_current_closure env id variable,
         Ident.add id variable local_env)
       t.all_free_idents (closure_env, Ident.empty)
+
+  let add_let_rec_bound_functions_to_env env decl t =
+    let open Function_decl in
+    List.fold_left (fun env fun_decl ->
+        if Closure_id.equal fun_decl.closure_id decl.closure_id then
+          Env.add_var env fun_decl.let_rec_ident fun_decl.closure_bound_var
+        else
+          Env.add_closure_from_current_set env fun_decl.let_rec_ident
+            fun_decl.closure_id)
+      env t.function_decls
 end

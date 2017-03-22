@@ -174,13 +174,21 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
   | Lvar id ->
     begin match Env.find_var_exn env id with
     | Variable var -> Var var
-    | Closure var_within_closure ->
+    | Project_var var_within_closure ->
       let closure, closure_id, set_of_closures_id =
         Env.current_closure env
       in
       name_expr ~name:(Ident.name id)
         (Project_var { set_of_closures_id = Some set_of_closures_id;
                        closure; closure_id; var = var_within_closure })
+    | Move_within_set_of_closures move_to ->
+      let closure, start_from, set_of_closures_id =
+        Env.current_closure env
+      in
+      name_expr ~name:(Ident.name id)
+        (Move_within_set_of_closures
+           { set_of_closures_id = Some set_of_closures_id;
+             closure; start_from; move_to })
     | exception Not_found ->
       match Env.find_mutable_var_exn env id with
       | mut_var -> name_expr (Read_mutable mut_var) ~name:"read_mutable"
@@ -566,14 +574,19 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
     the only case where it cannot is for "let rec".) *)
 and close_functions t external_env function_declarations
   : Flambda.named * (Variable.t * Flambda.named) list * Set_of_closures_id.t =
-  let closure_env_without_parameters, ident_to_variables =
-    Function_decls.closure_env_without_parameters
+  let closure_env_without_parameters_and_functions, ident_to_variables =
+    Function_decls.closure_env_without_parameters_and_functions
       external_env function_declarations
   in
   let all_free_idents = Function_decls.all_free_idents function_declarations in
   let close_one_function set_of_closures_id map decl =
     let closure_bound_var = Function_decl.closure_bound_var decl in
-    let closure_id = Closure_id.wrap closure_bound_var in
+    let closure_id = Function_decl.closure_id decl in
+    let closure_env_without_parameters =
+      Function_decls.add_let_rec_bound_functions_to_env
+        closure_env_without_parameters_and_functions
+        decl function_declarations
+    in
     let closure_env_without_parameters =
       Env.set_current_closure
         closure_env_without_parameters
@@ -638,7 +651,7 @@ and close_functions t external_env function_declarations
           let external_var, required_bindinds =
             match Env.find_var external_env var with
             | Variable var -> var, required_bindinds
-            | Closure var_within_closure ->
+            | Project_var var_within_closure ->
               let variable = Variable.create_with_same_name_as_ident var in
               let closure, closure_id, set_of_closures_id =
                 Env.current_closure external_env
@@ -648,6 +661,17 @@ and close_functions t external_env function_declarations
                Flambda.Project_var {
                  set_of_closures_id = Some set_of_closures_id;
                  closure; closure_id; var = var_within_closure })
+              :: required_bindinds
+            | Move_within_set_of_closures move_to ->
+              let variable = Variable.create_with_same_name_as_ident var in
+              let closure, start_from, set_of_closures_id =
+                Env.current_closure external_env
+              in
+              variable,
+              (variable,
+               Flambda.Move_within_set_of_closures {
+                 set_of_closures_id = Some set_of_closures_id;
+                 closure; start_from; move_to })
               :: required_bindinds
           in
           let external_var : Flambda.specialised_to =
