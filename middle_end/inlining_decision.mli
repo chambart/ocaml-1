@@ -33,7 +33,7 @@ val for_call_site
   -> args_approxs:Simple_value_approx.t list
   -> dbg:Debuginfo.t
   -> simplify:Inlining_decision_intf.simplify
-  -> inline_requested:Lambda.inline_attribute
+  -> inline_requested:Flambda.inline_attribute
   -> specialise_requested:Lambda.specialise_attribute
   -> Flambda.t * Inline_and_simplify_aux.Result.t
 

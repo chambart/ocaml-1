@@ -32,6 +32,11 @@ let wrap ?(inline_attribute=Lambda.Default) var = {
 
 let var p = p.var
 
+let inline_attribute p = p.inline_attribute
+
+let has_default_inlining_attribute p =
+  p.inline_attribute = Lambda.Default
+
 module M =
   Identifiable.Make (struct
     type t = parameter

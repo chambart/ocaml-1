@@ -220,7 +220,15 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
       (name_expr (Project_closure (project_closure))
         ~name:("project_closure_" ^ name))
   | Lapply { ap_func; ap_args; ap_loc; ap_should_be_tailcall = _;
-        ap_inlined; ap_specialised; } ->
+             ap_inlined; ap_specialised; } ->
+    let inline : Flambda.inline_attribute =
+      match ap_inlined with
+      | Always_inline -> Always_inline
+      | Never_inline -> Never_inline
+      | Unroll n -> Unroll n
+      | Default_inline -> Default_inline
+      | Inline_on_argument _ -> assert false
+    in
     Lift_code.lifting_helper (close_list t env ap_args)
       ~evaluation_order:`Right_to_left
       ~name:"apply_arg"
@@ -233,7 +241,7 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
               args;
               kind = Indirect;
               dbg = Debuginfo.from_location ap_loc;
-              inline = ap_inlined;
+              inline;
               specialise = ap_specialised;
             })))
   | Lletrec (defs, body) ->
@@ -572,6 +580,14 @@ and close_functions t external_env function_declarations : Flambda.named =
       | _ ->
         List.map (fun _ : Lambda.inline_pattern -> Default) param_vars
     in
+    let inline : Flambda.inline_attribute =
+      match Function_decl.inline decl with
+      | Always_inline -> Always_inline
+      | Never_inline -> Never_inline
+      | Unroll n -> Unroll n
+      | Default_inline -> Default_inline
+      | Inline_on_argument _ -> Default_inline
+    in
     let params =
       List.map2 (fun var inline_attribute ->
         Parameter.wrap ~inline_attribute var)
@@ -582,8 +598,7 @@ and close_functions t external_env function_declarations : Flambda.named =
     let body = close t closure_env body in
     let fun_decl =
       Flambda.create_function_declaration ~params ~body ~stub ~dbg
-        ~inline:(Function_decl.inline decl)
-        ~specialise:(Function_decl.specialise decl)
+        ~inline ~specialise:(Function_decl.specialise decl)
         ~is_a_functor:(Function_decl.is_a_functor decl)
     in
     match Function_decl.kind decl with

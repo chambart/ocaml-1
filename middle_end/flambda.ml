@@ -25,12 +25,18 @@ type const =
   | Char of char
   | Const_pointer of int
 
+type inline_attribute =
+  | Always_inline (* [@inline] or [@inline always] *)
+  | Never_inline (* [@inline never] *)
+  | Unroll of int (* [@unroll x] *)
+  | Default_inline (* no [@inline] attribute *)
+
 type apply = {
   func : Variable.t;
   args : Variable.t list;
   kind : call_kind;
   dbg : Debuginfo.t;
-  inline : Lambda.inline_attribute;
+  inline : inline_attribute;
   specialise : Lambda.specialise_attribute;
 }
 
@@ -122,7 +128,7 @@ and function_declaration = {
   free_symbols : Symbol.Set.t;
   stub : bool;
   dbg : Debuginfo.t;
-  inline : Lambda.inline_attribute;
+  inline : inline_attribute;
   specialise : Lambda.specialise_attribute;
   is_a_functor : bool;
 }
@@ -200,10 +206,6 @@ let rec lam ppf (flam : t) =
       | Always_inline -> fprintf ppf "<always>"
       | Never_inline -> fprintf ppf "<never>"
       | Unroll i -> fprintf ppf "<unroll %i>" i
-      | Inline_on_argument l ->
-        fprintf ppf "<Inline_on_argument @[[%a]@]>"
-          (Format.pp_print_list ~pp_sep:(fun ppf () -> fprintf ppf ",@ ")
-             Printlambda.inline_pattern) l
       | Default_inline -> ()
     in
     fprintf ppf "@[<2>(apply%a%a<%s>@ %a%a)@]" direct () inline ()
@@ -376,10 +378,6 @@ and print_function_declaration ppf var (f : function_declaration) =
     | Always_inline -> " *inline*"
     | Never_inline -> " *never_inline*"
     | Unroll _ -> " *unroll*"
-    | Inline_on_argument l ->
-      Format.asprintf "*inline_on_argument_@[[%a]@]*"
-        (Format.pp_print_list ~pp_sep:(fun ppf () -> fprintf ppf ",@ ")
-           Printlambda.inline_pattern) l
     | Default_inline -> ""
   in
   let specialise =
@@ -994,14 +992,21 @@ let free_symbols_program (program : program) =
   !symbols
 
 let create_function_declaration ~params ~body ~stub ~dbg
-      ~(inline : Lambda.inline_attribute)
+      ~(inline : inline_attribute)
       ~(specialise : Lambda.specialise_attribute) ~is_a_functor
       : function_declaration =
   begin match stub, inline with
+  | true, _ when
+      List.exists
+        (fun p -> not (Parameter.has_default_inlining_attribute p))
+        params ->
+    Misc.fatal_errorf
+      "Stubs may not be have parameters annotated for inlining: %a"
+      print body
   | true, (Never_inline | Default_inline)
   | false, (Never_inline | Default_inline | Always_inline
-           | Unroll _ | Inline_on_argument _) -> ()
-  | true, (Always_inline | Unroll _ | Inline_on_argument _) ->
+           | Unroll _) -> ()
+  | true, (Always_inline | Unroll _) ->
     Misc.fatal_errorf
       "Stubs may not be annotated as [Always_inline] or [Unroll]: %a"
       print body

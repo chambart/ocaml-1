@@ -33,27 +33,31 @@ type 'b good_idea =
   | Try_it
   | Don't_try_it of 'b
 
-let inlining_trigger env args arg_attributes =
-  (* TODO: do that another way: fix argument transforming pass *)
-  if not (List.length args = List.length arg_attributes) then
-    A.Can_inline
-  else
-  List.fold_left2 (fun acc_trigger arg attr : A.inlining_trigger ->
+let inlining_trigger env params args =
+  List.fold_left2 (fun acc_trigger param arg : A.inlining_trigger ->
     let trigger =
-      A.can_trigger_inlining attr (E.find_exn env arg)
+      A.can_trigger_inlining
+        (Parameter.inline_attribute param)
+        (E.find_exn env arg)
     in
     match acc_trigger, trigger with
     | A.Cannot_inline, _ | _, Cannot_inline -> Cannot_inline
-    | A.Must_inline, _ | _, Must_inline -> Must_inline
+    | _, Must_inline ->
+      Format.printf "param: %a (arg %a) must_inline@."
+        Parameter.print param
+        Variable.print arg;
+      Must_inline
+    | A.Must_inline, _ (* | _, Must_inline *) ->
+      Must_inline
     | A.Can_inline, Can_inline -> Can_inline)
-    A.Can_inline args arg_attributes
+    A.Can_inline params args
 
 let inline env r ~lhs_of_application
     ~(function_decls : Flambda.function_declarations)
     ~closure_id_being_applied ~(function_decl : Flambda.function_declaration)
     ~value_set_of_closures ~only_use_of_function ~original ~recursive
     ~(args : Variable.t list) ~size_from_approximation ~dbg ~simplify
-    ~(inline_requested : Lambda.inline_attribute)
+    ~(inline_requested : Flambda.inline_attribute)
     ~(specialise_requested : Lambda.specialise_attribute)
     ~self_call ~fun_cost ~inlining_threshold =
   let toplevel = E.at_toplevel env in
@@ -72,47 +76,37 @@ let inline env r ~lhs_of_application
         true, true, false, env
       else false, false, true, env
     | None -> begin
-        let inline_annotation =
-          (* Merge call site annotation and function annotation.
-             The call site annotation takes precedence *)
-          match (inline_requested : Lambda.inline_attribute) with
-          | Inline_on_argument arg_attribute ->
-            let inlining_trigger = inlining_trigger env args arg_attribute in
-            begin match inlining_trigger with
-              | Cannot_inline ->
-                Lambda.Never_inline
-              | Must_inline ->
-                Lambda.Always_inline
-              | Can_inline ->
-                function_decl.inline
-            end
-          | Always_inline | Never_inline | Unroll _ -> inline_requested
-          | Default_inline -> function_decl.inline
-        in
-        match inline_annotation with
-        | Inline_on_argument arg_attribute ->
-          Format.printf "args: %i attr: %i@."
-            (List.length args) (List.length arg_attribute);
-          let inlining_trigger = inlining_trigger env args arg_attribute in
-          begin match inlining_trigger with
-            | Cannot_inline ->
-              false, false, true, env
-            | Must_inline ->
+        let translate_annotation inline_annotation =
+          match (inline_annotation : Flambda.inline_attribute) with
+          | Always_inline -> false, true, false, env
+          | Never_inline -> false, false, true, env
+          | Default_inline -> false, false, false, env
+          | Unroll count ->
+            if count > 0 then
+              let env =
+                E.start_actively_unrolling
+                  env function_decls.set_of_closures_origin (count - 1)
+              in
               true, true, false, env
-            | Can_inline ->
-              false, false, false, env
-          end
-        | Always_inline -> false, true, false, env
-        | Never_inline -> false, false, true, env
-        | Default_inline -> false, false, false, env
-        | Unroll count ->
-          if count > 0 then
-            let env =
-              E.start_actively_unrolling
-                env function_decls.set_of_closures_origin (count - 1)
-            in
+            else false, false, true, env
+        in
+        (* Merge call site annotation and function annotation.
+           The call site annotation takes precedence *)
+        match (inline_requested : Flambda.inline_attribute) with
+        | Always_inline | Never_inline | Unroll _ ->
+          translate_annotation inline_requested
+        | Default_inline ->
+          (* And parameter annotations takes precedence over function
+             annotation *)
+          match inlining_trigger env function_decl.params args with
+          | A.Can_inline ->
+            translate_annotation function_decl.inline
+          | A.Must_inline ->
+            (* Inlining triggered by arguments allows unbounded depth
+               unrolling *)
             true, true, false, env
-          else false, false, true, env
+          | A.Cannot_inline ->
+            false, false, true, env
       end
   in
   let remaining_inlining_threshold : Inlining_cost.Threshold.t =
@@ -538,18 +532,18 @@ let for_call_site ~env ~r ~(function_decls : Flambda.function_declarations)
   end;
   (* Remove unroll attributes from functions we are already actively
      unrolling, otherwise they'll be unrolled again next round. *)
-  let inline_requested : Lambda.inline_attribute =
-    match (inline_requested : Lambda.inline_attribute) with
+  let inline_requested : Flambda.inline_attribute =
+    match (inline_requested : Flambda.inline_attribute) with
     | Unroll _ -> begin
-        let unrolling =
+       let unrolling =
           E.actively_unrolling env function_decls.set_of_closures_origin
         in
         match unrolling with
         | Some _ -> Default_inline
         | None -> inline_requested
       end
-    | Always_inline | Default_inline | Never_inline
-    | Inline_on_argument _ -> inline_requested
+    | Always_inline | Default_inline | Never_inline ->
+      inline_requested
   in
   let original =
     Flambda.Apply {

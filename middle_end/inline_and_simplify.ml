@@ -600,7 +600,7 @@ and simplify_set_of_closures original_env r
         ~dbg:function_decl.dbg
         ~f:(fun body_env -> simplify body_env r function_decl.body)
     in
-    let inline : Lambda.inline_attribute =
+    let inline : Flambda.inline_attribute =
       match function_decl.inline with
       | Default_inline ->
         if !Clflags.classic_inlining && not function_decl.stub then
@@ -788,8 +788,8 @@ and simplify_partial_application env r ~lhs_of_application
   (* CR-someday mshinwell: Pierre noted that we might like a function to be
      inlined when applied to its first set of arguments, e.g. for some kind
      of type class like thing. *)
-  begin match (inline_requested : Lambda.inline_attribute) with
-  | Always_inline | Never_inline | Inline_on_argument _ ->
+  begin match (inline_requested : Flambda.inline_attribute) with
+  | Always_inline | Never_inline ->
     Location.prerr_warning (Debuginfo.to_location dbg)
       (Warnings.Inlining_impossible "[@inlined] attributes may not be used \
         on partial applications")

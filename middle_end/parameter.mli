@@ -27,6 +27,10 @@ val wrap : ?inline_attribute:Lambda.inline_pattern -> Variable.t -> t
 
 val var : t -> Variable.t
 
+val inline_attribute : t -> Lambda.inline_pattern
+
+val has_default_inlining_attribute : t -> bool
+
 (** Rename the inner variable of the parameter *)
 val rename
    : ?current_compilation_unit:Compilation_unit.t

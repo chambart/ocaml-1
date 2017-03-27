@@ -34,6 +34,12 @@ type const =
      boxed (typically a variant type with both constant and non-constant
      constructors). *)
 
+type inline_attribute =
+  | Always_inline (* [@inline] or [@inline always] *)
+  | Never_inline (* [@inline never] *)
+  | Unroll of int (* [@unroll x] *)
+  | Default_inline (* no [@inline] attribute *)
+
 (** The application of a function to a list of arguments. *)
 type apply = {
   (* CR-soon mshinwell: rename func -> callee, and
@@ -42,7 +48,7 @@ type apply = {
   args : Variable.t list;
   kind : call_kind;
   dbg : Debuginfo.t;
-  inline : Lambda.inline_attribute;
+  inline : inline_attribute;
   (** Instructions from the source code as to whether the callee should
       be inlined. *)
   specialise : Lambda.specialise_attribute;
@@ -319,7 +325,7 @@ and function_declaration = private {
       through a stub.  Stubs will be unconditionally inlined. *)
   dbg : Debuginfo.t;
   (** Debug info for the function declaration. *)
-  inline : Lambda.inline_attribute;
+  inline : inline_attribute;
   (** Inlining requirements from the source code. *)
   specialise : Lambda.specialise_attribute;
   (** Specialising requirements from the source code. *)
@@ -550,7 +556,7 @@ val create_function_declaration
   -> body:t
   -> stub:bool
   -> dbg:Debuginfo.t
-  -> inline:Lambda.inline_attribute
+  -> inline:inline_attribute
   -> specialise:Lambda.specialise_attribute
   -> is_a_functor:bool
   -> function_declaration
