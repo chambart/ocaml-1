@@ -77,9 +77,12 @@ module Set = struct
   let vars l = Variable.Set.of_list (List.map var l)
 end
 
-let rename ?current_compilation_unit ?append p = {
+let rename ?current_compilation_unit ?append ?inline_attribute p = {
   var = Variable.rename ?current_compilation_unit ?append p.var;
-  inline_attribute = p.inline_attribute;
+  inline_attribute =
+    match inline_attribute with
+    | None -> p.inline_attribute
+    | Some inline_attribute -> inline_attribute;
 }
 
 let map_var f { var; inline_attribute } = {

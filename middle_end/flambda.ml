@@ -1001,7 +1001,9 @@ let create_function_declaration ~params ~body ~stub ~dbg
         (fun p -> not (Parameter.has_default_inlining_attribute p))
         params ->
     Misc.fatal_errorf
-      "Stubs may not be have parameters annotated for inlining: %a"
+      "Stubs may not be have parameters annotated for inlining: [%a] ->@ %a"
+      (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf ",@ ")
+         Parameter.print) params
       print body
   | true, (Never_inline | Default_inline)
   | false, (Never_inline | Default_inline | Always_inline

@@ -410,7 +410,11 @@ module Make (T : S) = struct
     let new_fun_var = Variable.rename fun_var ~append:T.variable_suffix in
     let params_renaming_list =
       List.map (fun param ->
-          let new_param = Parameter.rename param ~append:T.variable_suffix in
+          let new_param =
+            Parameter.rename param
+              ~inline_attribute:Lambda.Default
+              ~append:T.variable_suffix
+          in
           param, new_param)
         function_decl.params
     in

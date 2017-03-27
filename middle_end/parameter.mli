@@ -35,6 +35,7 @@ val has_default_inlining_attribute : t -> bool
 val rename
    : ?current_compilation_unit:Compilation_unit.t
   -> ?append:string
+  -> ?inline_attribute:Lambda.inline_pattern
   -> t
   -> t
 

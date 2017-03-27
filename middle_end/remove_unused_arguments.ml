@@ -45,7 +45,9 @@ let make_stub unused var (fun_decl : Flambda.function_declaration)
     ~specialised_args ~additional_specialised_args =
   let renamed = rename_var var in
   let args' =
-    List.map (fun param -> param, Parameter.rename param) fun_decl.params
+    List.map (fun param ->
+      param, Parameter.rename ~inline_attribute:Lambda.Default param)
+      fun_decl.params
   in
   let used_args' =
     List.filter (fun (param, _) ->
