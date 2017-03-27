@@ -96,7 +96,6 @@ let tupled_function_call_stub original_params unboxed_version
         pos + 1, Flambda.create_let param lam body)
       (0, call) params
   in
-  Format.printf "TO UPDATE: Parameter.wrap on tuple param";
   let tuple_param = Parameter.wrap tuple_param_var in
   Flambda.create_function_declaration ~params:[tuple_param]
     ~body ~stub:true ~dbg:Debuginfo.none ~inline:Default_inline

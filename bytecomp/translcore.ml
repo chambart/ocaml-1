@@ -1293,7 +1293,14 @@ and transl_function loc untuplify_fn repr partial param cases =
               (Matching.flatten_pattern size c_lhs, c_guard, c_rhs))
             cases in
         let params = List.map (fun _ -> Ident.create "param") pl in
-        let attributes = List.map (fun _ -> Default) params in
+        let attributes =
+          match attribute with
+          (* TODO: better handling of Or patterns *)
+          | Block (0, patterns) ->
+              List.map2 (fun _ pattern -> pattern) params patterns
+          | _ ->
+              List.map (fun _ -> Default) params
+        in
         ((Tupled, params, attributes),
          Matching.for_tupled_function loc params
            (transl_tupled_cases pats_expr_list) partial)
