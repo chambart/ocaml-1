@@ -29,10 +29,6 @@ val add_inline_attribute
   -> Parsetree.attributes
   -> Lambda.lambda
 
-val get_inline_attribute_on_argument
-   : Typedtree.case list
-  -> Lambda.inline_attribute_on_argument
-
 val get_inline_attribute_on_pattern
    : Typedtree.pattern
   -> Lambda.inline_attribute_on_argument

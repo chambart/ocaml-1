@@ -190,38 +190,11 @@ let get_specialise_attribute l =
   let attr, _ = find_attribute is_specialise_attribute l in
   parse_specialise_attribute attr
 
-let get_inline_attribute_on_argument (cases:Typedtree.case list)
-  : Lambda.inline_attribute_on_argument =
-  match cases with
-  | [ { c_lhs = { pat_attributes = l }} ] ->
-      let attr, _ = find_attribute is_inline_attribute_on_argument l in
-      parse_inline_attribute_on_argument attr
-  | _ ->
-      Default_param_inline
-
 let get_inline_attribute_on_pattern (pattern:Typedtree.pattern)
   : Lambda.inline_attribute_on_argument =
   let { pat_attributes = l } = pattern in
   let attr, _ = find_attribute is_inline_attribute_on_argument l in
   parse_inline_attribute_on_argument attr
-
-(* let get_inline_attribute_on_arguments params = *)
-(*   let attrs, _ = *)
-(*     List.split (List.map *)
-(*       (find_attribute is_inline_attribute_on_argument) *)
-(*       params) *)
-(*   in *)
-(*   if List.exists (function None -> false | Some _ -> true) attrs then *)
-(*     let attrs = *)
-(*       List.map *)
-(*         (function *)
-(*           | Some _ -> Inline_when_known *)
-(*           | None -> (Default_inline:inline_attribute_on_argument)) *)
-(*         attrs *)
-(*     in *)
-(*     Inline_on_argument attrs *)
-(*   else *)
-(*     Default_inline *)
 
 let add_inline_attribute expr loc attributes =
   match expr, get_inline_attribute attributes with
