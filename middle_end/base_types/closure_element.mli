@@ -20,7 +20,11 @@ include Identifiable.S
 
 val wrap : Variable.t -> t
 
-val wrap_map : 'a Variable.Map.t -> 'a Map.t
+val rename
+   : ?current_compilation_unit:Compilation_unit.t
+  -> ?append:string
+  -> t
+  -> t
 
 val in_compilation_unit : t -> Compilation_unit.t -> bool
 val get_compilation_unit : t -> Compilation_unit.t

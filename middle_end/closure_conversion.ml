@@ -67,12 +67,12 @@ let add_default_argument_wrappers lam =
   in
   Lambda.map f lam
 
-(*
 (** Generate a wrapper ("stub") function that accepts a tuple argument and
     calls another function with arguments extracted in the obvious
     manner from the tuple. *)
 let tupled_function_call_stub original_params unboxed_version
-      : Flambda.function_declaration =
+    closure_id set_of_closures_id
+     : Flambda.function_declaration =
   let closure_var = Variable.create "closure_var" in
   let tuple_param =
     Variable.create "tupled_stub_param"
@@ -86,7 +86,7 @@ let tupled_function_call_stub original_params unboxed_version
         args = params;
         (* CR-someday mshinwell for mshinwell: investigate if there is some
            redundancy here (func is also unboxed_version) *)
-        kind = Direct unboxed_version;
+        kind = Direct (unboxed_version, Some set_of_closures_id);
         dbg = Debuginfo.none;
         inline = Default_inline;
         specialise = Default_specialise;
@@ -96,7 +96,9 @@ let tupled_function_call_stub original_params unboxed_version
     Flambda.create_let unboxed_version_variable
       (Move_within_set_of_closures
          { closure = closure_var;
-           start_from; move_to = unboxed_version})
+           start_from = closure_id;
+           move_to = unboxed_version;
+           set_of_closures_id = Some set_of_closures_id; })
       call
   in
   let _, body =
@@ -111,7 +113,6 @@ let tupled_function_call_stub original_params unboxed_version
     ~body ~stub:true ~dbg:Debuginfo.none ~inline:Default_inline
     ~specialise:Default_specialise ~is_a_functor:false
     ~closure_var
-*)
 
 let register_const t (constant:Flambda.constant_defining_value) name
       : Flambda.constant_defining_value_block_field * string =
@@ -230,17 +231,17 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
     (* CR-soon mshinwell: some of this is now very similar to the let rec case
        below *)
     let set_of_closures_var = Variable.create ("set_of_closures_" ^ name) in
+    let decl =
+      Function_decl.create ~let_rec_ident:None ~closure_bound_var ~kind
+        ~params ~body ~attr ~loc
+    in
     let set_of_closures, required_bindings, set_of_closures_id =
-      let decl =
-        Function_decl.create ~let_rec_ident:None ~closure_bound_var ~kind
-          ~params ~body ~attr ~loc
-      in
       close_functions t env (Function_decls.create [decl])
     in
     let project_closure : Flambda.project_closure =
       { set_of_closures_id = Some set_of_closures_id;
         set_of_closures = set_of_closures_var;
-        closure_id = Closure_id.wrap closure_bound_var;
+        closure_id = Function_decl.closure_id decl;
       }
     in
     Flambda_utils.bind ~bindings:required_bindings
@@ -320,7 +321,7 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
       let body =
         List.fold_left (fun body decl ->
             let let_rec_ident = Function_decl.let_rec_ident decl in
-            let closure_bound_var = Function_decl.closure_bound_var decl in
+            let closure_id = Function_decl.closure_id decl in
             let let_bound_var = Ident.find_same let_rec_ident local_env in
             (* Inside the body of the [let], each function is referred to by
                a [Project_closure] expression, which projects from the set of
@@ -329,7 +330,7 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
               (Project_closure {
                  set_of_closures_id = Some set_of_closures_id;
                  set_of_closures = set_of_closures_var;
-                closure_id = Closure_id.wrap closure_bound_var;
+                closure_id;
               })
               body))
           (close t env body) function_declarations
@@ -582,15 +583,23 @@ and close_functions t external_env function_declarations
   let close_one_function set_of_closures_id map decl =
     let closure_bound_var = Function_decl.closure_bound_var decl in
     let closure_id = Function_decl.closure_id decl in
+    let unboxed_version_closure_id =
+      Closure_id.wrap (Variable.rename ~append:"_unboxed" closure_bound_var)
+    in
     let closure_env_without_parameters =
       Function_decls.add_let_rec_bound_functions_to_env
         closure_env_without_parameters_and_functions
         decl function_declarations
     in
     let closure_env_without_parameters =
+      let current_closure_id =
+        match Function_decl.kind decl with
+        | Curried -> closure_id
+        | Tupled -> unboxed_version_closure_id
+      in
       Env.set_current_closure
         closure_env_without_parameters
-        closure_bound_var (Closure_id.wrap closure_bound_var)
+        closure_bound_var current_closure_id
         set_of_closures_id
     in
     let body = Function_decl.body decl in
@@ -625,13 +634,12 @@ and close_functions t external_env function_declarations
     match Function_decl.kind decl with
     | Curried -> Closure_id.Map.add closure_id fun_decl map
     | Tupled ->
-      failwith "TO UPDATE"
-      (* let unboxed_version = Closure_id.wrap (Variable.rename closure_bound_var) in *)
-      (* let generic_function_stub = *)
-      (*   tupled_function_call_stub param_variables unboxed_version *)
-      (* in *)
-      (* Closure_id.Map.add unboxed_version fun_decl *)
-      (*   (Closure_id.Map.add closure_bound_var generic_function_stub map) *)
+      let generic_function_stub =
+        tupled_function_call_stub param_variables unboxed_version_closure_id
+          closure_id set_of_closures_id
+      in
+      Closure_id.Map.add unboxed_version_closure_id fun_decl
+        (Closure_id.Map.add closure_id generic_function_stub map)
   in
   let function_decls =
     Flambda.create_function_declarations
@@ -713,7 +721,7 @@ and close_let_bound_expression t ?let_rec_ident let_bound_var env
     in
     let project_closure : Flambda.project_closure =
       { set_of_closures = set_of_closures_var;
-        closure_id = Closure_id.wrap closure_bound_var;
+        closure_id = Function_decl.closure_id decl;
         set_of_closures_id = Some set_of_closures_id;
       }
     in

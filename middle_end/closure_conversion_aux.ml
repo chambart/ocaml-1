@@ -218,9 +218,10 @@ module Function_decls = struct
   let add_let_rec_bound_functions_to_env env decl t =
     let open Function_decl in
     List.fold_left (fun env fun_decl ->
-        if Closure_id.equal fun_decl.closure_id decl.closure_id then
+        match decl.kind with
+        | Curried when Closure_id.equal fun_decl.closure_id decl.closure_id ->
           Env.add_var env fun_decl.let_rec_ident fun_decl.closure_bound_var
-        else
+        | _ ->
           Env.add_closure_from_current_set env fun_decl.let_rec_ident
             fun_decl.closure_id)
       env t.function_decls

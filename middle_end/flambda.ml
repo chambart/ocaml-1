@@ -388,9 +388,13 @@ and print_function_declaration ppf closure_id (f : function_declaration) =
     | Never_specialise -> " *never_specialise*"
     | Default_specialise -> ""
   in
-  fprintf ppf "@[<2>(%a%s%s%s%s@ =@ fun@[<2>%a@] ->@ @[<2>%a@])@]@ "
+  let closure_var ppf () =
+    if Variable.Set.mem f.closure_var f.free_variables then
+      Format.fprintf ppf "@ (%a)" Variable.print f.closure_var
+  in
+  fprintf ppf "@[<2>(%a%s%s%s%s@ =@ fun@[<2>%a%a@] ->@ @[<2>%a@])@]@ "
     Closure_id.print closure_id stub is_a_functor inline specialise
-    idents f.params lam f.body
+    idents f.params closure_var () lam f.body
 
 and print_set_of_closures ppf (set_of_closures : set_of_closures) =
   match set_of_closures with
