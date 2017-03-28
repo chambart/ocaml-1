@@ -328,7 +328,7 @@ let specialise env r ~lhs_of_application
        (*     Var_within_closure.Set.mem var bound_vars_required) *)
        (*   value_set_of_closures.bound_vars *)
        ignore closures_required;
-       failwith "TO UPDATE"
+       failwith "TO UPDATE: Inlining_decision.specialise"
       )
   in
   let invariant_params = value_set_of_closures.invariant_params in
@@ -606,10 +606,15 @@ let for_call_site ~env ~r ~(function_decls : Flambda.function_declarations)
                   ~backend:(E.backend env))))
         in
         let specialise_result =
+          Format.printf "TO UPDATE Inlining_decision.specialise";
+          let _ = specialise in
+          Original S.Not_specialised.Classic_mode
+          (*
           specialise env r ~lhs_of_application ~function_decls ~recursive
             ~closure_id_being_applied ~function_decl ~value_set_of_closures
             ~args ~args_approxs ~dbg ~simplify ~original ~inline_requested
             ~specialise_requested ~fun_cost ~self_call ~inlining_threshold
+          *)
         in
         match specialise_result with
         | Changed (res, spec_reason) ->

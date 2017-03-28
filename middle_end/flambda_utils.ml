@@ -776,6 +776,8 @@ let closure_id_referenced_in_decls
       function_decls.funs
       Symbol.Map.empty
   in
+  Format.printf "TO UPDATE Flambda_utils.closure_id_referenced_in_decls: \
+                 Should look at move_within_set_of_closures@.";
   Closure_id.Map.mapi (fun closure_id (func_decl : Flambda.function_declaration) ->
       let from_symbols =
         Symbol.Set.fold (fun symbol closure_ids ->
