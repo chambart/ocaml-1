@@ -190,8 +190,8 @@ let inline env r ~lhs_of_application
          the function, without doing any further inlining upon it, to the call
          site. *)
       Inlining_transforms.inline_by_copying_function_body ~env
-        ~r:(R.reset_benefit r) ~function_decls ~lhs_of_application
-        ~closure_id_being_applied ~specialise_requested ~inline_requested
+        ~r:(R.reset_benefit r) ~lhs_of_application
+        ~specialise_requested ~inline_requested
         ~function_decl ~args ~dbg ~simplify
     in
     let num_direct_applications_seen =
@@ -532,8 +532,8 @@ let for_call_site ~env ~r ~(function_decls : Flambda.function_declarations)
   if function_decl.stub then
     let body, r =
       Inlining_transforms.inline_by_copying_function_body ~env
-        ~r ~function_decls ~lhs_of_application
-        ~closure_id_being_applied ~specialise_requested ~inline_requested
+        ~r ~lhs_of_application
+        ~specialise_requested ~inline_requested
         ~function_decl ~args ~dbg ~simplify
     in
     simplify env r body

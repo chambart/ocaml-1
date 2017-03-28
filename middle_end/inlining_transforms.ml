@@ -51,27 +51,27 @@ let which_function_parameters_can_we_specialise ~params ~args
     (List.combine params args) args_approxs
     (Variable.Set.empty, Variable.Map.empty, [], [])
 
-(** Fold over all variables bound by the given closure, which is bound to the
-    variable [lhs_of_application], and corresponds to the given
-    [function_decls].  Each variable bound by the closure is passed to the
-    user-specified function as an [Flambda.named] value that projects the
-    variable from its closure. *)
-let fold_over_projections_of_vars_bound_by_closure ~closure_id_being_applied
-      ~lhs_of_application ~(function_decls:Flambda.function_declarations)
-      ~init ~f =
-  Variable.Set.fold (fun var acc ->
-      let expr : Flambda.named =
-        Project_var {
-          closure = lhs_of_application;
-          closure_id = closure_id_being_applied;
-          var = Var_within_closure.wrap var;
-          set_of_closures_id = Some function_decls.set_of_closures_id;
-        }
-      in
-      f ~acc ~var ~expr)
-    (Flambda_utils.variables_bound_by_the_closure closure_id_being_applied
-      function_decls)
-    init
+(* (\** Fold over all variables bound by the given closure, which is bound to the *)
+(*     variable [lhs_of_application], and corresponds to the given *)
+(*     [function_decls].  Each variable bound by the closure is passed to the *)
+(*     user-specified function as an [Flambda.named] value that projects the *)
+(*     variable from its closure. *\) *)
+(* let fold_over_projections_of_vars_bound_by_closure ~closure_id_being_applied *)
+(*       ~lhs_of_application ~(function_decls:Flambda.function_declarations) *)
+(*       ~init ~f = *)
+(*   Variable.Set.fold (fun var acc -> *)
+(*       let expr : Flambda.named = *)
+(*         Project_var { *)
+(*           closure = lhs_of_application; *)
+(*           closure_id = closure_id_being_applied; *)
+(*           var = Var_within_closure.wrap var; *)
+(*           set_of_closures_id = Some function_decls.set_of_closures_id; *)
+(*         } *)
+(*       in *)
+(*       f ~acc ~var ~expr) *)
+(*     (Flambda_utils.variables_bound_by_the_closure closure_id_being_applied *)
+(*       function_decls) *)
+(*     init *)
 
 let set_inline_attribute_on_all_apply body inline specialise =
   Flambda_iterators.map_toplevel_expr (function
@@ -112,11 +112,9 @@ let copy_of_function's_body_with_freshened_params env
     (= "variables bound by the closure"), and any function identifiers
     introduced by the corresponding set of closures. *)
 let inline_by_copying_function_body ~env ~r
-      ~(function_decls : Flambda.function_declarations)
       ~lhs_of_application
       ~(inline_requested : Lambda.inline_attribute)
       ~(specialise_requested : Lambda.specialise_attribute)
-      ~closure_id_being_applied
       ~(function_decl : Flambda.function_declaration) ~args ~dbg ~simplify =
   assert (E.mem env lhs_of_application);
   assert (List.for_all (E.mem env) args);
@@ -146,20 +144,25 @@ let inline_by_copying_function_body ~env ~r
     let args = List.map (fun arg -> Flambda.Expr (Var arg)) args in
     Flambda_utils.bind ~body ~bindings:(List.combine freshened_params args)
   in
-  (* Add bindings for the variables bound by the closure. *)
-  let bindings_for_vars_bound_by_closure_and_params_to_args =
-    fold_over_projections_of_vars_bound_by_closure ~closure_id_being_applied
-      ~lhs_of_application ~function_decls ~init:bindings_for_params_to_args
-      ~f:(fun ~acc:body ~var ~expr -> Flambda.create_let var expr body)
-  in
+  (* (\* Add bindings for the variables bound by the closure. *\) *)
+  (* let bindings_for_vars_bound_by_closure_and_params_to_args = *)
+  (*   fold_over_projections_of_vars_bound_by_closure ~closure_id_being_applied *)
+  (*     ~lhs_of_application ~function_decls ~init:bindings_for_params_to_args *)
+  (*     ~f:(fun ~acc:body ~var ~expr -> Flambda.create_let var expr body) *)
+  (* in *)
+
   (* Add bindings for variables corresponding to the functions introduced by
      the whole set of closures.  Each such variable will be bound to a closure;
      each such closure is in turn produced by moving from the closure being
      applied to another closure in the same set.
   *)
   let expr =
-    ignore bindings_for_vars_bound_by_closure_and_params_to_args;
-    failwith "TO UPDATE"
+    Flambda.create_let
+      function_decl.closure_var
+      (Flambda.Expr (Var lhs_of_application))
+      bindings_for_params_to_args
+    (* ignore bindings_for_vars_bound_by_closure_and_params_to_args; *)
+    (* failwith "TO UPDATE" *)
     (* Closure_id.Map.fold (fun another_closure_in_the_same_set _ expr -> *)
     (*   let used = *)
     (*     Variable.Set.mem another_closure_in_the_same_set *)
