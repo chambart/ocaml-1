@@ -434,9 +434,8 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
       end else begin
         mark_curr curr
       end
-    | Project_var ({ closure; set_of_closures_id = _; closure_id; var }) ->
+    | Project_var ({ set_of_closures_id = _; closure_id; var }) ->
       if Closure_id.in_compilation_unit closure_id compilation_unit then begin
-        mark_var closure curr;
         (* match set_of_closures_id with *)
         (* | Some set_of_closures_id -> *)
         (*   register_implication *)
