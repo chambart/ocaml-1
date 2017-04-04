@@ -44,6 +44,33 @@ let assign_symbols_and_collect_constant_definitions
   let var_to_definition_tbl = Variable.Tbl.create 42 in
   let module AA = Alias_analysis in
   let assign_symbol var (named : Flambda.named) =
+    let record_set_of_closures_definition (set_of_closures:Flambda.set_of_closures) =
+      Variable.Tbl.add var_to_definition_tbl var
+        (AA.Set_of_closures set_of_closures);
+      let set_of_closures_id =
+        set_of_closures.function_decls.set_of_closures_id
+      in
+      Closure_id.Map.iter (fun closure_id (decl:Flambda.function_declaration) ->
+          let fun_var = decl.closure_var in
+          if not (Inconstant_idents.variable var inconstants) then begin
+            let closure_symbol = closure_symbol ~backend closure_id in
+            Variable.Tbl.add var_to_symbol_tbl fun_var closure_symbol
+          end;
+          let project_closure =
+            Alias_analysis.Project_closure
+              { set_of_closures_id = Some set_of_closures_id;
+                set_of_closures = var; closure_id }
+          in
+          Variable.Tbl.add var_to_definition_tbl fun_var
+            project_closure)
+        set_of_closures.function_decls.funs
+    in
+    let () =
+      match named with
+      | Set_of_closures set ->
+        record_set_of_closures_definition set
+      | _ -> ()
+    in
     if not (Inconstant_idents.variable var inconstants) then begin
       let assign_symbol () =
         let symbol = make_variable_symbol "" var in
@@ -69,24 +96,12 @@ let assign_symbols_and_collect_constant_definitions
       | Read_symbol_field (symbol, field) ->
         record_definition (AA.Symbol_field (symbol, field))
       | Set_of_closures (
-          { function_decls = { funs; set_of_closures_id; _ };
+          { function_decls = { set_of_closures_id; _ };
             _ } as set) ->
         assert (not (Inconstant_idents.closure set_of_closures_id
                        inconstants));
         assign_symbol ();
-        record_definition (AA.Set_of_closures set);
-        Closure_id.Map.iter (fun closure_id (decl:Flambda.function_declaration) ->
-            let fun_var = decl.closure_var in
-            let closure_symbol = closure_symbol ~backend closure_id in
-            Variable.Tbl.add var_to_symbol_tbl fun_var closure_symbol;
-            let project_closure =
-              Alias_analysis.Project_closure
-                { set_of_closures_id = Some set_of_closures_id;
-                  set_of_closures = var; closure_id }
-            in
-            Variable.Tbl.add var_to_definition_tbl fun_var
-              project_closure)
-          funs
+        record_set_of_closures_definition set;
       | Move_within_set_of_closures ({ closure = _; start_from = _; move_to; }
           as move) ->
         assign_existing_symbol (closure_symbol ~backend  move_to);
@@ -235,7 +250,9 @@ let translate_set_of_closures
       | Const c -> Const c
   in
   Flambda_iterators.map_function_bodies set_of_closures
-    ~f:(Flambda_iterators.map_all_immutable_let_and_let_rec_bindings ~f)
+    ~do_not_freshen_set_of_closure_id:()
+    ~f:(Flambda_iterators.map_all_immutable_let_and_let_rec_bindings
+          ~do_not_freshen_set_of_closure_id:() ~f)
 
 let translate_constant_set_of_closures
     (inconstants : Inconstant_idents.result)
@@ -298,6 +315,7 @@ let find_original_set_of_closure
   loop var
 
 let translate_definition_and_resolve_alias inconstants
+    ~(variable_being_defined : Variable.t)
     (aliases : Alias_analysis.allocation_point Variable.Map.t)
     (var_to_symbol_tbl : Symbol.t Variable.Tbl.t)
     (var_to_definition_tbl :
@@ -495,8 +513,22 @@ let translate_definition_and_resolve_alias inconstants
       | s ->
         Some (Flambda.Project_closure (s, closure_id, set_of_closures_id))
       | exception Not_found ->
-        Format.eprintf "var: %a@." Variable.print v;
-        assert false
+        match Variable.Map.find variable_being_defined aliases with
+        | exception Not_found ->
+          Format.eprintf "var: %a@." Variable.print v;
+          assert false
+        | Alias_analysis.Symbol _s ->
+          None
+        | Alias_analysis.Variable original ->
+          if Variable.equal original variable_being_defined then begin
+            Format.eprintf "var: %a = %a (%a) -> %a@."
+              Variable.print variable_being_defined
+              Variable.print original
+              Variable.print v
+              Alias_analysis.print_constant_defining_value definition;
+            assert false
+          end;
+          None
     end
   | Move_within_set_of_closures { closure; move_to; set_of_closures_id } ->
     let set_of_closures_id =
@@ -545,15 +577,19 @@ let translate_definitions_and_resolve_alias
     project_closure_map
     ~backend =
   Variable.Tbl.fold (fun var def map ->
-      match
-        translate_definition_and_resolve_alias inconstants aliases ~backend
-          var_to_symbol_tbl var_to_definition_tbl symbol_definition_map
-          project_closure_map def
-      with
-      | None -> map
-      | Some def ->
-        let symbol = Variable.Tbl.find var_to_symbol_tbl var in
-        Symbol.Map.add symbol def map)
+      if Inconstant_idents.variable var inconstants then
+        map
+      else
+        match
+          translate_definition_and_resolve_alias inconstants aliases ~backend
+            ~variable_being_defined:var
+            var_to_symbol_tbl var_to_definition_tbl symbol_definition_map
+            project_closure_map def
+        with
+        | None -> map
+        | Some def ->
+          let symbol = Variable.Tbl.find var_to_symbol_tbl var in
+          Symbol.Map.add symbol def map)
     var_to_definition_tbl Symbol.Map.empty
 
 (* Resorting of graph including Initialize_symbol *)
@@ -784,16 +820,18 @@ let introduce_free_variables_in_sets_of_closures
     translate_definition
 
 let var_to_block_field
+    ~inconstants
     (aliases : Alias_analysis.allocation_point Variable.Map.t)
     (var_to_symbol_tbl : Symbol.t Variable.Tbl.t)
     (var_to_definition_tbl :
       Alias_analysis.constant_defining_value Variable.Tbl.t) =
   let var_to_block_field_tbl = Variable.Tbl.create 42 in
   Variable.Tbl.iter (fun var _ ->
-      let def =
-        resolve_variable aliases var_to_symbol_tbl var_to_definition_tbl var
-      in
-      Variable.Tbl.add var_to_block_field_tbl var def)
+      if not (Inconstant_idents.variable var inconstants) then
+        let def =
+          resolve_variable aliases var_to_symbol_tbl var_to_definition_tbl var
+        in
+        Variable.Tbl.add var_to_block_field_tbl var def)
     var_to_definition_tbl;
   var_to_block_field_tbl
 
@@ -996,6 +1034,7 @@ let lift_constants (program : Flambda.program) ~backend =
   in
   let var_to_block_field_tbl =
     var_to_block_field
+      ~inconstants
       (aliases : Alias_analysis.allocation_point Variable.Map.t)
       (var_to_symbol_tbl : Symbol.t Variable.Tbl.t)
       (var_to_definition_tbl
