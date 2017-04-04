@@ -85,6 +85,7 @@ exception Var_within_closure_bound_multiple_times of Var_within_closure.t
 exception Declared_closure_from_another_unit of Compilation_unit.t
 exception Closure_id_is_bound_multiple_times of Closure_id.t
 exception Set_of_closures_id_is_bound_multiple_times of Set_of_closures_id.t
+exception Unbound_set_of_closures_id of Set_of_closures_id.t
 exception Unbound_closure_ids of Closure_id.Set.t
 exception Unbound_vars_within_closures of Var_within_closure.Set.t
 (* exception Move_to_a_closure_not_in_the_free_variables *)
@@ -552,7 +553,20 @@ let no_set_of_closures_id_is_bound_multiple_times program =
   match declared_set_of_closures_ids program with
   | _, Some set_of_closures_id ->
     raise (Set_of_closures_id_is_bound_multiple_times set_of_closures_id)
-  | _, None -> ()
+  | bound, None ->
+    let f (named:Flambda.named) =
+      match named with
+      | Project_var { set_of_closures_id = Some set_of_closures_id; _ } ->
+        let compilation_unit =
+          Set_of_closures_id.get_compilation_unit set_of_closures_id
+        in
+        if Compilation_unit.equal (Compilation_unit.get_current_exn ())
+            compilation_unit then
+          if not (Set_of_closures_id.Set.mem set_of_closures_id bound) then
+            raise (Unbound_set_of_closures_id set_of_closures_id)
+      | _ -> ()
+    in
+    Flambda_iterators.iter_named_of_program ~f program
 
 let used_closure_ids (program:Flambda.program) =
   let used = ref Closure_id.Set.empty in
