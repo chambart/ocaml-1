@@ -280,7 +280,7 @@ let iter_constant_defining_values_on_program (program : Flambda.program) ~f =
   in
   loop program.program_body
 
-let map_general ~toplevel f f_named tree =
+let map_general ?do_not_freshen_set_of_closure_id ~toplevel f f_named tree =
   let rec aux (tree : Flambda.t) =
     match tree with
     | Let _ ->
@@ -425,7 +425,9 @@ let map_general ~toplevel f f_named tree =
             named
           else
             let function_decls =
-              Flambda.update_function_declarations function_decls ~funs
+              Flambda.update_function_declarations
+                ?do_not_freshen_set_of_closure_id
+                function_decls ~funs
             in
             let set_of_closures =
               Flambda.create_set_of_closures ~function_decls ~free_vars
@@ -460,8 +462,9 @@ let map f f_named tree =
   map_general ~toplevel:false f (fun _ n -> f_named n) tree
 let map_expr f tree = map f (fun named -> named) tree
 let map_named f_named tree = map (fun expr -> expr) f_named tree
-let map_named_with_id f_named tree =
-  map_general ~toplevel:false (fun expr -> expr) f_named tree
+let map_named_with_id ?do_not_freshen_set_of_closure_id f_named tree =
+  map_general ?do_not_freshen_set_of_closure_id ~toplevel:false
+    (fun expr -> expr) f_named tree
 let map_toplevel f f_named tree =
   map_general ~toplevel:true f (fun _ n -> f_named n) tree
 let map_toplevel_expr f_expr tree =
@@ -586,7 +589,8 @@ let map_project_var_to_named_opt tree ~f =
           as named -> named)
     tree
 
-let map_function_bodies (set_of_closures : Flambda.set_of_closures) ~f =
+let map_function_bodies ?do_not_freshen_set_of_closure_id
+    (set_of_closures : Flambda.set_of_closures) ~f =
   let done_something = ref false in
   let funs =
     Closure_id.Map.map (fun (function_decl : Flambda.function_declaration) ->
@@ -611,7 +615,7 @@ let map_function_bodies (set_of_closures : Flambda.set_of_closures) ~f =
   else
     let function_decls =
       Flambda.update_function_declarations
-        ~do_not_freshen_set_of_closure_id:()
+        ?do_not_freshen_set_of_closure_id
         set_of_closures.function_decls ~funs
     in
     Flambda.create_set_of_closures
@@ -829,9 +833,10 @@ let map_named_of_program (program : Flambda.program)
   map_exprs_at_toplevel_of_program program
       ~f:(fun expr -> map_named_with_id f expr)
 
-let map_all_immutable_let_and_let_rec_bindings (expr : Flambda.t)
+let map_all_immutable_let_and_let_rec_bindings
+      ?do_not_freshen_set_of_closure_id (expr : Flambda.t)
       ~(f : Variable.t -> Flambda.named -> Flambda.named) : Flambda.t =
-  map_named_with_id f expr
+  map_named_with_id ?do_not_freshen_set_of_closure_id f expr
 
 let fold_function_decls_ignoring_stubs
       (set_of_closures : Flambda.set_of_closures) ~init ~f =

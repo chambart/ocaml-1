@@ -178,7 +178,8 @@ val map_apply
   -> Flambda.t
 
 val map_function_bodies
-   : Flambda.set_of_closures
+   : ?do_not_freshen_set_of_closure_id:unit
+  -> Flambda.set_of_closures
   -> f:(Flambda.t -> Flambda.t)
   -> Flambda.set_of_closures
 
@@ -213,7 +214,8 @@ val map_named_of_program
   -> Flambda.program
 
 val map_all_immutable_let_and_let_rec_bindings
-   : Flambda.t
+   : ?do_not_freshen_set_of_closure_id:unit
+  -> Flambda.t
   -> f:(Variable.t -> Flambda.named -> Flambda.named)
   -> Flambda.t
 
