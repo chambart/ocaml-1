@@ -411,6 +411,7 @@ type t = {
   local_constraints: type_declaration PathMap.t;
   gadt_instances: (int * TypeSet.t ref) list;
   flags: int;
+  return: Types.type_expr option;
 }
 
 and module_components =
@@ -494,7 +495,8 @@ let empty = {
   summary = Env_empty; local_constraints = PathMap.empty; gadt_instances = [];
   flags = 0;
   functor_args = Ident.empty;
- }
+  return = None;
+}
 
 let in_signature b env =
   let flags =
@@ -779,6 +781,12 @@ let set_unit_name name =
 
 let get_unit_name () =
   !current_unit
+
+let find_return t =
+  t.return
+
+let add_return return t =
+  { t with return = Some return }
 
 (* Lookup by identifier *)
 
