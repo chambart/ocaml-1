@@ -168,6 +168,7 @@ let middle_end ppf ~prefixname ~backend
                Ref_to_variables.eliminate_ref)
           +-+ ("Initialize_symbol_to_let_symbol",
                Initialize_symbol_to_let_symbol.run)
+          +-+ ("Analyse", fun p -> Reach_analysis.run p; p)
           |> loop
       in
       let back_end flam =
