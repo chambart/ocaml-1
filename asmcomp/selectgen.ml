@@ -23,7 +23,7 @@ open Mach
 
 type environment =
   { vars : (Ident.t, Reg.t array) Tbl.t;
-    static_exceptions : (int, Reg.t array list) Tbl.t;
+    static_exceptions : (Static_exception.t, Reg.t array list) Tbl.t;
     (** Which registers must be populated when jumping to the given
         handler. *)
   }
@@ -821,7 +821,7 @@ method emit_expr (env:environment) exp =
       let l = List.map translate_one_handler handlers in
       let a = Array.of_list ((r_body, s_body) :: List.map snd l) in
       let r = join_array a in
-      let aux (nfail, (_r, s)) = (nfail, s#extract) in
+      let aux (nfail, (_r, s)) = (Static_exception.to_int nfail, s#extract) in
       self#insert (Icatch (rec_flag, List.map aux l, s_body#extract)) [||] [||];
       r
   | Cexit (nfail,args) ->
@@ -832,8 +832,8 @@ method emit_expr (env:environment) exp =
           let dest_args =
             try env_find_static_exception nfail env
             with Not_found ->
-              fatal_error ("Selection.emit_expr: unboun label "^
-                           string_of_int nfail)
+              fatal_errorf "Selection.emit_expr: unboun label %a"
+                Static_exception.print nfail
           in
           (* Intermediate registers to handle cases where some
              registers from src are present in dest *)
@@ -843,7 +843,7 @@ method emit_expr (env:environment) exp =
           Array.iter (fun reg -> assert(reg.typ <> Addr)) src;
           self#insert_moves src tmp_regs ;
           self#insert_moves tmp_regs (Array.concat dest_args) ;
-          self#insert (Iexit nfail) [||] [||];
+          self#insert (Iexit (Static_exception.to_int nfail)) [||] [||];
           None
       end
   | Ctrywith(e1, v, e2) ->
@@ -1142,7 +1142,7 @@ method emit_tail (env:environment) exp =
           List.fold_left
             (fun env (id,r) -> env_add id r env)
             env (List.combine ids rs) in
-        nfail, self#emit_tail_sequence new_env e2
+        Static_exception.to_int nfail, self#emit_tail_sequence new_env e2
       in
       self#insert (Icatch(rec_flag, List.map aux handlers, s_body)) [||] [||]
   | Ctrywith(e1, v, e2) ->

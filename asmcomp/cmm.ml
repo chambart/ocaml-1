@@ -169,8 +169,9 @@ type expression =
   | Cifthenelse of expression * expression * expression
   | Cswitch of expression * int array * expression array * Debuginfo.t
   | Cloop of expression
-  | Ccatch of rec_flag * (int * Ident.t list * expression) list * expression
-  | Cexit of int * expression list
+  | Ccatch of rec_flag * (Static_exception.t * Ident.t list * expression) list
+              * expression
+  | Cexit of Static_exception.t * expression list
   | Ctrywith of expression * Ident.t * expression
 
 type fundecl =

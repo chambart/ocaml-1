@@ -15,7 +15,6 @@
 
 (* Translation of string matching from closed lambda to C-- *)
 
-open Lambda
 open Cmm
 
 module type I = sig
@@ -377,7 +376,7 @@ module Make(I:I) = struct
     let catch arg k = match arg with
     | Cexit (_e,[]) ->  k arg
     | _ ->
-        let e =  next_raise_count () in
+        let e = Static_exception.create () in
         ccatch (e,[],k (Cexit (e,[])),arg)
 
     let compile dbg str default cases =

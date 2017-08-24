@@ -169,8 +169,8 @@ let rec expr ppf = function
       fprintf ppf "@[<2>(loop@ %a)@]" sequence e
   | Ccatch(flag, handlers, e1) ->
       let print_handler ppf (i, ids, e2) =
-        fprintf ppf "(%d%a)@ %a"
-          i
+        fprintf ppf "(%a%a)@ %a"
+          Static_exception.print i
           (fun ppf ids ->
              List.iter
                (fun id -> fprintf ppf " %a" Ident.print id)
@@ -186,7 +186,7 @@ let rec expr ppf = function
         sequence e1
         print_handlers handlers
   | Cexit (i, el) ->
-      fprintf ppf "@[<2>(exit %d" i;
+      fprintf ppf "@[<2>(exit %a" Static_exception.print i;
       List.iter (fun e -> fprintf ppf "@ %a" expr e) el;
       fprintf ppf ")@]"
   | Ctrywith(e1, id, e2) ->

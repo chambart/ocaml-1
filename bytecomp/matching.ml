@@ -1918,6 +1918,7 @@ module SArg = struct
   let gtint = Pintcomp Cgt
 
   type act = Lambda.lambda
+  type label = int
 
   let make_prim p args = Lprim (p,args,Location.none)
   let make_offset arg n = match n with

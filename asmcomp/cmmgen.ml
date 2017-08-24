@@ -1437,6 +1437,7 @@ struct
   let gtint = Ccmpi Cgt
 
   type act = expression
+  type label = Static_exception.t
 
   let make_const i =  Cconst_int i
   (* CR mshinwell: fix debuginfo *)
@@ -1452,7 +1453,7 @@ struct
   let make_catch handler = match handler with
   | Cexit (i,[]) -> i,fun e -> e
   | _ ->
-      let i = next_raise_count () in
+      let i = Static_exception.create () in
 (*
       Printf.eprintf  "SHARE CMM: %i\n" i ;
       Printcmm.expression Format.str_formatter handler ;
@@ -1461,7 +1462,7 @@ struct
       i,
       (fun body -> match body with
       | Cexit (j,_) ->
-          if i=j then handler
+          if Static_exception.equal i j then handler
           else body
       | _ ->  ccatch (i,[],body,handler))
 
@@ -1475,7 +1476,7 @@ module StoreExp =
   Switch.Store
     (struct
       type t = expression
-      type key = int
+      type key = Static_exception.t
       let make_key = function
         | Cexit (i,[]) -> Some i
         | _ -> None
@@ -1857,12 +1858,12 @@ let rec transl env e =
           strmatch_compile dbg arg (Misc.may_map (transl env) d)
             (List.map (fun (s,act) -> s,transl env act) sw))
   | Ustaticfail (nfail, args) ->
-      Cexit (Static_exception.to_int nfail, List.map (transl env) args)
+      Cexit (nfail, List.map (transl env) args)
   | Ucatch(nfail, [], body, handler) ->
-      make_catch (Static_exception.to_int nfail) (transl env body)
+      make_catch nfail (transl env body)
         (transl env handler)
   | Ucatch(nfail, ids, body, handler) ->
-      ccatch(Static_exception.to_int nfail, ids, transl env body,
+      ccatch(nfail, ids, transl env body,
         transl env handler)
   | Utrywith(body, exn, handler) ->
       Ctrywith(transl env body, exn, transl env handler)
@@ -1874,7 +1875,7 @@ let rec transl env e =
       Csequence(remove_unit(transl env exp1), transl env exp2)
   | Uwhile(cond, body) ->
       let dbg = Debuginfo.none in
-      let raise_num = next_raise_count () in
+      let raise_num = Static_exception.create () in
       return_unit
         (ccatch
            (raise_num, [],
@@ -1886,7 +1887,7 @@ let rec transl env e =
       let dbg = Debuginfo.none in
       let tst = match dir with Upto -> Cgt   | Downto -> Clt in
       let inc = match dir with Upto -> Caddi | Downto -> Csubi in
-      let raise_num = next_raise_count () in
+      let raise_num = Static_exception.create () in
       let id_prev = Ident.rename id in
       return_unit
         (Clet
@@ -2636,7 +2637,7 @@ and transl_let env str kind id exp body =
            transl (add_unboxed_id id unboxed_id boxed_number env) body)
 
 and make_catch ncatch body handler = match body with
-| Cexit (nexit,[]) when nexit=ncatch -> handler
+| Cexit (nexit,[]) when Static_exception.equal nexit ncatch -> handler
 | _ ->  ccatch (ncatch, [], body, handler)
 
 and is_shareable_cont exp =
@@ -2647,7 +2648,7 @@ and is_shareable_cont exp =
 and make_shareable_cont mk exp =
   if is_shareable_cont exp then mk exp
   else begin
-    let nfail = next_raise_count () in
+    let nfail = Static_exception.create () in
     make_catch
       nfail
       (mk (Cexit (nfail,[])))
@@ -3078,7 +3079,7 @@ CAMLprim value caml_cache_public_method (value meths, value tag, value *cache)
 *)
 
 let cache_public_method meths tag cache dbg =
-  let raise_num = next_raise_count () in
+  let raise_num = Static_exception.create () in
   let li = Ident.create "li" and hi = Ident.create "hi"
   and mi = Ident.create "mi" and tagged = Ident.create "tagged" in
   Clet (
