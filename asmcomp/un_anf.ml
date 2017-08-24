@@ -34,6 +34,7 @@ let ignore_ulambda_list (_ : Clambda.ulambda list) = ()
 let ignore_function_label (_ : Clambda.function_label) = ()
 let ignore_debuginfo (_ : Debuginfo.t) = ()
 let ignore_int (_ : int) = ()
+let ignore_static_exception (_ : Static_exception.t) = ()
 let ignore_ident (_ : Ident.t) = ()
 let ignore_ident_option (_ : Ident.t option) = ()
 let ignore_primitive (_ : Lambda.primitive) = ()
@@ -133,10 +134,10 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
         branches;
       Misc.may loop default
     | Ustaticfail (static_exn, args) ->
-      ignore_int static_exn;
+      ignore_static_exception static_exn;
       List.iter loop args
     | Ucatch (static_exn, idents, body, handler) ->
-      ignore_int static_exn;
+      ignore_static_exception static_exn;
       ignore_ident_list idents;
       loop body;
       loop handler
@@ -331,10 +332,10 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
       Misc.may loop default;
       let_stack := []
     | Ustaticfail (static_exn, args) ->
-      ignore_int static_exn;
+      ignore_static_exception static_exn;
       examine_argument_list args
     | Ucatch (static_exn, idents, body, handler) ->
-      ignore_int static_exn;
+      ignore_static_exception static_exn;
       ignore_ident_list idents;
       let_stack := [];
       loop body;

@@ -153,10 +153,10 @@ and lam ppf = function
   | Ustaticfail (i, ls)  ->
       let lams ppf largs =
         List.iter (fun l -> fprintf ppf "@ %a" lam l) largs in
-      fprintf ppf "@[<2>(exit@ %d%a)@]" i lams ls;
+      fprintf ppf "@[<2>(exit@ %a%a)@]" Static_exception.print i lams ls;
   | Ucatch(i, vars, lbody, lhandler) ->
-      fprintf ppf "@[<2>(catch@ %a@;<1 -1>with (%d%a)@ %a)@]"
-        lam lbody i
+      fprintf ppf "@[<2>(catch@ %a@;<1 -1>with (%a%a)@ %a)@]"
+        lam lbody Static_exception.print i
         (fun ppf vars -> match vars with
           | [] -> ()
           | _ ->

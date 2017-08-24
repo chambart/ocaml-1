@@ -777,8 +777,26 @@ let excessive_function_nesting_depth = 5
 
 exception NotClosed
 
+type env =
+  { approx : (Ident.t, Clambda.value_approximation) Tbl.t;
+    stexn : Static_exception.t Numbers.Int.Map.t }
+
+let env_empty = { approx = Tbl.empty; stexn = Numbers.Int.Map.empty }
+
+let env_add id value env =
+  { env with approx = Tbl.add id value env.approx }
+
+let env_add_stexn num label env =
+  { env with stexn = Numbers.Int.Map.add num label env.stexn }
+
+let find_stexn num env =
+  try Numbers.Int.Map.find num env.stexn with
+  | Not_found ->
+      Misc.fatal_errorf "Unbound static exception %i in environment %a" num
+        (Numbers.Int.Map.print (fun _ _ -> ())) env.stexn
+
 let close_approx_var fenv cenv id =
-  let approx = try Tbl.find id fenv with Not_found -> Value_unknown in
+  let approx = try Tbl.find id fenv.approx with Not_found -> Value_unknown in
   match approx with
     Value_const c -> make_const c
   | approx ->
@@ -788,7 +806,7 @@ let close_approx_var fenv cenv id =
 let close_var fenv cenv id =
   let (ulam, _app) = close_approx_var fenv cenv id in ulam
 
-let rec close fenv cenv = function
+let rec close (fenv:env) cenv = function
     Lvar id ->
       close_approx_var fenv cenv id
   | Lconst cst ->
@@ -863,7 +881,7 @@ let rec close fenv cenv = function
           @ (List.map (fun arg -> Lvar arg ) final_args)
         in
         let funct_var = Ident.create "funct" in
-        let fenv = Tbl.add funct_var fapprox fenv in
+        let fenv = env_add funct_var fapprox fenv in
         let (new_fun, approx) = close fenv cenv
           (Lfunction{
                kind = Curried;
@@ -923,9 +941,9 @@ let rec close fenv cenv = function
           (Ulet(Mutable, kind, id, ulam, ubody), abody)
       | (_, Value_const _)
         when str = Alias || is_pure lam ->
-          close (Tbl.add id alam fenv) cenv body
+          close (env_add id alam fenv) cenv body
       | (_, _) ->
-          let (ubody, abody) = close (Tbl.add id alam fenv) cenv body in
+          let (ubody, abody) = close (env_add id alam fenv) cenv body in
           (Ulet(Immutable, kind, id, ulam, ubody), abody)
       end
   | Lletrec(defs, body) ->
@@ -938,7 +956,7 @@ let rec close fenv cenv = function
         let clos_ident = Ident.create "clos" in
         let fenv_body =
           List.fold_right
-            (fun (id, _pos, approx) fenv -> Tbl.add id approx fenv)
+            (fun (id, _pos, approx) fenv -> env_add id approx fenv)
             infos fenv in
         let (ubody, approx) = close fenv_body cenv body in
         let sb =
@@ -956,7 +974,7 @@ let rec close fenv cenv = function
         | (id, lam) :: rem ->
             let (udefs, fenv_body) = clos_defs rem in
             let (ulam, approx) = close_named fenv cenv id lam in
-            ((id, ulam) :: udefs, Tbl.add id approx fenv_body) in
+            ((id, ulam) :: udefs, env_add id approx fenv_body) in
         let (udefs, fenv_body) = clos_defs defs in
         let (ubody, approx) = close fenv_body cenv body in
         (Uletrec(udefs, ubody), approx)
@@ -996,7 +1014,7 @@ let rec close fenv cenv = function
       simplif_prim !Clflags.float_const_prop
                    p (close_list_approx fenv cenv args) dbg
   | Lswitch(arg, sw, dbg) ->
-      let fn fail =
+      let fn fenv fail =
         let (uarg, _) = close fenv cenv arg in
         let const_index, const_actions, fconst =
           close_switch fenv cenv sw.sw_consts sw.sw_numconsts fail
@@ -1015,17 +1033,19 @@ let rec close fenv cenv = function
 (* NB: failaction might get copied, thus it should be some Lstaticraise *)
       let fail = sw.sw_failaction in
       begin match fail with
-      | None|Some (Lstaticraise (_,_)) -> fn fail
+      | None|Some (Lstaticraise (_,_)) -> fn fenv fail
       | Some lamfail ->
           if
             (sw.sw_numconsts - List.length sw.sw_consts) +
             (sw.sw_numblocks - List.length sw.sw_blocks) > 1
           then
             let i = next_raise_count () in
-            let ubody,_ = fn (Some (Lstaticraise (i,[])))
+            let label = Static_exception.create () in
+            let fenv = env_add_stexn i label fenv in
+            let ubody,_ = fn fenv (Some (Lstaticraise (i,[])))
             and uhandler,_ = close fenv cenv lamfail in
-            Ucatch (i,[],ubody,uhandler),Value_unknown
-          else fn fail
+            Ucatch (label,[],ubody,uhandler),Value_unknown
+          else fn fenv fail
       end
   | Lstringswitch(arg,sw,d,_) ->
       let uarg,_ = close fenv cenv arg in
@@ -1042,11 +1062,14 @@ let rec close fenv cenv = function
             ud) d in
       Ustringswitch (uarg,usw,ud),Value_unknown
   | Lstaticraise (i, args) ->
-      (Ustaticfail (i, close_list fenv cenv args), Value_unknown)
+      (Ustaticfail (find_stexn i fenv, close_list fenv cenv args),
+       Value_unknown)
   | Lstaticcatch(body, (i, vars), handler) ->
+      let label = Static_exception.create () in
+      let fenv = env_add_stexn i label fenv in
       let (ubody, _) = close fenv cenv body in
       let (uhandler, _) = close fenv cenv handler in
-      (Ucatch(i, vars, ubody, uhandler), Value_unknown)
+      (Ucatch(label, vars, ubody, uhandler), Value_unknown)
   | Ltrywith(body, id, handler) ->
       let (ubody, _) = close fenv cenv body in
       let (uhandler, _) = close fenv cenv handler in
@@ -1149,7 +1172,7 @@ and close_functions fenv cenv fun_defs =
   let fenv_rec =
     List.fold_right
       (fun (id, _params, _body, fundesc, _dbg) fenv ->
-        Tbl.add id (Value_closure(fundesc, Value_unknown)) fenv)
+        env_add id (Value_closure(fundesc, Value_unknown)) fenv)
       uncurried_defs fenv in
   (* Determine the offsets of each function's closure in the shared block *)
   let env_pos = ref (-1) in
@@ -1281,7 +1304,7 @@ and close_switch fenv cenv cases num_keys default =
             ulam
         | Shared lam ->
             let ulam,_ = close fenv cenv lam in
-            let i = next_raise_count () in
+            let i = Static_exception.create () in
 (*
             let string_of_lambda e =
               Printlambda.lambda Format.str_formatter e ;
@@ -1368,7 +1391,7 @@ let intro size lam =
   let id = Compilenv.make_symbol None in
   global_approx := Array.init size (fun i -> Value_global_field (id, i));
   Compilenv.set_global_approx(Value_tuple !global_approx);
-  let (ulam, _approx) = close Tbl.empty Tbl.empty lam in
+  let (ulam, _approx) = close env_empty Tbl.empty lam in
   let opaque =
     !Clflags.opaque
     || Env.is_imported_opaque (Compilenv.current_unit_name ())

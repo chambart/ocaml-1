@@ -309,7 +309,7 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
     let def = Misc.may_map (to_clambda t env) def in
     Ustringswitch (arg, sw, def)
   | Static_raise (static_exn, args) ->
-    Ustaticfail (Static_exception.to_int static_exn,
+    Ustaticfail (static_exn,
       List.map (subst_var env) args)
   | Static_catch (static_exn, vars, body, handler) ->
     let env_handler, ids =
@@ -318,7 +318,7 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
           env, id :: ids)
         vars (env, [])
     in
-    Ucatch (Static_exception.to_int static_exn, ids,
+    Ucatch (static_exn, ids,
       to_clambda t env body, to_clambda t env_handler handler)
   | Try_with (body, var, handler) ->
     let id, env_handler = Env.add_fresh_ident env var in

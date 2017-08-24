@@ -48,8 +48,8 @@ and ulambda =
   | Uprim of primitive * ulambda list * Debuginfo.t
   | Uswitch of ulambda * ulambda_switch * Debuginfo.t
   | Ustringswitch of ulambda * (string * ulambda) list * ulambda option
-  | Ustaticfail of int * ulambda list
-  | Ucatch of int * Ident.t list * ulambda * ulambda
+  | Ustaticfail of Static_exception.t * ulambda list
+  | Ucatch of Static_exception.t * Ident.t list * ulambda * ulambda
   | Utrywith of ulambda * Ident.t * ulambda
   | Uifthenelse of ulambda * ulambda * ulambda
   | Usequence of ulambda * ulambda

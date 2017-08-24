@@ -1857,11 +1857,13 @@ let rec transl env e =
           strmatch_compile dbg arg (Misc.may_map (transl env) d)
             (List.map (fun (s,act) -> s,transl env act) sw))
   | Ustaticfail (nfail, args) ->
-      Cexit (nfail, List.map (transl env) args)
+      Cexit (Static_exception.to_int nfail, List.map (transl env) args)
   | Ucatch(nfail, [], body, handler) ->
-      make_catch nfail (transl env body) (transl env handler)
+      make_catch (Static_exception.to_int nfail) (transl env body)
+        (transl env handler)
   | Ucatch(nfail, ids, body, handler) ->
-      ccatch(nfail, ids, transl env body, transl env handler)
+      ccatch(Static_exception.to_int nfail, ids, transl env body,
+        transl env handler)
   | Utrywith(body, exn, handler) ->
       Ctrywith(transl env body, exn, transl env handler)
   | Uifthenelse(cond, ifso, ifnot) ->
