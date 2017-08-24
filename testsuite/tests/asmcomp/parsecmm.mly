@@ -12,9 +12,10 @@ let rec make_letdef def body =
       Clet(id, def, make_letdef rem body)
 
 let make_switch n selector caselist =
+  let exn = Static_exception.create () in
   let index = Array.make n 0 in
   let casev = Array.of_list caselist in
-  let actv = Array.make (Array.length casev) (Cexit(0,[])) in
+  let actv = Array.make (Array.length casev) (Cexit(exn,[])) in
   for i = 0 to Array.length casev - 1 do
     let (posl, e) = casev.(i) in
     List.iter (fun pos -> index.(pos) <- i) posl;
@@ -191,18 +192,18 @@ expr:
   | LPAREN IF expr expr expr RPAREN { Cifthenelse($3, $4, $5) }
   | LPAREN SWITCH INTCONST expr caselist RPAREN { make_switch $3 $4 $5 }
   | LPAREN WHILE expr sequence RPAREN
-      { let body =
+      { let stexn = Static_exception.create () in
+        let body =
           match $3 with
             Cconst_int x when x <> 0 -> $4
-          | _ -> Cifthenelse($3, $4, (Cexit(0,[]))) in
-        Ccatch(Recursive, [0, [], Cloop body], Ctuple []) }
+          | _ -> Cifthenelse($3, $4, (Cexit(stexn,[]))) in
+        Ccatch(Recursive, [stexn, [], Cloop body], Ctuple []) }
   | LPAREN EXIT IDENT exprlist RPAREN
     { Cexit(find_label $3, List.rev $4) }
   | LPAREN CATCH sequence WITH catch_handlers RPAREN
     { let handlers = $5 in
       List.iter (fun (_, l, _) -> List.iter unbind_ident l) handlers;
       Ccatch(Recursive, handlers, $3) }
-  | EXIT        { Cexit(0,[]) }
   | LPAREN TRY sequence WITH bind_ident sequence RPAREN
                 { unbind_ident $5; Ctrywith($3, $5, $6) }
   | LPAREN VAL expr expr RPAREN
@@ -345,8 +346,6 @@ catch_handlers:
     { $1 :: $3 }
 
 catch_handler:
-  | sequence
-    { 0, [], $1 }
   | LPAREN IDENT bind_identlist RPAREN sequence
     { find_label $2, $3, $5 }
 

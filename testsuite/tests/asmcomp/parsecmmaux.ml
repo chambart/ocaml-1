@@ -6,7 +6,7 @@ type error =
 exception Error of error
 
 let tbl_ident = (Hashtbl.create 57 : (string, Ident.t) Hashtbl.t)
-let tbl_label = (Hashtbl.create 57 : (string, int) Hashtbl.t)
+let tbl_label = (Hashtbl.create 57 : (string, Static_exception.t) Hashtbl.t)
 
 let ident_name s =
   match String.index s '/' with
@@ -31,7 +31,7 @@ let find_label s =
   try
     Hashtbl.find tbl_label s
   with Not_found ->
-    let lbl = Lambda.next_raise_count () in
+    let lbl = Static_exception.create () in
     Hashtbl.add tbl_label s lbl;
     lbl
 

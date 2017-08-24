@@ -19,6 +19,7 @@ INCLUDES=\
   -I $(OTOPDIR)/parsing \
   -I $(OTOPDIR)/utils \
   -I $(OTOPDIR)/typing \
+  -I $(OTOPDIR)/middle_end/base_types \
   -I $(OTOPDIR)/middle_end \
   -I $(OTOPDIR)/bytecomp \
   -I $(OTOPDIR)/asmcomp
