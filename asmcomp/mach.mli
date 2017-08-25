@@ -85,8 +85,9 @@ and instruction_desc =
   | Iifthenelse of test * instruction * instruction
   | Iswitch of int array * instruction array
   | Iloop of instruction
-  | Icatch of Cmm.rec_flag * (int * instruction) list * instruction
-  | Iexit of int
+  | Icatch of Cmm.rec_flag * (Static_exception.t * instruction) list *
+      instruction
+  | Iexit of Static_exception.t
   | Itrywith of instruction * instruction
   | Iraise of Cmm.raise_kind
 

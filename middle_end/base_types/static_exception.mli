@@ -22,5 +22,3 @@
 include Identifiable.S
 
 val create : unit -> t
-
-val to_int : t -> int

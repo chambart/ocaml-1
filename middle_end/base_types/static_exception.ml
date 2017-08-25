@@ -19,4 +19,3 @@
 include Numbers.Int
 
 let create () = Lambda.next_raise_count ()
-let to_int t = t

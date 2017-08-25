@@ -153,11 +153,11 @@ let try_depth = ref 0
 
 (* Association list: exit handler -> (handler label, try-nesting factor) *)
 
-let exit_label = ref []
+let exit_label : (Static_exception.t * (Cmm.label * int)) list ref = ref []
 
 let find_exit_label_try_depth k =
   try
-    List.assoc k !exit_label
+    snd (List.find (fun (n, _) -> Static_exception.equal n k) !exit_label)
   with
   | Not_found -> Misc.fatal_error "Linearize.find_exit_label"
 

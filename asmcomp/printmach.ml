@@ -195,7 +195,7 @@ let rec instr ppf i =
       fprintf ppf "@[<v 2>catch%a@,%a@;<0 -2>with"
         Printcmm.rec_flag flag instr body;
       let h (nfail, handler) =
-        fprintf ppf "(%d)@,%a@;" nfail instr handler in
+        fprintf ppf "(%a)@,%a@;" Static_exception.print nfail instr handler in
       let rec aux = function
         | [] -> ()
         | [v] -> h v
@@ -206,7 +206,7 @@ let rec instr ppf i =
       in
       aux handlers
   | Iexit i ->
-      fprintf ppf "exit(%d)" i
+      fprintf ppf "exit(%a)" Static_exception.print i
   | Itrywith(body, handler) ->
       fprintf ppf "@[<v 2>try@,%a@;<0 -2>with@,%a@;<0 -2>endtry@]"
              instr body instr handler
