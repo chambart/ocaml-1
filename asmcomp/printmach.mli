@@ -23,9 +23,9 @@ val regset: formatter -> Reg.Set.t -> unit
 val regsetaddr: formatter -> Reg.Set.t -> unit
 val operation: Mach.operation -> Reg.t array -> formatter -> Reg.t array -> unit
 val test: Mach.test -> formatter -> Reg.t array -> unit
-val instr: formatter -> Mach.instruction -> unit
-val fundecl: formatter -> Mach.fundecl -> unit
-val phase: string -> formatter -> Mach.fundecl -> unit
+val instr: formatter -> ?live:Mach.live_set -> Mach.instruction -> unit
+val fundecl: formatter -> ?live:Mach.live_set -> Mach.fundecl -> unit
+val phase: string -> formatter -> ?live:Mach.live_set -> Mach.fundecl -> unit
 val interferences: formatter -> unit -> unit
 val intervals: formatter -> unit -> unit
 val preferences: formatter -> unit -> unit

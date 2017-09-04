@@ -66,7 +66,6 @@ type instruction =
     arg: Reg.t array;
     res: Reg.t array;
     dbg: Debuginfo.t;
-    mutable live: Reg.Set.t;
     id: int }
 
 and instruction_desc =
@@ -103,7 +102,6 @@ let rec dummy_instr =
     arg = [||];
     res = [||];
     dbg = Debuginfo.none;
-    live = Reg.Set.empty;
     id = -1 }
 
 let end_instr () =
@@ -112,7 +110,6 @@ let end_instr () =
     arg = [||];
     res = [||];
     dbg = Debuginfo.none;
-    live = Reg.Set.empty;
     id = -2 }
 
 let next_id =
@@ -121,11 +118,11 @@ let next_id =
 
 let instr_cons d a r n =
   { desc = d; next = n; arg = a; res = r;
-    dbg = Debuginfo.none; live = Reg.Set.empty;
+    dbg = Debuginfo.none;
     id = next_id () }
 
 let instr_cons_debug d a r dbg n =
-  { desc = d; next = n; arg = a; res = r; dbg = dbg; live = Reg.Set.empty;
+  { desc = d; next = n; arg = a; res = r; dbg = dbg;
     id = next_id () }
 
 let rec instr_iter f i =
@@ -212,8 +209,6 @@ let[@inline] with_ ?desc ?next ?arg ?res instr =
   in
   { instr with next; desc; arg; res; id = next_id () }
 
-let[@inline] set_live instr live = instr.live <- live
-
 module Instruction = struct
   module T = struct
     type t = instruction
@@ -222,3 +217,5 @@ module Instruction = struct
   end
   module Map = Map.Make(T)
 end
+
+type live_set = Reg.Set.t Instruction.Map.t

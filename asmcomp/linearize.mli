@@ -54,4 +54,4 @@ type fundecl =
     fun_spacetime_shape : Mach.spacetime_shape option;
   }
 
-val fundecl: Mach.fundecl -> fundecl
+val fundecl: Mach.fundecl -> Mach.live_set -> fundecl

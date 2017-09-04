@@ -28,13 +28,20 @@ type error = Assembler_error of string
 exception Error of error
 
 let liveness ppf phrase =
-  Liveness.fundecl ppf phrase; phrase
+  let live_set = Liveness.fundecl ppf phrase in
+  phrase, live_set
 
 let dump_if ppf flag message phrase =
   if !flag then Printmach.phase message ppf phrase
 
 let pass_dump_if ppf flag message phrase =
   dump_if ppf flag message phrase; phrase
+
+let dump_if_live ppf flag message phrase live =
+  if !flag then Printmach.phase message ppf ~live phrase
+
+let pass_dump_if_live ppf flag message phrase live =
+  dump_if_live ppf flag message phrase live; phrase
 
 let pass_dump_linear_if ppf flag message phrase =
   if !flag then fprintf ppf "*** %s@.%a@." message Printlinear.fundecl phrase;
@@ -75,19 +82,19 @@ let raw_clambda_dump_if ppf
     end;
   if !dump_cmm then Format.fprintf ppf "@.cmm:@."
 
-let rec regalloc ppf round fd =
+let rec regalloc ppf round fd live_set =
   if round > 50 then
     fatal_error(fd.Mach.fun_name ^
                 ": function too complex, cannot complete register allocation");
   dump_if ppf dump_live "Liveness analysis" fd;
   if !use_linscan then begin
     (* Linear Scan *)
-    Interval.build_intervals fd;
+    Interval.build_intervals fd live_set;
     if !dump_interval then Printmach.intervals ppf ();
     Linscan.allocate_registers()
   end else begin
     (* Graph Coloring *)
-    Interf.build_graph fd;
+    Interf.build_graph live_set fd;
     if !dump_interf then Printmach.interferences ppf ();
     if !dump_prefer then Printmach.preferences ppf ();
     Coloring.allocate_registers()
@@ -96,10 +103,14 @@ let rec regalloc ppf round fd =
   let (newfd, redo_regalloc) = Reload.fundecl fd in
   dump_if ppf dump_reload "After insertion of reloading code" newfd;
   if redo_regalloc then begin
-    Reg.reinit(); Liveness.fundecl ppf newfd; regalloc ppf (round + 1) newfd
+    Reg.reinit();
+    let live_set = Liveness.fundecl ppf newfd in
+    regalloc ppf (round + 1) newfd live_set
   end else newfd
 
 let (++) x f = f x
+let (+*) (x, live) f = f x live, live
+let (+-) (x, live) f = f x live
 
 let compile_fundecl (ppf : formatter) fd_cmm =
   Proc.init ();
@@ -112,16 +123,18 @@ let compile_fundecl (ppf : formatter) fd_cmm =
   ++ Profile.record ~accumulate:true "cse" CSE.fundecl
   ++ pass_dump_if ppf dump_cse "After CSE"
   ++ Profile.record ~accumulate:true "liveness" (liveness ppf)
-  ++ Profile.record ~accumulate:true "deadcode" Deadcode.fundecl
-  ++ pass_dump_if ppf dump_live "Liveness analysis"
+  +- Profile.record ~accumulate:true "deadcode" Deadcode.fundecl
+  ++ Profile.record ~accumulate:true "liveness" (liveness ppf)
+  +* pass_dump_if_live ppf dump_live "Liveness analysis"
   ++ Profile.record ~accumulate:true "spill" Spill.fundecl
   ++ Profile.record ~accumulate:true "liveness" (liveness ppf)
-  ++ pass_dump_if ppf dump_spill "After spilling"
-  ++ Profile.record ~accumulate:true "split" Split.fundecl
+  +* pass_dump_if_live ppf dump_spill "After spilling"
+  +- Profile.record ~accumulate:true "split" Split.fundecl
   ++ pass_dump_if ppf dump_split "After live range splitting"
   ++ Profile.record ~accumulate:true "liveness" (liveness ppf)
-  ++ Profile.record ~accumulate:true "regalloc" (regalloc ppf 1)
-  ++ Profile.record ~accumulate:true "linearize" Linearize.fundecl
+  +- Profile.record ~accumulate:true "regalloc" (regalloc ppf 1)
+  ++ Profile.record ~accumulate:true "liveness" (liveness ppf)
+  +- Profile.record ~accumulate:true "linearize" Linearize.fundecl
   ++ pass_dump_linear_if ppf dump_linear "Linearized code"
   ++ Profile.record ~accumulate:true "scheduling" Scheduling.fundecl
   ++ pass_dump_linear_if ppf dump_scheduling "After instruction scheduling"

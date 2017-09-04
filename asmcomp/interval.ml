@@ -97,10 +97,11 @@ let update_interval_position_by_array intervals regs pos kind =
 let update_interval_position_by_set intervals regs pos kind =
   Set.iter (update_interval_position intervals pos kind) regs
 
-let update_interval_position_by_instr intervals instr pos =
+let update_interval_position_by_instr live_set intervals instr pos =
   update_interval_position_by_array intervals instr.arg pos Argument;
   update_interval_position_by_array intervals instr.res pos Result;
-  update_interval_position_by_set intervals instr.live pos Live
+  let live = Mach.Instruction.Map.find instr live_set in
+  update_interval_position_by_set intervals live pos Live
 
 let insert_destroyed_at_oper intervals instr pos =
   let destroyed = Proc.destroyed_at_oper instr.desc in
@@ -116,7 +117,7 @@ let insert_destroyed_at_raise intervals pos =
    The intervals will be expanded by one step at the start and end
    of a basic block. *)
 
-let build_intervals fd =
+let build_intervals fd (live_set:Mach.live_set) =
   let intervals = Array.init
                     (Reg.num_registers())
                     (fun _ -> {
@@ -127,7 +128,7 @@ let build_intervals fd =
   let pos = ref 0 in
   let rec walk_instruction i =
     incr pos;
-    update_interval_position_by_instr intervals i !pos;
+    update_interval_position_by_instr live_set intervals i !pos;
     begin match i.desc with
       Iend -> ()
     | Iop(Icall_ind _ | Icall_imm _ | Iextcall{alloc = true; _}

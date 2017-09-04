@@ -28,6 +28,9 @@ let find_live_at_exit k =
 
 let live_at_raise = ref Reg.Set.empty
 
+let live_set = ref Instruction.Map.empty
+let set_live i set = live_set := Instruction.Map.add i set !live_set
+
 let rec live i finally =
   (* finally is the set of registers live after execution of the
      instruction sequence.
@@ -43,10 +46,10 @@ let rec live i finally =
   in
   match i.desc with
     Iend ->
-      Mach.set_live i finally;
+      set_live i finally;
       finally
   | Ireturn | Iop(Itailcall_ind _) | Iop(Itailcall_imm _) ->
-      Mach.set_live i Reg.Set.empty; (* no regs are live across *)
+      set_live i Reg.Set.empty; (* no regs are live across *)
       Reg.set_of_array arg
   | Iop op ->
       let after = live i.next finally in
@@ -56,7 +59,7 @@ let rec live i finally =
       && not (Proc.regs_are_volatile i.res)    (*            is involved *)
       then begin
         (* This operation is dead code.  Ignore its arguments. *)
-        Mach.set_live i after;
+        set_live i after;
         after
       end else begin
         let across_after = Reg.diff_set_array after i.res in
@@ -73,13 +76,13 @@ let rec live i finally =
                Reg.Set.union across_after !live_at_raise
            | _ ->
                across_after in
-        Mach.set_live i across;
+        set_live i across;
         Reg.add_set_array across arg
       end
   | Iifthenelse(_test, ifso, ifnot) ->
       let at_join = live i.next finally in
       let at_fork = Reg.Set.union (live ifso at_join) (live ifnot at_join) in
-      Mach.set_live i at_fork;
+      set_live i at_fork;
       Reg.add_set_array at_fork arg
   | Iswitch(_index, cases) ->
       let at_join = live i.next finally in
@@ -87,7 +90,7 @@ let rec live i finally =
       for i = 0 to Array.length cases - 1 do
         at_fork := Reg.Set.union !at_fork (live cases.(i) at_join)
       done;
-      Mach.set_live i !at_fork;
+      set_live i !at_fork;
       Reg.add_set_array !at_fork arg
   | Iloop(body) ->
       let at_top = ref Reg.Set.empty in
@@ -101,7 +104,7 @@ let rec live i finally =
         done
       with Exit -> ()
       end;
-      Mach.set_live i !at_top;
+      set_live i !at_top;
       !at_top
   | Icatch(rec_flag, handlers, body) ->
       let at_join = live i.next finally in
@@ -137,11 +140,11 @@ let rec live i finally =
       live_at_exit := before_handler @ !live_at_exit;
       let before_body = live body at_join in
       live_at_exit := live_at_exit_before;
-      Mach.set_live i before_body;
+      set_live i before_body;
       before_body
   | Iexit nfail ->
       let this_live = find_live_at_exit nfail in
-      Mach.set_live i this_live ;
+      set_live i this_live ;
       this_live
   | Itrywith(body, handler) ->
       let at_join = live i.next finally in
@@ -150,10 +153,10 @@ let rec live i finally =
       live_at_raise := Reg.Set.remove Proc.loc_exn_bucket before_handler;
       let before_body = live body at_join in
       live_at_raise := saved_live_at_raise;
-      Mach.set_live i before_body;
+      set_live i before_body;
       before_body
   | Iraise _ ->
-      Mach.set_live i !live_at_raise;
+      set_live i !live_at_raise;
       Reg.add_set_array !live_at_raise arg
 
 let reset () =
@@ -162,6 +165,8 @@ let reset () =
 
 let fundecl ppf f =
   let initially_live = live f.fun_body Reg.Set.empty in
+  let result = !live_set in
+  live_set := Instruction.Map.empty;
   (* Sanity check: only function parameters (and the Spacetime node hole
      register, if profiling) can be live at entrypoint *)
   let wrong_live = Reg.Set.diff initially_live (Reg.set_of_array f.fun_args) in
@@ -172,4 +177,5 @@ let fundecl ppf f =
   if not (Reg.Set.is_empty wrong_live) then begin
     Format.fprintf ppf "%a@." Printmach.regset wrong_live;
     Misc.fatal_error "Liveness.fundecl"
-  end
+  end;
+  result

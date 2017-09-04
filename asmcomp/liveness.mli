@@ -19,4 +19,4 @@
 open Format
 
 val reset : unit -> unit
-val fundecl: formatter -> Mach.fundecl -> unit
+val fundecl: formatter -> Mach.fundecl -> Mach.live_set

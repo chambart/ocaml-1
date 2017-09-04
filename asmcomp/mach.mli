@@ -76,7 +76,6 @@ type instruction = private
     arg: Reg.t array;
     res: Reg.t array;
     dbg: Debuginfo.t;
-    mutable live: Reg.Set.t;
     id: int }
 
 and instruction_desc =
@@ -128,10 +127,11 @@ val spacetime_node_hole_pointer_is_live_before : instruction -> bool
 val with_:
       ?desc:instruction_desc -> ?next:instruction -> ?arg:Reg.t array ->
         ?res:Reg.t array -> instruction -> instruction
-val set_live: instruction -> Reg.Set.t -> unit
 
 module Instruction : sig
   module T : Map.OrderedType
   module Map : Map.S with type key = instruction
                       and type 'a t = 'a Map.Make(T).t
 end
+
+type live_set = Reg.Set.t Instruction.Map.t

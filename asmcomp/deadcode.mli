@@ -16,4 +16,4 @@
 (* Dead code elimination: remove pure instructions whose results are
    not used. *)
 
-val fundecl: Mach.fundecl -> Mach.fundecl
+val fundecl: Mach.fundecl -> Mach.live_set -> Mach.fundecl

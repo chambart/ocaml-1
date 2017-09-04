@@ -35,4 +35,4 @@ val all_fixed_intervals: unit -> t list
 val overlap: t -> t -> bool
 val is_live: t -> int -> bool
 val remove_expired_ranges: t -> int -> unit
-val build_intervals: Mach.fundecl -> unit
+val build_intervals: Mach.fundecl -> Mach.live_set -> unit

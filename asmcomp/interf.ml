@@ -28,7 +28,7 @@ module IntPairSet =
 open Reg
 open Mach
 
-let build_graph fundecl =
+let build_graph live_set fundecl =
 
   (* The interference graph is represented in two ways:
      - by adjacency lists for each register
@@ -79,21 +79,23 @@ let build_graph fundecl =
   let add_interf_move src dst s =
     Reg.Set.iter (fun r -> if r.stamp <> src.stamp then add_interf dst r) s in
 
+  let live i = Instruction.Map.find i live_set in
+
   (* Compute interferences *)
 
   let rec interf i =
     let destroyed = Proc.destroyed_at_oper i.desc in
-    if Array.length destroyed > 0 then add_interf_set destroyed i.live;
+    if Array.length destroyed > 0 then add_interf_set destroyed (live i);
     match i.desc with
       Iend -> ()
     | Ireturn -> ()
     | Iop(Imove | Ispill | Ireload) ->
-        add_interf_move i.arg.(0) i.res.(0) i.live;
+        add_interf_move i.arg.(0) i.res.(0) (live i);
         interf i.next
     | Iop(Itailcall_ind _) -> ()
     | Iop(Itailcall_imm _) -> ()
     | Iop _ ->
-        add_interf_set i.res i.live;
+        add_interf_set i.res (live i);
         add_interf_self i.res;
         interf i.next
     | Iifthenelse(_tst, ifso, ifnot) ->
@@ -114,7 +116,7 @@ let build_graph fundecl =
     | Iexit _ ->
         ()
     | Itrywith(body, handler) ->
-        add_interf_set Proc.destroyed_at_raise handler.live;
+        add_interf_set Proc.destroyed_at_raise (live handler);
         interf body; interf handler; interf i.next
     | Iraise _ -> () in
 

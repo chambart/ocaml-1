@@ -81,6 +81,9 @@ let identify_sub sub1 sub2 reg =
     with Not_found ->
       ()
 
+let live_set = ref Instruction.Map.empty
+let live i = Instruction.Map.find i !live_set
+
 (* Identify registers so that the two substitutions agree on the
    registers live before the given instruction. *)
 
@@ -90,7 +93,7 @@ let merge_substs sub1 sub2 i =
   | (Some _, None) -> sub1
   | (None, Some _) -> sub2
   | (Some s1, Some s2) ->
-      Reg.Set.iter (identify_sub s1 s2) (Reg.add_set_array i.live i.arg);
+      Reg.Set.iter (identify_sub s1 s2) (Reg.add_set_array (live i) i.arg);
       sub1
 
 (* Same, for N substitutions *)
@@ -106,7 +109,7 @@ let merge_subst_array subv instr =
               None -> ()
             | Some sj ->
                 Reg.Set.iter (identify_sub si sj)
-                             (Reg.add_set_array instr.live instr.arg)
+                             (Reg.add_set_array (live instr) instr.arg)
           done;
           sub
     end in
@@ -210,8 +213,9 @@ let reset () =
   equiv_classes := Reg.Map.empty;
   exit_subst := []
 
-let fundecl f =
+let fundecl f live =
   reset ();
+  live_set := live;
 
   let new_args = Array.copy f.fun_args in
   let (new_body, _sub_body) = rename f.fun_body (Some Reg.Map.empty) in

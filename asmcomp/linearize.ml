@@ -96,10 +96,13 @@ let cons_instr d n =
 (* Build an instruction with arg, res, dbg, live taken from
    the given Mach.instruction *)
 
+let live_set = ref Instruction.Map.empty
+let live i = Instruction.Map.find i !live_set
+
 let copy_instr d i n =
   { desc = d; next = n;
     arg = i.Mach.arg; res = i.Mach.res;
-    dbg = i.Mach.dbg; live = i.Mach.live }
+    dbg = i.Mach.dbg; live = live i }
 
 (*
    Label the beginning of the given instruction sequence.
@@ -308,7 +311,8 @@ let rec linear i n =
   | Iraise k ->
       copy_instr (Lraise k) i (discard_dead_code n)
 
-let fundecl f =
+let fundecl f live =
+  live_set := live;
   { fun_name = f.Mach.fun_name;
     fun_body = linear f.Mach.fun_body end_instr;
     fun_fast = f.Mach.fun_fast;

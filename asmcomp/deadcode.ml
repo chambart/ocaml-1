@@ -18,6 +18,9 @@
 
 open Mach
 
+let live_set = ref Instruction.Map.empty
+let live i = Instruction.Map.find i !live_set
+
 (* [deadcode i] returns a pair of an optimized instruction [i']
    and a set of registers live "before" instruction [i]. *)
 
@@ -30,7 +33,7 @@ let rec deadcode i =
   in
   match i.desc with
   | Iend | Ireturn | Iop(Itailcall_ind _) | Iop(Itailcall_imm _) | Iraise _ ->
-      (i, Reg.add_set_array i.live arg)
+      (i, Reg.add_set_array (live i) arg)
   | Iop op ->
       let (s, before) = deadcode i.next in
       if Proc.op_is_pure op                     (* no side effects *)
@@ -41,24 +44,24 @@ let rec deadcode i =
         assert (Array.length i.res > 0);  (* sanity check *)
         (s, before)
       end else begin
-        (Mach.with_ i ~next:s, Reg.add_set_array i.live arg)
+        (Mach.with_ i ~next:s, Reg.add_set_array (live i) arg)
       end
   | Iifthenelse(test, ifso, ifnot) ->
       let (ifso', _) = deadcode ifso in
       let (ifnot', _) = deadcode ifnot in
       let (s, _) = deadcode i.next in
       (Mach.with_ i ~desc:(Iifthenelse(test, ifso', ifnot')) ~next:s,
-       Reg.add_set_array i.live arg)
+       Reg.add_set_array (live i) arg)
   | Iswitch(index, cases) ->
       let cases' = Array.map (fun c -> fst (deadcode c)) cases in
       let (s, _) = deadcode i.next in
       (Mach.with_ i ~desc:(Iswitch(index, cases')) ~next:s,
-       Reg.add_set_array i.live arg)
+       Reg.add_set_array (live i) arg)
   | Iloop(body) ->
       let (body', _) = deadcode body in
       let (s, _) = deadcode i.next in
       (Mach.with_ i ~desc:(Iloop body') ~next:s,
-       i.live)
+       (live i))
   | Icatch(rec_flag, handlers, body) ->
       let (body', _) = deadcode body in
       let handlers' =
@@ -68,15 +71,16 @@ let rec deadcode i =
           handlers
       in
       let (s, _) = deadcode i.next in
-      (Mach.with_ i ~desc:(Icatch(rec_flag, handlers', body')) ~next:s, i.live)
+      (Mach.with_ i ~desc:(Icatch(rec_flag, handlers', body')) ~next:s, (live i))
   | Iexit _nfail ->
-      (i, i.live)
+      (i, (live i))
   | Itrywith(body, handler) ->
       let (body', _) = deadcode body in
       let (handler', _) = deadcode handler in
       let (s, _) = deadcode i.next in
-      (Mach.with_ i ~desc:(Itrywith(body', handler')) ~next:s, i.live)
+      (Mach.with_ i ~desc:(Itrywith(body', handler')) ~next:s, (live i))
 
-let fundecl f =
+let fundecl f live =
+  live_set := live;
   let (new_body, _) = deadcode f.fun_body in
   {f with fun_body = new_body}

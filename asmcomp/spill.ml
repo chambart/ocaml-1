@@ -132,6 +132,9 @@ let find_reload_at_exit k =
   with
   | Not_found -> Misc.fatal_error "Spill.find_reload_at_exit"
 
+let live_set = ref Instruction.Map.empty
+let live i = Instruction.Map.find i !live_set
+
 let rec reload i before =
   incr current_date;
   record_use i.arg;
@@ -144,7 +147,7 @@ let rec reload i before =
        Reg.Set.empty)
   | Iop(Icall_ind _ | Icall_imm _ | Iextcall { alloc = true; }) ->
       (* All regs live across must be spilled *)
-      let (new_next, finally) = reload i.next i.live in
+      let (new_next, finally) = reload i.next (live i) in
       (add_reloads (Reg.inter_set_array before i.arg)
                    (instr_cons_debug i.desc i.arg i.res i.dbg new_next),
        finally)
@@ -152,10 +155,10 @@ let rec reload i before =
       let new_before =
         (* Quick check to see if the register pressure is below the maximum *)
         if !Clflags.use_linscan ||
-           (Reg.Set.cardinal i.live + Array.length i.res <=
+           (Reg.Set.cardinal (live i) + Array.length i.res <=
             Proc.safe_register_pressure op)
         then before
-        else add_superpressure_regs op i.live i.res before in
+        else add_superpressure_regs op (live i) i.res before in
       let after =
         Reg.diff_set_array (Reg.diff_set_array new_before i.arg) i.res in
       let (new_next, finally) = reload i.next after in
@@ -266,7 +269,7 @@ let rec reload i before =
          except the exception bucket *)
       let before_handler =
         Reg.Set.remove Proc.loc_exn_bucket
-                       (Reg.add_set_array handler.live handler.arg) in
+                       (Reg.add_set_array (live handler) handler.arg) in
       let (new_handler, after_handler) = reload handler before_handler in
       let (new_next, finally) =
         reload i.next (Reg.Set.union after_body after_handler) in
@@ -458,8 +461,9 @@ let reset () =
   current_date := 0;
   destroyed_at_fork := []
 
-let fundecl f =
+let fundecl (f, live) =
   reset ();
+  live_set := live;
 
   let (body1, _) = reload f.fun_body Reg.Set.empty in
   let (body2, tospill_at_entry) = spill body1 Reg.Set.empty in

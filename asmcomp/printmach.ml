@@ -160,11 +160,15 @@ let operation op arg ppf res =
   | Ispecific op ->
       Arch.print_specific_operation reg op ppf arg
 
-let rec instr ppf i =
-  if !print_live then begin
-    fprintf ppf "@[<1>{%a" regsetaddr i.live;
-    if Array.length i.arg > 0 then fprintf ppf "@ +@ %a" regs i.arg;
-    fprintf ppf "}@]@,";
+let rec instr live ppf i =
+  begin match live with
+  | None -> ()
+  | Some live ->
+      if !print_live then begin
+        fprintf ppf "@[<1>{%a" regsetaddr (Instruction.Map.find i live);
+        if Array.length i.arg > 0 then fprintf ppf "@ +@ %a" regs i.arg;
+        fprintf ppf "}@]@,";
+      end
   end;
   begin match i.desc with
   | Iend -> ()
@@ -173,10 +177,10 @@ let rec instr ppf i =
   | Ireturn ->
       fprintf ppf "return %a" regs i.arg
   | Iifthenelse(tst, ifso, ifnot) ->
-      fprintf ppf "@[<v 2>if %a then@,%a" (test tst) i.arg instr ifso;
+      fprintf ppf "@[<v 2>if %a then@,%a" (test tst) i.arg (instr live) ifso;
       begin match ifnot.desc with
       | Iend -> ()
-      | _ -> fprintf ppf "@;<0 -2>else@,%a" instr ifnot
+      | _ -> fprintf ppf "@;<0 -2>else@,%a" (instr live) ifnot
       end;
       fprintf ppf "@;<0 -2>endif@]"
   | Iswitch(index, cases) ->
@@ -186,16 +190,16 @@ let rec instr ppf i =
         for j = 0 to Array.length index - 1 do
           if index.(j) = i then fprintf ppf "case %i:@," j
         done;
-        fprintf ppf "@]@,%a@]" instr cases.(i)
+        fprintf ppf "@]@,%a@]" (instr live) cases.(i)
       done;
       fprintf ppf "@,endswitch"
   | Iloop(body) ->
-      fprintf ppf "@[<v 2>loop@,%a@;<0 -2>endloop@]" instr body
+      fprintf ppf "@[<v 2>loop@,%a@;<0 -2>endloop@]" (instr live) body
   | Icatch(flag, handlers, body) ->
       fprintf ppf "@[<v 2>catch%a@,%a@;<0 -2>with"
-        Printcmm.rec_flag flag instr body;
+        Printcmm.rec_flag flag (instr live) body;
       let h (nfail, handler) =
-        fprintf ppf "(%d)@,%a@;" nfail instr handler in
+        fprintf ppf "(%d)@,%a@;" nfail (instr live) handler in
       let rec aux = function
         | [] -> ()
         | [v] -> h v
@@ -209,7 +213,7 @@ let rec instr ppf i =
       fprintf ppf "exit(%d)" i
   | Itrywith(body, handler) ->
       fprintf ppf "@[<v 2>try@,%a@;<0 -2>with@,%a@;<0 -2>endtry@]"
-             instr body instr handler
+             (instr live) body (instr live) handler
   | Iraise k ->
       fprintf ppf "%a %a" Printcmm.raise_kind k reg i.arg.(0)
   end;
@@ -217,20 +221,23 @@ let rec instr ppf i =
     fprintf ppf "%s" (Debuginfo.to_string i.dbg);
   begin match i.next.desc with
     Iend -> ()
-  | _ -> fprintf ppf "@,%a" instr i.next
+  | _ -> fprintf ppf "@,%a" (instr live) i.next
   end
 
-let fundecl ppf f =
+let instr ppf ?live i =
+  instr live ppf i
+
+let fundecl ppf ?live f =
   let dbg =
     if Debuginfo.is_none f.fun_dbg then
       ""
     else
       " " ^ Debuginfo.to_string f.fun_dbg in
   fprintf ppf "@[<v 2>%s(%a)%s@,%a@]"
-    f.fun_name regs f.fun_args dbg instr f.fun_body
+    f.fun_name regs f.fun_args dbg (instr ?live) f.fun_body
 
-let phase msg ppf f =
-  fprintf ppf "*** %s@.%a@." msg fundecl f
+let phase msg ppf ?live f =
+  fprintf ppf "*** %s@.%a@." msg (fun ppf -> fundecl ppf ?live) f
 
 let interference ppf r =
   let interf ppf =
