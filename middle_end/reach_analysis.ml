@@ -1,5 +1,37 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+(* Analysis propagating the possibility for a value to reach a
+   variable.
+
+   We say that a variable x 'flow' to another variable y if there exists an
+   execution where a value bound to x can later be bound to y.
+
+   We define the partial order '<=' as the transitive closure of the
+   'flow' relation. ('flow' is not necessarilly transitively closed,
+   but is usualy quite close).
+
+   For instance
+
+   let f b x y =
+   let v = if b then x else y in
+   if b then
+     let w = v in
+     w
+   else
+     let z = v in
+     z
+
+   x and y flow to v,
+   v flow to w and z
+   x flow to w,
+   y flow to z
+   but x does not flow to z, yet z <= x
+
+   This analysis computes an over-approximation of the '<=' relation.
+
+   The main approximation point is about functions: ...
+*)
+
 module Int = Numbers.Int
 
 type closure_descr = {
@@ -582,8 +614,8 @@ and do_program env (prog:Flambda.program_body) : unit =
       end
     in
     let add_var s (small, large) =
-      let info_small = Variable.Tbl.find env.info small in
-      let info_large = Variable.Tbl.find env.info large in
+      let info_small = find_info env small in
+      let info_large = find_info env large in
       add s (info_small, info_large)
     in
     while not (Queue.is_empty work_queue) do
@@ -629,12 +661,25 @@ and do_program env (prog:Flambda.program_body) : unit =
         end
       end
       else if Variable.equal external_world_source small then begin
-        (* TODO leak pour les clotures venant du monde exterieur *)
         (*Format.printf "snip %24s  >  external_world_source@." large;*)
         Int.Map.iter (fun _i field_large ->
             let info_field_large = Variable.Tbl.find env.info field_large in
             add "" (external_source_info, info_field_large))
-          info_large.descr.block
+          info_large.descr.block;
+
+        begin match info_small.descr.closure_value with
+        | None -> ()
+        | Some { closure_args; closure_return } ->
+          List.iter (fun arg ->
+            let info_arg = Variable.Tbl.find env.info arg in
+            add "leaking arguments" (info_arg, external_sink_info))
+            closure_args;
+          List.iter (fun return ->
+              let info_return = Variable.Tbl.find env.info return in
+              add "return value from extern world" (external_source_info, info_return))
+            closure_return
+        end
+
       end
       else
         begin
@@ -672,7 +717,6 @@ and do_program env (prog:Flambda.program_body) : unit =
            | field_large -> add_var "" (field_small, field_large))
         info_small.descr.vars_within_closure;
 
-      (* TODO propagations pour clotures (return et arg) *)
       (match info_small.descr.closure_value, info_large.descr.closure_value with
        | Some closure_small, Some closure_large ->
 
@@ -710,7 +754,7 @@ and do_program env (prog:Flambda.program_body) : unit =
            end
          end
          else begin
-          (* TODO faire plus précis. Là ça leak tout*)
+          (* TODO faire plus précis. Là ça leak tout *)
           (* Anything can be returned by the function *)
            List.iter (fun large_return -> add_var "return_any" (external_world_source, large_return))
              closure_large.closure_return;
