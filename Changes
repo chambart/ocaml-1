@@ -1,3 +1,9 @@
+### Code generation and optimizations:
+
+- MPR#7630, GPR#1455: Disable CSE for the initialization function
+  (Pierre Chambart, report by Emilio Jesús Gallego Arias,
+   review by Gabriel Scherer)
+
 OCaml 4.06.0 (3 Nov 2017):
 --------------------------
 
