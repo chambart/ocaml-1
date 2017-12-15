@@ -103,6 +103,9 @@ map.cmi :
 marshal.cmo : bytes.cmi marshal.cmi
 marshal.cmx : bytes.cmx marshal.cmi
 marshal.cmi :
+memprof.cmo : printexc.cmi obj.cmi ephemeron.cmi memprof.cmi
+memprof.cmx : printexc.cmx obj.cmx ephemeron.cmx memprof.cmi
+memprof.cmi : printexc.cmi obj.cmi ephemeron.cmi
 moreLabels.cmo : set.cmi map.cmi hashtbl.cmi moreLabels.cmi
 moreLabels.cmx : set.cmx map.cmx hashtbl.cmx moreLabels.cmi
 moreLabels.cmi : set.cmi map.cmi hashtbl.cmi
@@ -260,6 +263,8 @@ map.cmo : map.cmi
 map.p.cmx : map.cmi
 marshal.cmo : bytes.cmi marshal.cmi
 marshal.p.cmx : bytes.cmx marshal.cmi
+memprof.cmo : printexc.cmi obj.cmi ephemeron.cmi memprof.cmi
+memprof.p.cmx : printexc.cmx obj.cmx ephemeron.cmx memprof.cmi
 moreLabels.cmo : set.cmi map.cmi hashtbl.cmi moreLabels.cmi
 moreLabels.p.cmx : set.cmx map.cmx hashtbl.cmx moreLabels.cmi
 nativeint.cmo : sys.cmi pervasives.cmi nativeint.cmi

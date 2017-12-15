@@ -53,6 +53,7 @@ with_debugger=ocamldebugger
 with_ocamldoc=ocamldoc
 with_frame_pointers=false
 with_spacetime=false
+with_statmemprof=false
 no_naked_pointers=false
 native_compiler=true
 TOOLPREF=""
@@ -181,6 +182,8 @@ while : ; do
         no_naked_pointers=true;;
     -spacetime|--spacetime)
         with_spacetime=true;;
+    -statmemprof|--statmemprof)
+        with_statmemprof=true;;
     -no-cfi|--no-cfi)
         with_cfi=false;;
     -no-native-compiler|--no-native-compiler)
@@ -1893,6 +1896,17 @@ if $with_spacetime; then
   fi
 fi
 
+if $with_statmemprof; then
+  echo "#define WITH_STATMEMPROF" >> m.h
+  case "$arch" in
+    i386|amd64|arm|s390x|none)
+      ;;
+    *)
+      err "Statistical memory profiling in native code for this platform "\
+          "is not supported.";;
+  esac
+fi
+
 if ! $shared_libraries_supported; then
   with_cplugins=false
 fi
@@ -1987,6 +2001,7 @@ echo "WITH_OCAMLDOC=${with_ocamldoc}" >>Makefile
 echo "ASM_CFI_SUPPORTED=$asm_cfi_supported" >> Makefile
 echo "WITH_FRAME_POINTERS=$with_frame_pointers" >> Makefile
 echo "WITH_SPACETIME=$with_spacetime" >> Makefile
+echo "WITH_STATMEMPROF=$with_statmemprof" >> Makefile
 echo "LIBUNWIND_AVAILABLE=$libunwind_available" >> Makefile
 echo "LIBUNWIND_INCLUDE_FLAGS=$libunwind_include" >> Makefile
 echo "LIBUNWIND_LINK_FLAGS=$libunwind_lib" >> Makefile
@@ -2057,6 +2072,11 @@ else
   inf "        with frame pointers....... yes"
   else
   inf "        with frame pointers....... no"
+  fi
+  if $with_statmemprof; then
+    inf "        statistical memprof....... yes"
+  else
+    inf "        statistical memprof....... no"
   fi
   if $no_naked_pointers; then
   inf "        naked pointers forbidden.. yes"

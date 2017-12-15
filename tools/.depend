@@ -75,8 +75,10 @@ primreq.cmx : ../utils/config.cmx ../bytecomp/cmo_format.cmi
 profiling.cmo : profiling.cmi
 profiling.cmx : profiling.cmi
 profiling.cmi :
-read_cmt.cmo : ../typing/cmt_format.cmi cmt2annot.cmo ../utils/clflags.cmi
-read_cmt.cmx : ../typing/cmt_format.cmx cmt2annot.cmx ../utils/clflags.cmx
+read_cmt.cmo : ../parsing/location.cmi ../driver/compmisc.cmi \
+    ../typing/cmt_format.cmi cmt2annot.cmo ../utils/clflags.cmi
+read_cmt.cmx : ../parsing/location.cmx ../driver/compmisc.cmx \
+    ../typing/cmt_format.cmx cmt2annot.cmx ../utils/clflags.cmx
 scrapelabels.cmo :
 scrapelabels.cmx :
 stripdebug.cmo : ../utils/misc.cmi ../bytecomp/bytesections.cmi
