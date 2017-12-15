@@ -912,7 +912,7 @@ asmcomp/emitaux.cmo : asmcomp/mach.cmi middle_end/debuginfo.cmi \
 asmcomp/emitaux.cmx : asmcomp/mach.cmx middle_end/debuginfo.cmx \
     utils/config.cmx asmcomp/cmm.cmx utils/clflags.cmx asmcomp/arch.cmx \
     asmcomp/emitaux.cmi
-asmcomp/emitaux.cmi : middle_end/debuginfo.cmi
+asmcomp/emitaux.cmi : asmcomp/mach.cmi middle_end/debuginfo.cmi
 asmcomp/export_info.cmo : middle_end/base_types/variable.cmi \
     middle_end/base_types/var_within_closure.cmi \
     middle_end/base_types/tag.cmi middle_end/base_types/symbol.cmi \
