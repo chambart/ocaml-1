@@ -28,7 +28,7 @@ type error =
   | Custom_runtime
   | File_exists of string
   | Cannot_open_dll of string
-  | Required_module_unavailable of string
+  | Required_module_unavailable of string * string
 
 exception Error of error
 
@@ -85,25 +85,32 @@ let add_ccobjs origin l =
 
 (* First pass: determine which units are needed *)
 
-module IdentSet = Lambda.IdentSet
-
-let missing_globals = ref IdentSet.empty
+let missing_globals = ref Ident.Map.empty
 
 let is_required (rel, _pos) =
   match rel with
     Reloc_setglobal id ->
-      IdentSet.mem id !missing_globals
+      Ident.Map.mem id !missing_globals
   | _ -> false
 
 let add_required compunit =
   let add_required_by_reloc (rel, _pos) =
     match rel with
-      Reloc_getglobal id ->
-        missing_globals := IdentSet.add id !missing_globals
+      Reloc_getglobal id -> begin
+        match Ident.Map.find_opt id !missing_globals with
+        | None ->
+            missing_globals :=
+              Ident.Map.add id compunit.cu_name !missing_globals
+        | Some _ -> ()
+      end
     | _ -> ()
   in
   let add_required_for_effects id =
-    missing_globals := IdentSet.add id !missing_globals
+    match Ident.Map.find_opt id !missing_globals with
+    | None ->
+        missing_globals :=
+          Ident.Map.add id compunit.cu_name !missing_globals
+    | Some _ -> ()
   in
   List.iter add_required_by_reloc compunit.cu_reloc;
   List.iter add_required_for_effects compunit.cu_required_globals
@@ -111,7 +118,7 @@ let add_required compunit =
 let remove_required (rel, _pos) =
   match rel with
     Reloc_setglobal id ->
-      missing_globals := IdentSet.remove id !missing_globals
+      missing_globals := Ident.Map.remove id !missing_globals
   | _ -> ()
 
 let scan_file obj_name tolink =
@@ -569,12 +576,13 @@ let link ppf objfiles output_name =
     else "stdlib.cma" :: (objfiles @ ["std_exit.cmo"]) in
   let tolink = List.fold_right scan_file objfiles [] in
   let missing_modules =
-    IdentSet.filter (fun id -> not (Ident.is_predef_exn id)) !missing_globals
+    Ident.Map.filter (fun id _ -> not (Ident.is_predef_exn id)) !missing_globals
   in
   begin
-    match IdentSet.elements missing_modules with
+    match Ident.Map.bindings missing_modules with
     | [] -> ()
-    | id :: _ -> raise (Error (Required_module_unavailable (Ident.name id)))
+    | (id, req_by) :: _ ->
+        raise (Error (Required_module_unavailable (Ident.name id, req_by)))
   end;
   Clflags.ccobjs := !Clflags.ccobjs @ !lib_ccobjs; (* put user's libs last *)
   Clflags.all_ccopts := !lib_ccopts @ !Clflags.all_ccopts;
@@ -693,8 +701,8 @@ let report_error ppf = function
   | Cannot_open_dll file ->
       fprintf ppf "Error on dynamically loaded library: %a"
         Location.print_filename file
-  | Required_module_unavailable s ->
-      fprintf ppf "Required module `%s' is unavailable" s
+  | Required_module_unavailable (req, by) ->
+      fprintf ppf "Required module `%s' is unavailable for %s" req by
 
 let () =
   Location.register_error_of_exn
@@ -707,7 +715,7 @@ let reset () =
   lib_ccobjs := [];
   lib_ccopts := [];
   lib_dllibs := [];
-  missing_globals := IdentSet.empty;
+  missing_globals := Ident.Map.empty;
   Consistbl.clear crc_interfaces;
   implementations_defined := [];
   debug_info := [];
