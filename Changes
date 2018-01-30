@@ -53,6 +53,10 @@ Working version
   first character (instead of comma) in the set ":|; ,"
   (Fabrice Le Fessant)
 
+- GPR#1391 MPR#7645 MPR#3922: Add an early error when compiling different
+  modules with mismatching -for-pack
+  (Pierre Chambart, review by Mark Shinwell)
+
 - GPR#1428: give a non dummy location for warning 49 (no cmi found)
   (Valentin Gatien-Baron)
 
