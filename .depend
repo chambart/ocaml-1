@@ -548,6 +548,13 @@ bytecomp/bytesections.cmo : utils/config.cmi bytecomp/bytesections.cmi
 bytecomp/bytesections.cmx : utils/config.cmx bytecomp/bytesections.cmi
 bytecomp/bytesections.cmi :
 bytecomp/cmo_format.cmi : utils/tbl.cmi bytecomp/lambda.cmi typing/ident.cmi
+bytecomp/dissect_letrec.cmo : typing/types.cmi bytecomp/printlambda.cmi \
+    typing/primitive.cmi parsing/location.cmi bytecomp/lambda.cmi \
+    typing/ident.cmi bytecomp/dissect_letrec.cmi
+bytecomp/dissect_letrec.cmx : typing/types.cmx bytecomp/printlambda.cmx \
+    typing/primitive.cmx parsing/location.cmx bytecomp/lambda.cmx \
+    typing/ident.cmx bytecomp/dissect_letrec.cmi
+bytecomp/dissect_letrec.cmi : bytecomp/lambda.cmi
 bytecomp/dll.cmo : utils/misc.cmi utils/config.cmi bytecomp/dll.cmi
 bytecomp/dll.cmx : utils/misc.cmx utils/config.cmx bytecomp/dll.cmi
 bytecomp/dll.cmi :
@@ -626,12 +633,12 @@ bytecomp/semantics_of_primitives.cmx : bytecomp/lambda.cmx \
 bytecomp/semantics_of_primitives.cmi : bytecomp/lambda.cmi
 bytecomp/simplif.cmo : utils/warnings.cmi utils/tbl.cmi typing/stypes.cmi \
     utils/misc.cmi parsing/location.cmi bytecomp/lambda.cmi typing/ident.cmi \
-    utils/clflags.cmi parsing/asttypes.cmi typing/annot.cmi \
-    bytecomp/simplif.cmi
+    bytecomp/dissect_letrec.cmi utils/clflags.cmi parsing/asttypes.cmi \
+    typing/annot.cmi bytecomp/simplif.cmi
 bytecomp/simplif.cmx : utils/warnings.cmx utils/tbl.cmx typing/stypes.cmx \
     utils/misc.cmx parsing/location.cmx bytecomp/lambda.cmx typing/ident.cmx \
-    utils/clflags.cmx parsing/asttypes.cmi typing/annot.cmi \
-    bytecomp/simplif.cmi
+    bytecomp/dissect_letrec.cmx utils/clflags.cmx parsing/asttypes.cmi \
+    typing/annot.cmi bytecomp/simplif.cmi
 bytecomp/simplif.cmi : utils/misc.cmi parsing/location.cmi \
     bytecomp/lambda.cmi typing/ident.cmi
 bytecomp/switch.cmo : parsing/location.cmi bytecomp/switch.cmi
