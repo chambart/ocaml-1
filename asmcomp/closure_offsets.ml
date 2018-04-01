@@ -96,7 +96,9 @@ let compute_reexported_offsets program
   let used_closure_id closure_id =
     match Closure_id.Map.find closure_id imported_units_offset_fun with
     | offset ->
-      assert (not (Closure_id.Map.mem closure_id current_unit_offset_fun));
+      if Closure_id.Map.mem closure_id current_unit_offset_fun then
+        Misc.fatal_errorf "Closure_offsetes: already present closure id %a"
+          Closure_id.print closure_id;
       begin match Closure_id.Map.find closure_id !offset_fun with
       | exception Not_found ->
         offset_fun := Closure_id.Map.add closure_id offset !offset_fun
@@ -108,7 +110,10 @@ let compute_reexported_offsets program
   let used_var_within_closure var =
     match Var_within_closure.Map.find var imported_units_offset_fv with
     | offset ->
-      assert (not (Var_within_closure.Map.mem var current_unit_offset_fv));
+      if Var_within_closure.Map.mem var current_unit_offset_fv then
+        Misc.fatal_errorf "Closure_offsetes: already present var in closure %a"
+          Var_within_closure.print var;
+        (* assert (not (Var_within_closure.Map.mem var current_unit_offset_fv)); *)
       begin match Var_within_closure.Map.find var !offset_fv with
       | exception Not_found ->
         offset_fv := Var_within_closure.Map.add var offset !offset_fv

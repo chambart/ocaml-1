@@ -202,7 +202,8 @@ let flambda_gen_implementation ?toplevel ~backend ppf
   let (clambda, preallocated, constants) =
     Profile.record_call "backend" (fun () ->
       (program, export)
-      ++ Flambda_to_clambda.convert
+      ++ (fun arg -> Profile.record_call "flambda_to_clambda" (fun () ->
+          Flambda_to_clambda.convert arg))
       ++ flambda_raw_clambda_dump_if ppf
       ++ (fun { Flambda_to_clambda. expr; preallocated_blocks;
                 structured_constants; exported; } ->
@@ -213,11 +214,11 @@ let flambda_gen_implementation ?toplevel ~backend ppf
       ++ set_export_info)
   in
   let constants =
-    List.map (fun (symbol, definition) ->
+    List.rev_map (fun (symbol, definition) ->
         { Clambda.symbol = Linkage_name.to_string (Symbol.label symbol);
           exported = true;
           definition })
-      (Symbol.Map.bindings constants)
+      (List.rev (Symbol.Map.bindings constants))
   in
   end_gen_implementation ?toplevel ppf
     (clambda, preallocated, constants)

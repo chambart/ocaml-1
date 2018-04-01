@@ -53,7 +53,7 @@ CAMLYACC ?= boot/ocamlyacc
 include stdlib/StdlibModules
 
 CAMLC=$(CAMLRUN) boot/ocamlc -g -nostdlib -I boot -use-prims byterun/primitives
-CAMLOPT=$(CAMLRUN) ./ocamlopt -g -nostdlib -I stdlib -I otherlibs/dynlink
+CAMLOPT=$(CAMLRUN) ./ocamlopt -g -nostdlib -dflambda-no-invariants -I stdlib -I otherlibs/dynlink
 ARCHES=amd64 i386 arm arm64 power s390x
 INCLUDES=-I utils -I parsing -I typing -I bytecomp -I middle_end \
         -I middle_end/base_types -I asmcomp -I asmcomp/debug \
@@ -680,9 +680,11 @@ installopt:
 	$(MAKE) -C stdlib installopt
 	cp middle_end/*.cmi middle_end/*.cmt middle_end/*.cmti \
 	    middle_end/*.mli \
+	    middle_end/*.cmx \
 		"$(INSTALL_COMPLIBDIR)"
 	cp middle_end/base_types/*.cmi middle_end/base_types/*.cmt \
 	    middle_end/base_types/*.cmti middle_end/base_types/*.mli \
+	    middle_end/base_types/*.cmx \
 		"$(INSTALL_COMPLIBDIR)"
 	cp asmcomp/*.cmi asmcomp/*.cmt asmcomp/*.cmti asmcomp/*.mli \
 		"$(INSTALL_COMPLIBDIR)"

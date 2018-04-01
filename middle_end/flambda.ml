@@ -1192,3 +1192,114 @@ let compare_project_var = Projection.compare_project_var
 let compare_project_closure = Projection.compare_project_closure
 let compare_move_within_set_of_closures =
   Projection.compare_move_within_set_of_closures
+
+
+module ObjHash = struct
+  type t = Obj.t
+  let hash = Hashtbl.hash
+  let equal = (==)
+end
+module ObjTbl = Hashtbl.Make(ObjHash)
+
+(* type magic_table = {
+ *   table : Symbol.t ObjTbl.t;
+ *   to_emit : (Symbol.t * constant_defining_value) ObjTbl.t;
+ *   mutable count : int;
+ * }
+ * 
+ * let init_magic_table () : magic_table =
+ *   { table = ObjTbl.create 100;
+ *     to_emit = ObjTbl.create 100;
+ *     count = 0; }
+ * 
+ * let rec produce_magic (v : Obj.t) (t : magic_table) : constant_defining_value_block_field =
+ *   if Obj.is_int v then
+ *     Const (Int (Obj.obj v))
+ *   else
+ *     match ObjTbl.find_opt t.table v with
+ *     | Some s -> Symbol s
+ *     | None ->
+ *         (\* TODO: int 32/64 ? *\)
+ *         let tag = Obj.tag v in
+ *         let size = Obj.size v in
+ *         let symbol =
+ *           let c = Compilation_unit.get_current_exn () in
+ *           t.count <- t.count + 1;
+ *           let l = Linkage_name.create ("flambda_"^string_of_int t.count) in
+ *           Symbol.create c l
+ *         in
+ *         ObjTbl.add t.table v symbol;
+ *         let repr : constant_defining_value =
+ *           if tag >= Obj.no_scan_tag then begin
+ *             if tag = Obj.string_tag then
+ *               let s : string = Obj.obj v in
+ *               Allocated_const (String s)
+ *             else
+ *               assert false
+ *           end
+ *           else begin
+ * 
+ *             let fields =
+ *               List.init size
+ *                 (fun i ->
+ *                    let o = Obj.field v i in
+ *                    produce_magic o t)
+ *             in
+ *             Block (Tag.create_exn tag, fields)
+ *           end
+ *         in
+ *         ObjTbl.add t.to_emit v (symbol, repr);
+ *         Symbol symbol
+ * 
+ * let produce_magic v t =
+ *   Profile.record_call ~accumulate:true "produce_magic"
+ *     (fun () -> produce_magic v t)
+ * 
+ * let grand_finale t =
+ *   let r = ObjTbl.fold (fun _obj def l -> def::l) t.to_emit [] in
+ *   ObjTbl.clear t.to_emit;
+ *   r *)
+
+
+type magic_table = {
+  mutable symbol : Symbol.t;
+  table : int ObjTbl.t;
+  mutable to_emit : Obj.t list;
+  mutable count : int;
+  mutable table_count : int;
+}
+
+let fresh_symbol n =
+  let c = Compilation_unit.get_current_exn () in
+  let l = Linkage_name.create ("flambda_magic_table_"^string_of_int n) in
+  Symbol.create c l
+
+let init_magic_table () : magic_table =
+  { symbol = fresh_symbol 0;
+    table = ObjTbl.create 100;
+    to_emit = [];
+    count = 0;
+    table_count = 0; }
+
+let produce_magic (v : Obj.t) (t : magic_table) :
+  constant_defining_value_block_field * constant_defining_value_block_field =
+  if Obj.is_int v then
+    assert false
+  else
+    match ObjTbl.find_opt t.table v with
+    | Some n -> Const (Int n), Symbol t.symbol
+    | None ->
+        let n = t.count in
+        t.count <- t.count + 1;
+        ObjTbl.add t.table v n;
+        t.to_emit <- v :: t.to_emit;
+        Const (Int n), Symbol t.symbol
+
+let grand_finale t =
+  let r = Array.of_list (List.rev t.to_emit) in
+  let sym = t.symbol in
+  t.count <- 0;
+  t.table_count <- t.table_count + 1;
+  t.symbol <- fresh_symbol t.table_count;
+  t.to_emit <- [];
+  sym, Marshal.to_string r []

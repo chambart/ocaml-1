@@ -36,3 +36,17 @@ val duplicate_function
   -> fun_var:Variable.t
   -> Flambda.function_declaration
     * Flambda.specialised_to Variable.Map.t  (* new specialised arguments *)
+
+val duplicate_function'
+   : env:Inline_and_simplify_aux.Env.t
+  -> never_inline:bool
+  -> set_of_closures:Flambda.set_of_closures
+  -> fun_var:Variable.t
+  -> Flambda.function_declaration
+    * Flambda.specialised_to Variable.Map.t  (* new specialised arguments *)
+
+val simplify
+   : Inline_and_simplify_aux.Env.t
+  -> Inline_and_simplify_aux.Result.t
+  -> Flambda.t
+  -> Flambda.t * Inline_and_simplify_aux.Result.t

@@ -197,3 +197,25 @@ let _ =
 
   Hashtbl.add directive_table "warn_error"
              (Directive_string (parse_warnings std_out true))
+
+let () = ()
+
+exception Not_a_closure
+
+let flambda_repr (obj:Obj.t) =
+  if Obj.is_int obj then
+    raise Not_a_closure;
+  let tag = Obj.tag obj in
+  if tag <> Obj.closure_tag then
+    raise Not_a_closure;
+  let size = Obj.size obj in
+  if size < 2 then
+    raise Not_a_closure;
+  let id = Obj.obj (Obj.field obj (size - 2)) in
+  let marshalled = Obj.field obj (size - 1) in
+  if not (Obj.is_int id && Obj.is_block marshalled && Obj.tag marshalled = Obj.string_tag) then
+    raise Not_a_closure;
+  let id : int = Obj.obj id in
+  let marshalled : string = Obj.obj marshalled in
+  let array = Marshal.from_string marshalled 0 in
+  array.(id)

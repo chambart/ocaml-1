@@ -130,3 +130,7 @@ val override_sys_argv : string array -> unit
    This is called by [run_script] so that [Sys.argv] represents
    "script.ml args..." instead of the full command line:
    "ocamlrun unix.cma ... script.ml args...". *)
+
+exception Not_a_closure
+
+val flambda_repr : Obj.t -> Flambda.set_of_closures

@@ -416,6 +416,21 @@ type program = {
   program_body : program_body;
 }
 
+type magic_table
+
+val init_magic_table : unit -> magic_table
+
+(* val produce_magic : Obj.t -> magic_table -> constant_defining_value_block_field
+ * 
+ * val grand_finale : magic_table -> (Symbol.t * constant_defining_value) list *)
+
+val produce_magic : Obj.t -> magic_table ->
+  constant_defining_value_block_field *
+  constant_defining_value_block_field
+
+val grand_finale : magic_table -> Symbol.t * string
+
+
 (** Compute the free variables of a term.  (This is O(1) for [Let]s).
     If [ignore_uses_as_callee], all free variables inside [Apply] expressions
     are ignored.  Likewise [ignore_uses_in_project_var] for [Project_var]

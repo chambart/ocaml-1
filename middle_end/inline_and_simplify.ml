@@ -1383,7 +1383,7 @@ and simplify_list env r l =
     then l, approxs, r
     else h' :: t', approxs, r
 
-and duplicate_function ~env ~(set_of_closures : Flambda.set_of_closures)
+and duplicate_function' ~env ~never_inline ~(set_of_closures : Flambda.set_of_closures)
       ~fun_var =
   let function_decl =
     match Variable.Map.find fun_var set_of_closures.function_decls.funs with
@@ -1392,7 +1392,13 @@ and duplicate_function ~env ~(set_of_closures : Flambda.set_of_closures)
         Variable.print fun_var
     | function_decl -> function_decl
   in
-  let env = E.activate_freshening (E.set_never_inline env) in
+  let env =
+    if never_inline then
+      E.set_never_inline env
+    else
+      env
+  in
+  let env = E.activate_freshening env in
   let free_vars, specialised_args, function_decls, parameter_approximations,
       _internal_value_set_of_closures, set_of_closures_env =
     Inline_and_simplify_aux.prepare_to_simplify_set_of_closures ~env
@@ -1426,6 +1432,12 @@ and duplicate_function ~env ~(set_of_closures : Flambda.set_of_closures)
       ~is_a_functor:function_decl.is_a_functor
   in
   function_decl, specialised_args
+
+and duplicate_function ~env ~(set_of_closures : Flambda.set_of_closures)
+    ~fun_var =
+  duplicate_function' ~env ~never_inline:true
+    ~set_of_closures
+    ~fun_var
 
 let constant_defining_value_approx
     env

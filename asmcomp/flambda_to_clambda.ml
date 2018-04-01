@@ -26,6 +26,7 @@ type for_one_or_more_units = {
 type t = {
   current_unit : for_one_or_more_units;
   imported_units : for_one_or_more_units;
+  magic : Flambda.magic_table;
 }
 
 type ('a, 'b) declaration_position =
@@ -529,10 +530,26 @@ and to_clambda_set_of_closures t env
       fun (free_var : Flambda.specialised_to) ->
         subst_var env free_var.var) free_vars)
   in
-  Uclosure (funs, List.map snd free_vars)
+
+  (* let set_repr : Clambda.ulambda =
+   *   let set =
+   *     Flambda.produce_magic (Obj.repr set_of_closures) t.magic
+   *   in
+   *   Uconst (to_clambda_const env set)
+   * in
+   * Uclosure (funs, List.map snd free_vars @ [ set_repr ]) *)
+
+  let (f1, f2) : Clambda.ulambda * Clambda.ulambda =
+    let id, table =
+      Flambda.produce_magic (Obj.repr set_of_closures) t.magic
+    in
+    Clambda.Uconst (to_clambda_const env id),
+    Clambda.Uconst (to_clambda_const env table)
+  in
+  Uclosure (funs, List.map snd free_vars @ [ f1; f2 ])
 
 and to_clambda_closed_set_of_closures t env symbol
-      ({ function_decls; } : Flambda.set_of_closures)
+      ({ function_decls; } as set_of_closures : Flambda.set_of_closures)
       : Clambda.ustructured_constant =
   let functions = Variable.Map.bindings function_decls.funs in
   let to_clambda_function (id, (function_decl : Flambda.function_declaration))
@@ -565,7 +582,21 @@ and to_clambda_closed_set_of_closures t env symbol
   in
   let ufunct = List.map to_clambda_function functions in
   let closure_lbl = Linkage_name.to_string (Symbol.label symbol) in
-  Uconst_closure (ufunct, closure_lbl, [])
+  (* let set_repr =
+   *   let flambda_const =
+   *     Flambda.produce_magic (Obj.repr set_of_closures) t.magic
+   *   in
+   *   to_clambda_const env flambda_const
+   * in
+   * Uconst_closure (ufunct, closure_lbl, [ set_repr ]) *)
+  let (f1, f2) =
+    let id, table =
+      Flambda.produce_magic (Obj.repr set_of_closures) t.magic
+    in
+    to_clambda_const env id,
+    to_clambda_const env table
+  in
+  Uconst_closure (ufunct, closure_lbl, [ f1; f2 ])
 
 let to_clambda_initialize_symbol t env symbol fields : Clambda.ulambda =
   let fields =
@@ -665,7 +696,11 @@ let convert (program, exported) : result =
       constant_sets_of_closures = imported.constant_sets_of_closures;
     }
   in
-  let t = { current_unit; imported_units; } in
+  let t = {
+    current_unit;
+    imported_units;
+    magic = Flambda.init_magic_table ();
+  } in
   let preallocated_blocks =
     List.map (fun (symbol, tag, fields) ->
         { Clambda.
@@ -679,6 +714,20 @@ let convert (program, exported) : result =
   let expr, structured_constants =
     to_clambda_program t Env.empty Symbol.Map.empty program
   in
+  (* let structured_constants =
+   *   List.fold_left (fun map (sym, descr) ->
+   *       accumulate_structured_constants t Env.empty sym descr map)
+   *     structured_constants
+   *     (Flambda.grand_finale t.magic)
+   * in *)
+
+  let (gf_sym, gf_marsh) = Flambda.grand_finale t.magic in
+  let structured_constants =
+    accumulate_structured_constants t Env.empty gf_sym
+      (Allocated_const (String gf_marsh))
+      structured_constants
+  in
+
   let offset_fun, offset_fv =
     Closure_offsets.compute_reexported_offsets program
       ~current_unit_offset_fun:current_unit.fun_offset_table

@@ -242,6 +242,7 @@ let really_save_then_forget_decisions ~output_prefix =
   let out_channel = open_out (output_prefix ^ ".inlining.org") in
   let ppf = Format.formatter_of_out_channel out_channel in
   Inlining_report.print ppf report;
+  Format.pp_print_flush ppf ();
   close_out out_channel;
   log := []
 

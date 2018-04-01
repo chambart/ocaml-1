@@ -31,3 +31,7 @@ type 'a printer_type_old = 'a -> unit
 
 (* For topmain.ml. Maybe shouldn't be there *)
 val load_file : formatter -> string -> bool
+
+exception Not_a_closure
+
+val flambda_repr : Obj.t -> Flambda.set_of_closures
