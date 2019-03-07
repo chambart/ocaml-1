@@ -127,6 +127,8 @@ let parse_arguments argv =
       ld_opts := next_arg s :: !ld_opts
     else if s = "-linkall" then
       caml_opts := s :: !caml_opts
+    else if s = "-lto" then
+      lto := true
     else if starts_with s "-l" then
       let s =
         if Config.ccomp_type = "msvc" then
@@ -135,8 +137,6 @@ let parse_arguments argv =
           s
       in
       c_libs := s :: !c_libs
-    else if s = "-lto" then
-      lto := true
     else if starts_with s "-L" then
      (c_Lopts := s :: !c_Lopts;
       let l = chop_prefix s "-L" in
