@@ -81,7 +81,7 @@ let windows_unicode = %%WINDOWS_UNICODE%% != 0
 let supports_shared_libraries = %%SUPPORTS_SHARED_LIBRARIES%%
 
 let flat_float_array = %%FLAT_FLOAT_ARRAY%%
-let cmx_contains_all_code = %%CMX_CONTAINS_ALL_CODE%%
+let cmx_contains_all_code = %%LTO%%
 
 let afl_instrument = %%AFL_INSTRUMENT%%
 
