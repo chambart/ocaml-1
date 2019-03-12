@@ -58,7 +58,8 @@ let flambda i backend typed =
         ~backend
         ~module_initializer:lam)
     |> Asmgen.compile_implementation_flambda ~opaque:!Clflags.opaque
-      i.output_prefix ~required_globals ~backend ~ppf_dump:i.ppf_dump;
+      ~whole_program:false ~prefixname:i.output_prefix
+      ~required_globals ~backend ~ppf_dump:i.ppf_dump;
     Compilenv.save_unit_info (cmx i))
 
 let clambda i typed =

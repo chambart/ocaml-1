@@ -27,6 +27,7 @@ type 'a for_one_or_more_units = {
 }
 
 type t = {
+  whole_program : bool;
   current_unit :
     Set_of_closures_id.t for_one_or_more_units;
   imported_units :
@@ -35,7 +36,11 @@ type t = {
 
 let get_fun_offset t closure_id =
   let fun_offset_table =
-    if Closure_id.in_compilation_unit closure_id (Compilenv.current_unit ())
+    (* When compiling a whole program, all the functions comes
+       from the current compilation unit which might not be the
+       original compilation unit *)
+    if t.whole_program ||
+       Closure_id.in_compilation_unit closure_id (Compilenv.current_unit ())
     then
       t.current_unit.fun_offset_table
     else
@@ -48,8 +53,9 @@ let get_fun_offset t closure_id =
 
 let get_fv_offset t var_within_closure =
   let fv_offset_table =
-    if Var_within_closure.in_compilation_unit var_within_closure
-        (Compilenv.current_unit ())
+    if t.whole_program || (* See get_fun_offset *)
+       Var_within_closure.in_compilation_unit var_within_closure
+         (Compilenv.current_unit ())
     then t.current_unit.fv_offset_table
     else t.imported_units.fv_offset_table
   in
@@ -698,7 +704,7 @@ type result = {
   exported : Export_info.t;
 }
 
-let convert (program, exported_transient) : result =
+let convert ~whole_program (program, exported_transient) : result =
   let current_unit =
     let closures =
       Closure_id.Map.keys (Flambda_utils.make_closure_map program)
@@ -733,7 +739,7 @@ let convert (program, exported_transient) : result =
       closures;
     }
   in
-  let t = { current_unit; imported_units; } in
+  let t = { whole_program; current_unit; imported_units; } in
   let expr, structured_constants, preallocated_blocks =
     to_clambda_program t Env.empty Symbol.Map.empty program
   in
