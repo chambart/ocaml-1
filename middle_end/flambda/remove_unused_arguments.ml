@@ -31,7 +31,8 @@ let remove_params unused (fun_decl: Flambda.function_declaration)
       fun_decl.params
   in
   let unused_params = List.filter (fun v ->
-      Variable.Set.mem (Parameter.var v) fun_decl.free_variables) unused_params
+    Variable.Set.mem (Parameter.var v)
+      (Free_names.all_free_variables fun_decl.free_names)) unused_params
   in
   let body =
     List.fold_left (fun body param ->

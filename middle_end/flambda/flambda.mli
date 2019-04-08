@@ -172,11 +172,12 @@ and let_expr = private {
   body : t;
   (* CR-someday mshinwell: we could consider having these be keys into some
      kind of global cache, to reduce memory usage. *)
-  free_vars_of_defining_expr : Variable.Set.t;
-  (** A cache of the free variables in the defining expression of the [let]. *)
-  free_vars_of_body : Variable.Set.t;
-  (** A cache of the free variables of the body of the [let].  This is an
-      important optimization. *)
+  free_names_of_defining_expr : Free_names.t;
+  (** A cache of the free variables and symbols in the defining expression
+      of the [let]. *)
+  free_names_of_body : Free_names.t;
+  (** A cache of the free variables and symbols in the body of the [let].
+      This is an important optimization. *)
 }
 
 and let_mutable = {
@@ -306,16 +307,13 @@ and function_declaration = private {
   closure_origin: Closure_origin.t;
   params : Parameter.t list;
   body : t;
-  (* CR-soon mshinwell: inconsistent naming free_variables/free_vars here and
-     above *)
-  free_variables : Variable.Set.t;
-  (** All variables free in the *body* of the function.  For example, a
-      variable that is bound as one of the function's parameters will still
-      be included in this set.  This field is present as an optimization. *)
-  free_symbols : Symbol.Set.t;
-  (** All symbols that occur in the function's body.  (Symbols can never be
-      bound in a function's body; the only thing that binds symbols is the
-      [program] constructions below.) *)
+  free_names : Free_names.t;
+  (** All variables and symbols free in the *body* of the function.  For
+      example, a variable that is bound as one of the function's parameters
+      will still be included in this set.  This field is present as an
+      optimization.
+      (Symbols can never be bound in a function's body; the only thing that
+      binds symbols is the [program] constructions below.) *)
   stub : bool;
   (** A stub function is a generated function used to prepare arguments or
       return values to allow indirect calls to functions with a special calling
@@ -420,43 +418,26 @@ type program = {
   program_body : program_body;
 }
 
-(** Compute the free variables of a term.  (This is O(1) for [Let]s).
-    If [ignore_uses_as_callee], all free variables inside [Apply] expressions
+(** Compute the free names of a term.  (This is O(1) for [Let]s).
+    If [ignore_uses_as_callee], all free names inside [Apply] expressions
     are ignored.  Likewise [ignore_uses_in_project_var] for [Project_var]
     expressions.
 *)
-val free_variables
+val free_names_expr
    : ?ignore_uses_as_callee:unit
   -> ?ignore_uses_as_argument:unit
   -> ?ignore_uses_in_project_var:unit
   -> t
-  -> Variable.Set.t
+  -> Free_names.t
 
-(** Compute the free variables of a named expression. *)
-val free_variables_named
+(** Compute the free names of a named expression. *)
+val free_names_named
    : ?ignore_uses_in_project_var:unit
   -> named
-  -> Variable.Set.t
+  -> Free_names.t
 
-(** Compute _all_ variables occurring inside an expression. *)
-val used_variables
-   : ?ignore_uses_as_callee:unit
-  -> ?ignore_uses_as_argument:unit
-  -> ?ignore_uses_in_project_var:unit
-  -> t
-  -> Variable.Set.t
-
-(** Compute _all_ variables occurring inside a named expression. *)
-val used_variables_named
-   : ?ignore_uses_in_project_var:unit
-  -> named
-  -> Variable.Set.t
-
-val free_symbols : expr -> Symbol.Set.t
-
-val free_symbols_named : named -> Symbol.Set.t
-
-val free_symbols_program : program -> Symbol.Set.t
+(** Compute the free names of a program. *)
+val free_names_program : program -> Free_names.t
 
 (** Used to avoid exceeding the stack limit when handling expressions with
     multiple consecutive nested [Let]-expressions.  This saves rewriting large
@@ -469,7 +450,7 @@ val fold_lets_option
   -> for_last_body:('a -> t -> t * 'b)
   (* CR-someday mshinwell: consider making [filter_defining_expr]
      optional *)
-  -> filter_defining_expr:('b -> Variable.t -> named -> Variable.Set.t ->
+  -> filter_defining_expr:('b -> Variable.t -> named -> Free_names.t ->
                            'b * Variable.t * named option)
   -> t * 'b
 
@@ -544,7 +525,7 @@ module With_free_variables : sig
   val contents : 'a t -> 'a
 
   (** O(1) time. *)
-  val free_variables : _ t -> Variable.Set.t
+  val free_names : _ t -> Free_names.t
 end
 
 (** Create a function declaration.  This calculates the free variables and

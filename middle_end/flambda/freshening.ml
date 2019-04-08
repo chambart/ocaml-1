@@ -202,9 +202,9 @@ let rewrite_recursive_calls_with_symbols t
   | Active _ ->
     let all_free_symbols =
       Variable.Map.fold
-        (fun _ (function_decl : Flambda.function_declaration)
-            syms ->
-          Symbol.Set.union syms function_decl.free_symbols)
+        (fun _ (function_decl : Flambda.function_declaration) syms ->
+           Symbol.Set.union syms
+             (Free_names.free_symbols function_decl.free_names))
         function_declarations.funs Symbol.Set.empty
     in
     let closure_symbols_used = ref false in

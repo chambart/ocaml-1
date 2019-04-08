@@ -136,8 +136,9 @@ let inline_by_copying_function_body ~env ~r
   let bindings_for_vars_bound_by_closure_and_params_to_args =
     let bound_variables =
       let params = Parameter.Set.vars function_decl.params in
+      let free_variables = Free_names.free_variables function_body.free_names in
       Variable.Set.diff
-        (Variable.Set.diff function_body.free_variables params)
+        (Variable.Set.diff free_variables params)
         fun_vars
     in
     fold_over_projections_of_vars_bound_by_closure ~closure_id_being_applied
@@ -152,8 +153,8 @@ let inline_by_copying_function_body ~env ~r
   let expr =
     Variable.Set.fold (fun another_closure_in_the_same_set expr ->
       let used =
-        Variable.Set.mem another_closure_in_the_same_set
-           function_body.free_variables
+        Free_names.is_free_variable function_body.free_names
+          another_closure_in_the_same_set
       in
       if used then
         Flambda.create_let another_closure_in_the_same_set
@@ -505,7 +506,7 @@ let rewrite_function ~lhs_of_application ~closure_id_being_applied
            add_free_var ~free_vars ~state ~free_var:var
          else
            state)
-      function_body.free_variables state
+      (Free_names.free_variables function_body.free_names) state
   in
   let state_ref = ref state in
   let body =

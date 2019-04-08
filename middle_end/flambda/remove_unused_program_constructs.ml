@@ -17,12 +17,24 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42-66"]
 open! Int_replace_polymorphic_compare
 
-let dependency (expr:Flambda.t) = Flambda.free_symbols expr
+let free_symbols () =
+  if (not !Clflags.debug)
+(* To be uncommented once [debug_can_increase_static_data] has been added
+    || (not !Clflags.debug_can_increase_static_data)
+*)
+  then
+    Free_names.free_symbols
+  else
+    Free_names.all_free_symbols
+
+let dependency (expr : Flambda.t) =
+  (free_symbols ()) (Flambda.free_names_expr expr)
 
 (* CR-soon pchambart: copied from lift_constant.  Needs remerging *)
 let constant_dependencies (const:Flambda.constant_defining_value) =
   let closure_dependencies (set_of_closures:Flambda.set_of_closures) =
-    Flambda.free_symbols_named (Set_of_closures set_of_closures)
+    (free_symbols ())
+      (Flambda.free_names_named (Set_of_closures set_of_closures))
   in
   match const with
   | Allocated_const _ -> Symbol.Set.empty

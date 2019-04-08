@@ -151,8 +151,7 @@ and function_declarations = private {
 }
 
 and function_body = private {
-  free_variables : Variable.Set.t;
-  free_symbols : Symbol.Set.t;
+  free_names : Free_names.t;
   stub : bool;
   dbg : Debuginfo.t;
   inline : Lambda.inline_attribute;

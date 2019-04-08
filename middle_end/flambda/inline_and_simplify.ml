@@ -1104,7 +1104,10 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
     let for_last_body (env, r) body =
       simplify env r body
     in
-    let filter_defining_expr r var defining_expr free_vars_of_body =
+    let filter_defining_expr r var defining_expr free_names_of_body =
+      let free_vars_of_body =
+        Free_names.free_variables free_names_of_body
+      in
       if Variable.Set.mem var free_vars_of_body then
         r, var, Some defining_expr
       else if Effect_analysis.no_effects_named defining_expr then

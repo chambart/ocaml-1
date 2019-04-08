@@ -55,8 +55,11 @@ let variables_bound_by_the_closure cf
   let func = find_declaration cf decls in
   let params = Parameter.Set.vars func.params in
   let functions = Variable.Map.keys decls.funs in
+  (* CR-soon mshinwell: efficiency (do the phantom ones separately and
+     only generate phantom lets for them) *)
+  let free_variables = Free_names.all_free_variables func.free_names in
   Variable.Set.diff
-    (Variable.Set.diff func.free_variables params)
+    (Variable.Set.diff free_variables params)
     functions
 
 let description_of_toplevel_node (expr : Flambda.t) =
@@ -329,7 +332,11 @@ let toplevel_substitution_named sb named =
 
 let make_closure_declaration
       ~is_classic_mode ~id ~body ~params ~stub : Flambda.t =
-  let free_variables = Flambda.free_variables body in
+  let free_variables =
+    (* We must rename the phantom free vars as well as the normal ones,
+       e.g. when inlining. *)
+    Free_names.all_free_variables (Flambda.free_names_expr body)
+  in
   let param_set = Parameter.Set.vars params in
   if not (Variable.Set.subset param_set free_variables) then begin
     Misc.fatal_error "Flambda_utils.make_closure_declaration"
@@ -352,7 +359,7 @@ let make_closure_declaration
       ~closure_origin:(Closure_origin.create (Closure_id.wrap id))
   in
   assert (Variable.Set.equal (Variable.Set.map subst free_variables)
-    function_declaration.free_variables);
+    (Free_names.all_free_variables function_declaration.free_names));
   let free_vars =
     Variable.Map.fold (fun id id' fv' ->
         let spec_to : Flambda.specialised_to =
@@ -433,7 +440,9 @@ let imported_symbols (program : Flambda.program) =
   program.imported_symbols
 
 let needed_import_symbols (program : Flambda.program) =
-  let dependencies = Flambda.free_symbols_program program in
+  let dependencies =
+    Free_names.all_free_symbols (Flambda.free_names_program program)
+  in
   let defined_symbol =
     Symbol.Set.union
       (Symbol.Set.of_list
@@ -604,11 +613,12 @@ let substitute_read_symbol_field_for_variables
       let fresh = Variable.rename v in
       bind v fresh (Var fresh)
     | Var _ -> expr
-    | Let ({ var = v; defining_expr = named; _ } as let_expr) ->
+    | Let ({ var = v; defining_expr = named;
+             free_names_of_defining_expr; _ } as let_expr) ->
       let to_substitute =
         Variable.Set.filter
           (fun v -> Variable.Map.mem v substitution)
-          (Flambda.free_variables_named named)
+          (Free_names.all_free_variables free_names_of_defining_expr)
       in
       if Variable.Set.is_empty to_substitute then
         expr
@@ -636,7 +646,10 @@ let substitute_read_symbol_field_for_variables
     | Let_rec (defs, body) ->
       let free_variables_of_defs =
         List.fold_left (fun set (_, named) ->
-            Variable.Set.union set (Flambda.free_variables_named named))
+            let free_variables =
+              Free_names.all_free_variables (Flambda.free_names_named named)
+            in
+            Variable.Set.union set free_variables)
           Variable.Set.empty defs
       in
       let to_substitute =
@@ -830,11 +843,14 @@ let fun_vars_referenced_in_decls
             | fun_var ->
               assert (Variable.Set.mem fun_var fun_vars);
               Variable.Set.add fun_var fun_vars')
-          func_decl.free_symbols
+          (* A phantom symbol *does* count as a use here. *)
+          (Free_names.all_free_symbols func_decl.free_names)
           Variable.Set.empty
       in
       let from_variables =
-        Variable.Set.inter func_decl.free_variables fun_vars
+        (* A phantom variable does not count as a use here. *)
+        Variable.Set.inter (Free_names.free_variables func_decl.free_names)
+          fun_vars
       in
       Variable.Set.union from_symbols from_variables)
     function_decls.funs
@@ -873,7 +889,8 @@ let all_functions_parameters (function_decls : Flambda.function_declarations) =
 let all_free_symbols (function_decls : Flambda.function_declarations) =
   Variable.Map.fold (fun _ (function_decl : Flambda.function_declaration)
           syms ->
-      Symbol.Set.union syms function_decl.free_symbols)
+      Symbol.Set.union syms
+        (Free_names.all_free_symbols function_decl.free_names))
     function_decls.funs Symbol.Set.empty
 
 let contains_stub (fun_decls : Flambda.function_declarations) =

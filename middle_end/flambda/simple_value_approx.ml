@@ -75,8 +75,7 @@ and function_declarations = {
 }
 
 and function_body = {
-  free_variables : Variable.Set.t;
-  free_symbols : Symbol.Set.t;
+  free_names : Free_names.t;
   stub : bool;
   dbg : Debuginfo.t;
   inline : Lambda.inline_attribute;
@@ -316,9 +315,10 @@ let create_value_set_of_closures
           | None -> sizes
           | Some function_body ->
               let params = Parameter.Set.vars function_decl.params in
+              let free_variables = Free_names.free_variables function_body.free_names in
               let free_vars =
                 Variable.Set.diff
-                  (Variable.Set.diff function_body.free_variables params)
+                  (Variable.Set.diff free_variables params)
                   functions
               in
               let num_free_vars = Variable.Set.cardinal free_vars in
@@ -966,8 +966,7 @@ let function_declaration_approx ~keep_body fun_var
              dbg = fun_decl.dbg;
              specialise = fun_decl.specialise;
              is_a_functor = fun_decl.is_a_functor;
-             free_variables = fun_decl.free_variables;
-             free_symbols = fun_decl.free_symbols; }
+             free_names = fun_decl.free_names; }
     end
   in
   { function_body;
@@ -1025,9 +1024,8 @@ let update_function_declaration_body
   | Some function_body ->
     let new_function_body =
       let body = f function_body.body in
-      let free_variables = Flambda.free_variables body in
-      let free_symbols = Flambda.free_symbols body in
-      { function_body with free_variables; free_symbols; body; }
+      let free_names = Flambda.free_names_expr body in
+      { function_body with free_names; body; }
     in
     { function_decl with function_body = Some new_function_body }
 

@@ -68,7 +68,17 @@ let remove_unused_closure_variables ~remove_direct_call_surrogates program =
             Variable.Map.disjoint_union needed_funs new_needed_funs
           in
           let free_vars_of_kept_funs =
-            Variable.Map.fold (fun _ { Flambda. free_variables } acc ->
+            Variable.Map.fold (fun _ { Flambda. free_names } acc ->
+                let free_variables =
+                  if (not !Clflags.debug)
+(* To be uncommented once [debug_can_change_code] has been added
+                    || (not !Clflags.debug_can_change_code)
+*)
+                  then
+                    Free_names.free_variables free_names
+                  else
+                    Free_names.all_free_variables free_names
+                in
                 Variable.Set.union free_variables acc)
               new_needed_funs
               free_vars_of_kept_funs

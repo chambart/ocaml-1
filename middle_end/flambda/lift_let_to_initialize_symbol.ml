@@ -19,7 +19,6 @@ open! Int_replace_polymorphic_compare
 
 type ('a, 'b) kind =
   | Initialisation of (Symbol.t * Tag.t * Flambda.t list)
-  | Effect of 'b
 
 let should_copy (named:Flambda.named) =
   match named with
@@ -152,7 +151,10 @@ let rebuild_expr
     Flambda_utils.substitute_read_symbol_field_for_variables
       extracted_definitions expr
   in
-  let free_variables = Flambda.free_variables expr_with_read_symbols in
+  let free_variables =
+    Free_names.all_free_variables
+      (Flambda.free_names_expr expr_with_read_symbols)
+  in
   let substitution =
     if substitute then
       Variable.Map.of_set (fun x -> Variable.rename x) free_variables
@@ -168,7 +170,7 @@ let rebuild_expr
       Flambda.create_let declaration definition body)
     substitution expr_with_read_symbols
 
-let rebuild (used_variables:Variable.Set.t) (accumulated:accumulated) =
+let rebuild (accumulated:accumulated) =
   let copied_definitions = Variable.Map.of_list accumulated.copied_lets in
   let accumulated_extracted_lets =
     List.map (fun decl ->
@@ -212,18 +214,18 @@ let rebuild (used_variables:Variable.Set.t) (accumulated:accumulated) =
   let extracted =
     List.map (fun (symbol, decl) ->
         match decl with
-        | Expr (var, decl) ->
+        | Expr (_var, decl) ->
           let expr =
             rebuild_expr ~extracted_definitions ~copied_definitions
               ~substitute:true decl
           in
-          if Variable.Set.mem var used_variables then
-            Initialisation
-              (symbol,
-               Tag.create_exn 0,
-               [expr])
-          else
-            Effect expr
+          (* This [Initialisation] will be turned into an [Effect]
+             (by [Remove_unused_program_constructs]) if it turns out that
+             the [symbol] is not referenced. *)
+          Initialisation
+            (symbol,
+             Tag.create_exn 0,
+             [expr])
         | Exprs (_vars, decl) ->
           let expr =
             rebuild_expr ~extracted_definitions ~copied_definitions
@@ -255,17 +257,14 @@ let introduce_symbols expr =
       ~substitution:Variable.Map.empty
       ~copied_lets:[] ~extracted_lets:[]
   in
-  let used_variables = Flambda.used_variables expr in
-  let extracted, terminator = rebuild used_variables accumulated in
+  let extracted, terminator = rebuild accumulated in
   extracted, terminator
 
 let add_extracted introduced program =
   List.fold_right (fun extracted program ->
       match extracted with
       | Initialisation (symbol, tag, def) ->
-        Flambda.Initialize_symbol (symbol, tag, def, program)
-      | Effect effect ->
-        Flambda.Effect (effect, program))
+        Flambda.Initialize_symbol (symbol, tag, def, program))
     introduced program
 
 let rec split_program (program : Flambda.program_body) : Flambda.program_body =

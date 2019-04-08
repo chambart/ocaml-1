@@ -31,9 +31,15 @@ let variables_not_used_as_local_reference (tree:Flambda.t) =
     | Symbol _ |Const _ | Allocated_const _ | Read_mutable _
     | Read_symbol_field _ | Project_closure _
     | Move_within_set_of_closures _ | Project_var _ ->
-      set := Variable.Set.union !set (Flambda.free_variables_named flam)
+      let free_variables =
+        Free_names.free_variables (Flambda.free_names_named flam)
+      in
+      set := Variable.Set.union !set free_variables
     | Set_of_closures set_of_closures ->
-      set := Variable.Set.union !set (Flambda.free_variables_named flam);
+      let free_variables =
+        Free_names.free_variables (Flambda.free_names_named flam)
+      in
+      set := Variable.Set.union !set free_variables;
       Variable.Map.iter (fun _ (function_decl : Flambda.function_declaration) ->
           loop function_decl.body)
         set_of_closures.function_decls.funs
@@ -81,7 +87,10 @@ let variables_not_used_as_local_reference (tree:Flambda.t) =
     | Static_raise (_, args) ->
       set := Variable.Set.union (Variable.Set.of_list args) !set
     | Proved_unreachable | Apply _ | Send _ | Assign _ ->
-      set := Variable.Set.union !set (Flambda.free_variables flam)
+      let free_variables =
+        Free_names.free_variables (Flambda.free_names_expr flam)
+      in
+      set := Variable.Set.union !set free_variables
   in
   loop tree;
   !set

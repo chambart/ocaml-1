@@ -274,6 +274,7 @@ MIDDLE_END=\
   middle_end/flambda/allocated_const.cmo \
   middle_end/flambda/parameter.cmo \
   middle_end/flambda/projection.cmo \
+  middle_end/flambda/free_names.cmo \
   middle_end/flambda/flambda.cmo \
   middle_end/flambda/flambda_iterators.cmo \
   middle_end/flambda/flambda_utils.cmo \

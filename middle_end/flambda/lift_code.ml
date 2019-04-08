@@ -106,8 +106,16 @@ let rebuild_let_rec (defs:(Variable.t * Flambda.named) list) body =
   let graph =
     Variable.Map.map
       (fun named ->
-         Variable.Set.filter (fun v -> Variable.Map.mem v map)
-           (Flambda.free_variables_named named))
+        (* CR-soon mshinwell: we should think about this more so we don't
+           prevent removal of non-recursive bindings from "let rec"
+           when in debug mode. *)
+        let free_variables =
+          if !Clflags.debug then
+            Free_names.all_free_variables (Flambda.free_names_named named)
+          else
+            Free_names.free_variables (Flambda.free_names_named named)
+        in
+        Variable.Set.filter (fun v -> Variable.Map.mem v map) free_variables)
       map
   in
   let components =
