@@ -327,6 +327,8 @@ installopt:
 
 partialclean:
 	rm -f extract_crc *.cm[ioaxt] *.cmti *.cmxa
+	rm -f dynlink_compilerlibs/* dynlink_compilerlibs_bytecode/* \
+	      dynlink_compilerlibs_native/*
 
 clean: partialclean
 	rm -f *.$(A) *.$(O) *.so *.dll dynlink.mlopt \
