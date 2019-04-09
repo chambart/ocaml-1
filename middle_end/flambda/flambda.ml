@@ -90,11 +90,25 @@ and named =
 
 and let_expr = {
   var : Variable.t;
-  defining_expr : named;
+  defining_expr : defining_expr_of_let;
   body : t;
   free_names_of_defining_expr : Free_names.t;
   free_names_of_body : Free_names.t;
 }
+
+and defining_expr_of_let =
+  | Normal of named
+  | Phantom of defining_expr_of_phantom_let
+
+and defining_expr_of_phantom_let =
+  | Const of const
+  | Symbol of Symbol.t
+  | Var of Variable.t
+  | Read_mutable of Mutable_variable.t
+  | Read_symbol_field of Symbol.t * int
+  | Read_var_field of Variable.t * int
+  | Block of { tag : Tag.t; fields : Variable.t list; }
+  | Dead
 
 and let_mutable = {
   var : Mutable_variable.t;
@@ -230,12 +244,14 @@ let rec lam ppf (flam : t) =
       let rec letbody (ul : t) =
         match ul with
         | Let { var = id; defining_expr = arg; body; _ } ->
-            fprintf ppf "@ @[<2>%a@ %a@]" Variable.print id print_named arg;
+            fprintf ppf "@ @[<2>%a@ %a@]" Variable.print id
+              print_defining_expr_of_let arg;
             letbody body
         | _ -> ul
       in
       fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a@ %a@]"
-        Variable.print id print_named arg;
+        Variable.print id
+        print_defining_expr_of_let arg;
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" lam expr
   | Let_mutable { var = mut_var; initial_value = var; body; contents_kind } ->
@@ -330,6 +346,7 @@ let rec lam ppf (flam : t) =
       (match direction with
         Asttypes.Upto -> "to" | Asttypes.Downto -> "downto")
       Variable.print to_value lam body
+
 and print_named ppf (named : named) =
   match named with
   | Symbol (symbol) -> Symbol.print ppf symbol
@@ -352,7 +369,25 @@ and print_named ppf (named : named) =
       Variable.print_list args
   | Expr expr ->
     fprintf ppf "*%a" lam expr
-    (* lam ppf expr *)
+
+and print_defining_expr_of_let ppf (expr : defining_expr_of_let) =
+  match expr with
+  | Normal named -> print_named ppf named
+  | Phantom defining_expr ->
+    fprintf ppf "<phantom:>";
+    match defining_expr with
+    | Const const -> print_named ppf (Const const)
+    | Symbol sym -> print_named ppf (Symbol sym)
+    | Var var -> print_named ppf (Expr (Var var))
+    | Read_mutable mut_var -> print_named ppf (Read_mutable mut_var)
+    | Read_symbol_field (sym, field) ->
+      print_named ppf (Read_symbol_field (sym, field))
+    | Read_var_field (var, field) ->
+      print_named ppf (Prim (Pfield field, [var], Debuginfo.none))
+    | Block { tag; fields; } ->
+      fprintf ppf "[%a: %a]" Tag.print tag
+        (Format.pp_print_list Variable.print) fields
+    | Dead -> fprintf ppf "DEAD"
 
 and print_function_declaration ppf var (f : function_declaration) =
   let param ppf p =
@@ -538,9 +573,13 @@ let rec free_names_expr ?ignore_uses_in_project_var ?ignore_uses_as_callee
         then begin
           (* In these cases we can't benefit from the pre-computed free
              variable sets. *)
-          free_names_named ?ignore_uses_in_project_var
-            ?ignore_uses_as_callee ?ignore_uses_as_argument
-            ~free_names defining_expr;
+          begin match defining_expr with
+          | Normal defining_expr ->
+            free_names_named ?ignore_uses_in_project_var
+              ?ignore_uses_as_callee ?ignore_uses_as_argument
+              ~free_names defining_expr
+          | Phantom phantom -> free_names_phantom ~free_names phantom
+          end;
           aux body
         end else begin
           FN.union free_names free_names_of_defining_expr;
@@ -597,6 +636,17 @@ let rec free_names_expr ?ignore_uses_in_project_var ?ignore_uses_as_callee
     in
     aux tree;
     FN.bound_variables free_names !bound
+
+and free_names_phantom ~free_names (phantom : defining_expr_of_phantom_let) =
+  let module FN = Free_names.Mutable in
+  match phantom with
+  | Const _ | Read_mutable _ | Dead -> ()
+  | Var var | Read_var_field (var, _) ->
+    FN.free_phantom_variable free_names var
+  | Symbol sym | Read_symbol_field (sym, _) ->
+    FN.free_phantom_symbol free_names sym
+  | Block { tag = _; fields; } ->
+    List.iter (fun field -> FN.free_phantom_variable free_names field) fields
 
 and free_names_named ?ignore_uses_in_project_var
     ?ignore_uses_as_callee ?ignore_uses_as_argument ~free_names named =
@@ -689,7 +739,10 @@ and free_names_program ~free_names (program : program) =
 
 let free_names_defining_expr_of_let defining_expr_of_let =
   let free_names = Free_names.Mutable.create () in
-  free_names_named ~free_names defining_expr_of_let;
+  begin match defining_expr_of_let with
+  | Normal defining_expr -> free_names_named ~free_names defining_expr
+  | Phantom phantom -> free_names_phantom ~free_names phantom
+  end;
   Free_names.Mutable.freeze free_names
 
 let free_names_expr ?ignore_uses_as_callee ?ignore_uses_as_argument
@@ -709,7 +762,7 @@ let free_names_program program =
   free_names_program ~free_names program;
   Free_names.Mutable.freeze free_names
 
-let create_let var defining_expr body : t =
+let create_let_with_defining_expr var defining_expr body : t =
   begin match !Clflags.dump_flambda_let with
   | None -> ()
   | Some stamp ->
@@ -720,8 +773,8 @@ let create_let var defining_expr body : t =
   end;
   let defining_expr, free_names_of_defining_expr =
     match defining_expr with
-    | Expr (Let { var = var1; defining_expr; body = Var var2;
-          free_names_of_defining_expr; _ }) when Variable.equal var1 var2 ->
+    | Normal (Expr (Let { var = var1; defining_expr; body = Var var2;
+          free_names_of_defining_expr; _ })) when Variable.equal var1 var2 ->
       defining_expr, free_names_of_defining_expr
     | _ -> defining_expr, free_names_defining_expr_of_let defining_expr
   in
@@ -732,6 +785,9 @@ let create_let var defining_expr body : t =
     free_names_of_defining_expr;
     free_names_of_body = free_names_expr body;
   }
+
+let create_let var named body : t =
+  create_let_with_defining_expr var (Normal named) body
 
 let map_defining_expr_of_let let_expr ~f =
   let defining_expr = f let_expr.defining_expr in
@@ -785,7 +841,7 @@ let map_lets t ~for_defining_expr ~for_last_body ~after_rebuild =
             | Some original when not !seen_change -> original
             | Some _ | None ->
               seen_change := true;
-              create_let var defining_expr t
+              create_let_with_defining_expr var defining_expr t
           in
           let new_let = after_rebuild let_expr in
           if not (new_let == let_expr) then begin
@@ -802,12 +858,15 @@ type maybe_named =
   | Is_expr of t
   | Is_named of named
 
-let iter_general ~toplevel f f_named maybe_named =
+let iter_general ~toplevel f f_named f_phantom maybe_named =
   let rec aux (t : t) =
     match t with
     | Let _ ->
       iter_lets t
-        ~for_defining_expr:(fun _var named -> aux_named named)
+        ~for_defining_expr:(fun _var defining_expr ->
+          match defining_expr with
+          | Normal named -> aux_named named
+          | Phantom phantom -> f_phantom phantom)
         ~for_last_body:aux
         ~for_each_let:f
     | _ ->
@@ -858,7 +917,7 @@ let iter_general ~toplevel f f_named maybe_named =
 module With_free_variables = struct
   type 'a t =
     | Expr : expr * Free_names.t -> expr t
-    | Named : named * Free_names.t -> named t
+    | Named : defining_expr_of_let * Free_names.t -> defining_expr_of_let t
 
   let of_defining_expr_of_let let_expr =
     Named (let_expr.defining_expr, let_expr.free_names_of_defining_expr)
@@ -872,7 +931,8 @@ module With_free_variables = struct
   let of_named named =
     Named (named, free_names_defining_expr_of_let named)
 
-  let create_let_reusing_defining_expr var (t : named t) body =
+  let create_let_reusing_defining_expr var
+        (t : defining_expr_of_let t) body =
     match t with
     | Named (defining_expr, free_names_of_defining_expr) ->
       Let {
@@ -886,15 +946,18 @@ module With_free_variables = struct
   let create_let_reusing_body var defining_expr (t : expr t) =
     match t with
     | Expr (body, free_names_of_body) ->
+      let free_names_of_defining_expr =
+        free_names_defining_expr_of_let defining_expr
+      in
       Let {
         var;
         defining_expr;
         body;
-        free_names_of_defining_expr = free_names_named defining_expr;
+        free_names_of_defining_expr;
         free_names_of_body;
       }
 
-  let create_let_reusing_both var (t1 : named t) (t2 : expr t) =
+  let create_let_reusing_both var (t1 : defining_expr_of_let t) (t2 : expr t) =
     match t1, t2 with
     | Named (defining_expr, free_names_of_defining_expr),
         Expr (body, free_names_of_body) ->
@@ -908,7 +971,7 @@ module With_free_variables = struct
 
   let expr (t : expr t) =
     match t with
-    | Expr (expr, free_vars) -> Named (Expr expr, free_vars)
+    | Expr (expr, free_vars) -> Named (Normal (Expr expr), free_vars)
 
   let contents (type a) (t : a t) : a =
     match t with
@@ -923,10 +986,12 @@ end
 
 let fold_lets_option
     t ~init
-    ~(for_defining_expr:('a -> Variable.t -> named -> 'a * Variable.t * named))
+    ~(for_defining_expr:('a -> Variable.t -> defining_expr_of_let
+      -> 'a * Variable.t * defining_expr_of_let))
     ~for_last_body
-    ~(filter_defining_expr:('b -> Variable.t -> named -> Free_names.t ->
-                            'b * Variable.t * named option)) =
+    ~(filter_defining_expr:('b -> Variable.t
+      -> defining_expr_of_let -> Free_names.t
+      -> 'b * Variable.t * defining_expr_of_let option)) =
   let finish ~last_body ~acc ~rev_lets =
     let module W = With_free_variables in
     let acc, t =

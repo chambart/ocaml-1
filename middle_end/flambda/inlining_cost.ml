@@ -82,7 +82,10 @@ let lambda_smaller' lam ~than:threshold =
     | Send _ -> size := !size + 8
     | Proved_unreachable -> ()
     | Let { defining_expr; body; _ } ->
-      lambda_named_size defining_expr;
+      begin match defining_expr with
+      | Normal defining_expr -> lambda_named_size defining_expr
+      | Phantom _ -> ()
+      end;
       lambda_size body
     | Let_mutable { body } -> lambda_size body
     | Let_rec (bindings, body) ->
@@ -280,7 +283,7 @@ module Benefit = struct
   let remove_code lam b =
     let b = ref b in
     Flambda_iterators.iter_toplevel (remove_code_helper b)
-      (remove_code_helper_named b) lam;
+      (remove_code_helper_named b) (fun _phantom -> ()) lam;
     !b
 
   let remove_code_named lam b =
@@ -288,6 +291,11 @@ module Benefit = struct
     Flambda_iterators.iter_named_toplevel (remove_code_helper b)
       (remove_code_helper_named b) lam;
     !b
+
+  let remove_code_defining_expr (lam:Flambda.defining_expr_of_let) b =
+    match lam with
+    | Phantom _ -> b
+    | Normal named -> remove_code_named named b
 
   let remove_projection (_proj : Projection.t) b =
     (* They are all primitives for the moment.  The [Projection.t] argument

@@ -519,7 +519,9 @@ let join_summaries summary ~replaced_by_var_or_symbol =
 let simplify_using_env t ~is_present_in_env flam =
   let replaced_by_var_or_symbol, flam =
     match t.var with
-    | Some var when is_present_in_env var -> true, Flambda.Var var
+    | Some var when is_present_in_env var ->
+      let expr : Flambda.expr = Var var in
+      true, expr
     | _ ->
       match t.symbol with
       | Some (sym, None) ->
@@ -542,7 +544,7 @@ let simplify_named_using_env t ~is_present_in_env named =
       match t.symbol with
       | Some (sym, None) -> true, (Flambda.Symbol sym:Flambda.named)
       | Some (sym, Some field) ->
-        true, Flambda.Read_symbol_field (sym, field)
+        true, (Flambda.Read_symbol_field (sym, field):Flambda.named)
       | None -> false, named
   in
   let const, summary, approx = simplify_named t named in

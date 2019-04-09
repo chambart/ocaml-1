@@ -168,7 +168,7 @@ and named =
 
 and let_expr = private {
   var : Variable.t;
-  defining_expr : named;
+  defining_expr : defining_expr_of_let;
   body : t;
   (* CR-someday mshinwell: we could consider having these be keys into some
      kind of global cache, to reduce memory usage. *)
@@ -179,6 +179,20 @@ and let_expr = private {
   (** A cache of the free variables and symbols in the body of the [let].
       This is an important optimization. *)
 }
+
+and defining_expr_of_let =
+  | Normal of named
+  | Phantom of defining_expr_of_phantom_let
+
+and defining_expr_of_phantom_let =
+  | Const of const
+  | Symbol of Symbol.t
+  | Var of Variable.t
+  | Read_mutable of Mutable_variable.t
+  | Read_symbol_field of Symbol.t * int
+  | Read_var_field of Variable.t * int
+  | Block of { tag : Tag.t; fields : Variable.t list; }
+  | Dead
 
 and let_mutable = {
   var : Mutable_variable.t;
@@ -442,22 +456,33 @@ val free_names_program : program -> Free_names.t
 (** Used to avoid exceeding the stack limit when handling expressions with
     multiple consecutive nested [Let]-expressions.  This saves rewriting large
     simplification functions in CPS.  This function provides for the
-    rewriting or elimination of expressions during the fold. *)
+    rewriting or elimination of expressions during the fold.
+
+    This function preserves phantom lets but does not pass them to the
+    user-supplied functions.
+
+    If [filter_defining_expr] requests deletion of a let and we are
+    generating debugging information, the let will not be deleted, but
+    instead turned into a [Phantom].
+*)
 val fold_lets_option
    : t
   -> init:'a
-  -> for_defining_expr:('a -> Variable.t -> named -> 'a * Variable.t * named)
+  -> for_defining_expr:('a -> Variable.t
+     -> defining_expr_of_let -> 'a * Variable.t * defining_expr_of_let)
   -> for_last_body:('a -> t -> t * 'b)
   (* CR-someday mshinwell: consider making [filter_defining_expr]
      optional *)
-  -> filter_defining_expr:('b -> Variable.t -> named -> Free_names.t ->
-                           'b * Variable.t * named option)
+  -> filter_defining_expr:('b -> Variable.t
+     -> defining_expr_of_let -> Free_names.t
+     -> 'b * Variable.t * defining_expr_of_let option)
   -> t * 'b
 
 (** Like [fold_lets_option], but just a map. *)
 val map_lets
    : t
-  -> for_defining_expr:(Variable.t -> named -> named)
+  -> for_defining_expr:(Variable.t
+     -> defining_expr_of_let -> defining_expr_of_let)
   -> for_last_body:(t -> t)
   -> after_rebuild:(t -> t)
   -> t
@@ -465,7 +490,7 @@ val map_lets
 (** Like [map_lets], but just an iterator. *)
 val iter_lets
    : t
-  -> for_defining_expr:(Variable.t -> named -> unit)
+  -> for_defining_expr:(Variable.t -> defining_expr_of_let -> unit)
   -> for_last_body:(t -> unit)
   -> for_each_let:(t -> unit)
   -> unit
@@ -474,9 +499,19 @@ val iter_lets
     defining expression and the body.) *)
 val create_let : Variable.t -> named -> t -> t
 
+(** For use instead of [create_let] in the few cases where a phantom let
+    may need to be created. *)
+val create_let_with_defining_expr
+   : Variable.t
+  -> defining_expr_of_let
+  -> t
+  -> t
+
+
 (** Apply the specified function [f] to the defining expression of the given
     [Let]-expression, returning a new [Let]. *)
-val map_defining_expr_of_let : let_expr -> f:(named -> named) -> t
+val map_defining_expr_of_let : let_expr ->
+     f:(defining_expr_of_let -> defining_expr_of_let) -> t
 
 (** A module for the manipulation of terms where the recomputation of free
     variable sets is to be kept to a minimum. *)
@@ -484,7 +519,7 @@ module With_free_variables : sig
   type 'a t
 
   (** O(1) time. *)
-  val of_defining_expr_of_let : let_expr -> named t
+  val of_defining_expr_of_let : let_expr -> defining_expr_of_let t
 
   (** O(1) time. *)
   val of_body_of_let : let_expr -> expr t
@@ -494,13 +529,13 @@ module With_free_variables : sig
       for [Let] is O(1)). *)
   val of_expr : expr -> expr t
 
-  val of_named : named -> named t
+  val of_named : defining_expr_of_let -> defining_expr_of_let t
 
   (** Takes the time required to calculate the free variables of the given
       [expr]. *)
   val create_let_reusing_defining_expr
      : Variable.t
-    -> named t
+    -> defining_expr_of_let t
     -> expr
     -> expr
 
@@ -508,19 +543,19 @@ module With_free_variables : sig
       [named]. *)
   val create_let_reusing_body
      : Variable.t
-    -> named
+    -> defining_expr_of_let
     -> expr t
     -> expr
 
   (** O(1) time. *)
   val create_let_reusing_both
      : Variable.t
-    -> named t
+    -> defining_expr_of_let t
     -> expr t
     -> expr
 
   (** The equivalent of the [Expr] constructor. *)
-  val expr : expr t -> named t
+  val expr : expr t -> defining_expr_of_let t
 
   val contents : 'a t -> 'a
 
@@ -618,6 +653,7 @@ val iter_general
    : toplevel:bool
   -> (t -> unit)
   -> (named -> unit)
+  -> (defining_expr_of_phantom_let -> unit)
   -> maybe_named
   -> unit
 

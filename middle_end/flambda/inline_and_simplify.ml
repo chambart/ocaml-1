@@ -36,7 +36,8 @@ let ret = R.set_approx
 
 type simplify_variable_result =
   | No_binding of Variable.t
-  | Binding of Variable.t * (Flambda.named Flambda.With_free_variables.t)
+  | Binding of
+      Variable.t * (Flambda.defining_expr_of_let Flambda.With_free_variables.t)
 
 let simplify_free_variable_internal env original_var =
   let var = Freshening.apply_variable (E.freshening env) original_var in
@@ -69,7 +70,7 @@ let simplify_free_variable_internal env original_var =
     | None -> No_binding var, approx
     | Some (named, approx) ->
       let module W = Flambda.With_free_variables in
-      Binding (original_var, W.of_named named), approx
+      Binding (original_var, W.of_named (Normal named)), approx
 
 let simplify_free_variable env var ~f : Flambda.t * R.t =
   match simplify_free_variable_internal env var with
@@ -1010,7 +1011,8 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
                 let approx =
                   A.augment_with_symbol_field approx symbol field_index
                 in
-                Flambda.Read_symbol_field (symbol, field_index), approx
+                (Flambda.Read_symbol_field (symbol, field_index):Flambda.named),
+                  approx
               | None | Some (_, Some _ ) ->
                 (* This [Pfield] is either not projecting from a symbol at all,
                    or it is the projection of a projection from a symbol. *)
@@ -1094,8 +1096,19 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
   | Apply apply ->
     simplify_apply env r ~apply
   | Let _ ->
-    let for_defining_expr (env, r) var defining_expr =
-      let defining_expr, r = simplify_named env r defining_expr in
+    let for_defining_expr (env, r) var
+          (defining_expr : Flambda.defining_expr_of_let) =
+      let defining_expr, r =
+        match defining_expr with
+        | Normal defining_expr ->
+          let defining_expr, r = simplify_named env r defining_expr in
+          (Normal defining_expr : Flambda.defining_expr_of_let), r
+        | Phantom defining_expr ->
+          let defining_expr, r =
+            simplify_defining_expr_of_phantom_let env r defining_expr
+          in
+          (Phantom defining_expr : Flambda.defining_expr_of_let), r
+      in
       let var, sb = Freshening.add_variable (E.freshening env) var in
       let env = E.set_freshening env sb in
       let env = E.add env var (R.approx r) in
@@ -1104,14 +1117,18 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
     let for_last_body (env, r) body =
       simplify env r body
     in
-    let filter_defining_expr r var defining_expr free_names_of_body =
+    let filter_defining_expr r var
+        (defining_expr : Flambda.defining_expr_of_let)
+        free_names_of_body :
+      R.t * Variable.t * Flambda.defining_expr_of_let option =
       let free_vars_of_body =
         Free_names.free_variables free_names_of_body
       in
       if Variable.Set.mem var free_vars_of_body then
         r, var, Some defining_expr
-      else if Effect_analysis.no_effects_named defining_expr then
-        let r = R.map_benefit r (B.remove_code_named defining_expr) in
+      else if Effect_analysis.no_effects_defining_expr defining_expr then
+        let r = R.map_benefit r (B.remove_code_defining_expr defining_expr) in
+        (* CR-pchambart: C'est ici qu'on génère les phantomes *)
         r, var, None
       else
         r, var, Some defining_expr
@@ -1166,7 +1183,8 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
       | Let { var; defining_expr = def; body; _ }
           when not (Flambda_utils.might_raise_static_exn def i) ->
         simplify env r
-          (Flambda.create_let var def (Static_catch (i, vars, body, handler)))
+          (Flambda.create_let_with_defining_expr var
+             def (Static_catch (i, vars, body, handler)))
       | _ ->
         let i, sb = Freshening.add_static_exception (E.freshening env) i in
         let env = E.set_freshening env sb in
@@ -1375,6 +1393,29 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
         let branch, r = simplify env r branch in
         branch, R.map_benefit r B.remove_branch)
   | Proved_unreachable -> tree, ret r A.value_bottom
+
+and simplify_defining_expr_of_phantom_let env r
+      (tree : Flambda.defining_expr_of_phantom_let) =
+  let simplified : Flambda.defining_expr_of_phantom_let =
+    let freshening = E.freshening env in
+    match tree with
+    | Symbol sym | Read_symbol_field (sym, _) ->
+      ignore ((E.find_or_load_symbol env sym) : A.t);
+      tree
+    | Const _ -> tree
+    | Read_mutable mut_var ->
+      Read_mutable (Freshening.apply_mutable_variable freshening mut_var)
+    | Var var -> Var (Freshening.apply_variable freshening var)
+    | Read_var_field (var, field) ->
+      Read_var_field (Freshening.apply_variable freshening var, field)
+    | Block { tag; fields; } ->
+      let fields =
+        List.map (fun var -> Freshening.apply_variable freshening var) fields
+      in
+      Block { tag; fields; }
+    | Dead -> Dead
+  in
+  simplified, ret r (A.value_unknown Other)
 
 and simplify_list env r l =
   match l with

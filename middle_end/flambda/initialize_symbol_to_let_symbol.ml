@@ -17,16 +17,34 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42-66"]
 open! Int_replace_polymorphic_compare
 
-let constant_field (expr:Flambda.t)
+let rec tail_var (expr:Flambda.t) =
+  match expr with
+  | Let { defining_expr = Phantom _; body ; _ } ->
+    tail_var body
+  | Var var ->
+    Some var
+  | _ -> None
+
+let rec constant_field (expr:Flambda.t)
   : Flambda.constant_defining_value_block_field option =
   match expr with
-  | Let { var; defining_expr = Const c; body = Var var' ; _ } ->
-    assert(Variable.equal var var');
-    (* This must be true since var is the only variable in scope *)
-    Some (Flambda.Const c)
-  | Let { var; defining_expr = Symbol s; body = Var var' ; _ } ->
-    assert(Variable.equal var var');
-    Some (Flambda.Symbol s)
+  | Let { defining_expr = Phantom _; body ; _ } ->
+    constant_field body
+  | Let { var; defining_expr = Normal (Const c); body ; _ } ->
+    begin match tail_var body with
+    | None -> None
+    | Some var' ->
+      assert(Variable.equal var var');
+      (* This must be true since var is the only variable in scope *)
+      Some (Flambda.Const c)
+    end
+  | Let { var; defining_expr = Normal (Symbol s); body ; _ } ->
+    begin match tail_var body with
+    | None -> None
+    | Some var' ->
+      assert(Variable.equal var var');
+      Some (Flambda.Symbol s)
+    end
   | _ ->
     None
 

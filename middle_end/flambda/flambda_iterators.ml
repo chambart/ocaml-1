@@ -22,7 +22,10 @@ let apply_on_subexpressions f f_named (flam : Flambda.t) =
   | Var _ | Apply _ | Assign _ | Send _ | Proved_unreachable
   | Static_raise _ -> ()
   | Let { defining_expr; body; _ } ->
-    f_named defining_expr;
+    begin match defining_expr with
+    | Normal defining_expr -> f_named defining_expr
+    | Phantom _ -> ()
+    end;
     f body
   | Let_mutable { body; _ } ->
     f body
@@ -79,12 +82,16 @@ let map_subexpressions f f_named (tree:Flambda.t) : Flambda.t =
   | Var _ | Apply _ | Assign _ | Send _ | Proved_unreachable
   | Static_raise _ -> tree
   | Let { var; defining_expr; body; _ } ->
-    let new_named = f_named var defining_expr in
+    let new_named : Flambda.defining_expr_of_let =
+      match defining_expr with
+      | Normal defining_expr -> Normal (f_named var defining_expr)
+      | Phantom _ -> defining_expr
+    in
     let new_body = f body in
     if new_named == defining_expr && new_body == body then
       tree
     else
-      Flambda.create_let var new_named new_body
+      Flambda.create_let_with_defining_expr var new_named new_body
   | Let_rec (defs, body) ->
     let new_defs =
       list_map_sharing (map_snd_sharing f_named) defs
@@ -162,23 +169,33 @@ let map_subexpressions f f_named (tree:Flambda.t) : Flambda.t =
 
 let iter_general = Flambda.iter_general
 
-let iter f f_named t = iter_general ~toplevel:false f f_named (Is_expr t)
-let iter_expr f t = iter f (fun _ -> ()) t
-let iter_on_named f f_named t =
-  iter_general ~toplevel:false f f_named (Is_named t)
-let iter_named f_named t = iter (fun (_ : Flambda.t) -> ()) f_named t
+let iter f f_named f_phantom t =
+  iter_general ~toplevel:false f f_named f_phantom (Is_expr t)
+let iter_expr f t = iter f (fun _ -> ()) (fun _ -> ()) t
+let iter_on_named f f_named f_phantom t =
+  iter_general ~toplevel:false f f_named f_phantom (Is_named t)
+let iter_named f_named t =
+  iter (fun (_ : Flambda.t) -> ()) f_named
+    (fun (_ : Flambda.defining_expr_of_phantom_let) -> ()) t
 let iter_named_on_named f_named named =
   iter_general ~toplevel:false (fun (_ : Flambda.t) -> ()) f_named
+    (fun (_ : Flambda.defining_expr_of_phantom_let) -> ())
     (Is_named named)
 
-let iter_toplevel f f_named t =
-  iter_general ~toplevel:true f f_named (Is_expr t)
+let iter_toplevel f f_named f_phantom t =
+  iter_general ~toplevel:true f f_named f_phantom (Is_expr t)
 let iter_named_toplevel f f_named named =
-  iter_general ~toplevel:true f f_named (Is_named named)
+  iter_general ~toplevel:true f f_named
+    (fun (_ : Flambda.defining_expr_of_phantom_let) -> ())
+    (Is_named named)
 
 let iter_all_immutable_let_and_let_rec_bindings t ~f =
   iter_expr (function
-      | Let { var; defining_expr; _ } -> f var defining_expr
+      | Let { var; defining_expr; _ } ->
+        begin match defining_expr with
+        | Normal defining_expr -> f var defining_expr
+        | Phantom _ -> ()
+        end
       | Let_rec (defs, _) -> List.iter (fun (var, named) -> f var named) defs
       | _ -> ())
     t
@@ -186,9 +203,14 @@ let iter_all_immutable_let_and_let_rec_bindings t ~f =
 let iter_all_toplevel_immutable_let_and_let_rec_bindings t ~f =
   iter_general ~toplevel:true
     (function
-      | Let { var; defining_expr; _ } -> f var defining_expr
+      | Let { var; defining_expr; _ } ->
+        begin match defining_expr with
+        | Normal defining_expr -> f var defining_expr
+        | Phantom _ -> ()
+        end
       | Let_rec (defs, _) -> List.iter (fun (var, named) -> f var named) defs
       | _ -> ())
+    (fun _ -> ())
     (fun _ -> ())
     (Is_expr t)
 
@@ -281,11 +303,11 @@ let iter_constant_defining_values_on_program (program : Flambda.program) ~f =
   in
   loop program.program_body
 
-let map_general ~toplevel f f_named tree =
+let map_general ~toplevel f f_named f_phantom tree =
   let rec aux (tree : Flambda.t) =
     match tree with
     | Let _ ->
-      Flambda.map_lets tree ~for_defining_expr:aux_named ~for_last_body:aux
+      Flambda.map_lets tree ~for_defining_expr:aux_defining_expr ~for_last_body:aux
         ~after_rebuild:f
     | _ ->
       let exp : Flambda.t =
@@ -439,6 +461,17 @@ let map_general ~toplevel f f_named tree =
       done_something := true
     end;
     new_named
+  and aux_defining_expr id (defining_expr : Flambda.defining_expr_of_let)
+        : Flambda.defining_expr_of_let =
+    match defining_expr with
+    | Normal named ->
+      let new_named = aux_named id named in
+      if new_named == named then defining_expr
+      else Normal new_named
+    | Phantom phantom ->
+      let new_phantom = f_phantom phantom in
+      if new_phantom == phantom then defining_expr
+      else Phantom new_phantom
   in
   aux tree
 
@@ -448,23 +481,29 @@ let iter_apply_on_program program ~f =
         | Apply apply -> f apply
         | _ -> ())
       (fun _ -> ())
+      (fun _ -> ())
       expr)
 
 let map f f_named tree =
-  map_general ~toplevel:false f (fun _ n -> f_named n) tree
+  map_general ~toplevel:false f (fun _ n -> f_named n)
+    (fun phantom -> phantom) tree
 let map_expr f tree = map f (fun named -> named) tree
 let map_named f_named tree = map (fun expr -> expr) f_named tree
+let map_defining_expr_of_let f_named f_phantom tree =
+  map_general ~toplevel:false (fun expr -> expr) (fun _ n -> f_named n)
+    f_phantom tree
 let map_named_with_id f_named tree =
-  map_general ~toplevel:false (fun expr -> expr) f_named tree
+  map_general ~toplevel:false (fun expr -> expr) f_named
+    (fun phantom -> phantom) tree
 let map_toplevel f f_named tree =
   map_general ~toplevel:true f (fun _ n -> f_named n) tree
 let map_toplevel_expr f_expr tree =
-  map_toplevel f_expr (fun named -> named) tree
+  map_toplevel f_expr (fun named -> named) (fun phantom -> phantom) tree
 let map_toplevel_named f_named tree =
-  map_toplevel (fun tree -> tree) f_named tree
+  map_toplevel (fun tree -> tree) f_named (fun phantom -> phantom) tree
 
 let map_symbols tree ~f =
-  map_named (function
+  map_defining_expr_of_let (function
       | (Symbol sym) as named ->
         let new_sym = f sym in
         if new_sym == sym then
@@ -480,6 +519,21 @@ let map_symbols tree ~f =
       | (Const _ | Allocated_const _ | Set_of_closures _ | Read_mutable _
       | Project_closure _ | Move_within_set_of_closures _ | Project_var _
       | Prim _ | Expr _) as named -> named)
+    (function
+      | (Symbol sym) as phantom ->
+        let new_sym = f sym in
+        if new_sym == sym then
+          phantom
+        else
+          Symbol new_sym
+      | (Read_symbol_field (sym, field)) as phantom ->
+        let new_sym = f sym in
+        if new_sym == sym then
+          phantom
+        else
+          Read_symbol_field (new_sym, field)
+      | (Const _ | Var _ | Read_mutable _
+        | Read_var_field _ | Block _ | Dead) as phantom -> phantom)
     tree
 
 let map_symbols_on_set_of_closures

@@ -232,9 +232,16 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
   | Let { var; defining_expr; body; _ } ->
     (* TODO: synthesize proper value_kind *)
     let id, env_body = Env.add_fresh_ident env var in
-    Ulet (Immutable, Pgenval, VP.create id,
-      to_clambda_named t env var defining_expr,
-      to_clambda t env_body body)
+    begin match defining_expr with
+    | Normal named ->
+      Ulet (Immutable, Pgenval, VP.create id,
+        to_clambda_named t env var named,
+        to_clambda t env_body body)
+    | Phantom _phantom ->
+      (* Lots of stuff goes in here *)
+      assert false; (* TODO *)
+      (* to_clambda t env_body body *)
+    end
   | Let_mutable { var = mut_var; initial_value = var; body; contents_kind } ->
     let id, env_body = Env.add_fresh_mutable_ident env mut_var in
     let def = subst_var env var in

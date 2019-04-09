@@ -244,6 +244,7 @@ let analyse_functions ~backend ~param_to_param
   Variable.Map.iter (fun caller (decl : Flambda.function_declaration) ->
       Flambda_iterators.iter (check_expr ~caller)
         (fun (_ : Flambda.named) -> ())
+        (fun (_ : Flambda.defining_expr_of_phantom_let) -> ())
         decl.body;
       let free_variables =
         Free_names.free_variables

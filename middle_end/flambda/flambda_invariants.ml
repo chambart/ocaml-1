@@ -84,6 +84,7 @@ exception Unbound_closure_ids of Closure_id.Set.t
 exception Unbound_vars_within_closures of Var_within_closure.Set.t
 exception Move_to_a_closure_not_in_the_free_variables
   of Variable.t * Variable.Set.t
+exception Illegal_field_index of int
 
 exception Flambda_invariants_failed
 
@@ -152,9 +153,30 @@ let variable_and_symbol_invariants (program : Flambda.program) =
   let rec loop env (flam : Flambda.t) =
     match flam with
     (* Expressions that can bind [Variable.t]s: *)
-    | Let { var; defining_expr; body; _ } ->
+    | Let { var; defining_expr = Normal defining_expr; body; _ } ->
       loop_named env defining_expr;
       loop (add_binding_occurrence env var) body
+    | Let { var; defining_expr = Phantom phantom; body; _ } ->
+      begin match phantom with
+      | Const _ -> ()
+      | Symbol sym -> check_symbol_is_bound env sym
+      | Var var -> check_variable_is_bound env var
+      | Read_mutable mut_var -> check_mutable_variable_is_bound env mut_var
+      | Read_symbol_field (sym, field) ->
+        check_symbol_is_bound env sym;
+        if field < 0 then raise (Illegal_field_index field)
+      | Read_var_field (var, field) ->
+        check_variable_is_bound env var;
+        if field < 0 then raise (Illegal_field_index field)
+      | Block { tag = _; fields; } ->
+        List.iter (check_variable_is_bound env) fields
+      | Dead -> ()
+      end;
+      (* CR-soon mshinwell: this should distinguish normal and phantom
+         variables.  To do this we should add a proper type for the
+         environment, above.  Don't forget that the "Phantom Var" case may
+         name a normal _or_ a phantom variable. *)
+      loop (add_binding_occurrence env var) body;
     | Let_mutable { var = mut_var; initial_value = var;
                     body; contents_kind } ->
       ignore_value_kind contents_kind;
@@ -639,7 +661,10 @@ let every_static_exception_is_caught_at_a_single_position flam =
       caught := Static_exception.Set.add i !caught
     | _ -> ()
   in
-  Flambda_iterators.iter f (fun (_ : Flambda.named) -> ()) flam
+  Flambda_iterators.iter f
+    (fun (_ : Flambda.named) -> ())
+    (fun (_ : Flambda.defining_expr_of_phantom_let)-> ())
+    flam
 
 let _every_move_within_set_of_closures_is_to_a_function_in_the_free_vars
       program =
@@ -799,6 +824,8 @@ let check_exn ?(kind=Normal) (flam:Flambda.program) =
         to closures that are not parts of its free variables: %a"
           Variable.print start_from
           Variable.Set.print move_to
+    | Illegal_field_index field ->
+      Format.eprintf ">> Illegal field index %d" field
     | exn -> raise exn
     end;
     Format.eprintf "\n@?";

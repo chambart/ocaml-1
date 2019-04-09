@@ -102,7 +102,8 @@ let rec same (l1 : Flambda.t) (l2 : Flambda.t) =
   | Apply _, _ | _, Apply _ -> false
   | Let { var = var1; defining_expr = defining_expr1; body = body1; _ },
       Let { var = var2; defining_expr = defining_expr2; body = body2; _ } ->
-    Variable.equal var1 var2 && same_named defining_expr1 defining_expr2
+    Variable.equal var1 var2
+      && same_defining_expr_of_let defining_expr1 defining_expr2
       && same body1 body2
   | Let _, _ | _, Let _ -> false
   | Let_mutable {var = mv1; initial_value = v1; contents_kind = ck1; body = b1},
@@ -199,6 +200,41 @@ and same_named (named1 : Flambda.named) (named2 : Flambda.named) =
       && Misc.Stdlib.List.equal Variable.equal al1 al2
   | Prim _, _ | _, Prim _ -> false
   | Expr e1, Expr e2 -> same e1 e2
+
+and same_defining_expr_of_let (expr1 : Flambda.defining_expr_of_let)
+      (expr2 : Flambda.defining_expr_of_let) =
+  match expr1, expr2 with
+  | Normal named1, Normal named2 -> same_named named1 named2
+  | Phantom phantom1, Phantom phantom2 ->
+    same_defining_expr_of_phantom_let phantom1 phantom2
+  | Normal _, Phantom _
+  | Phantom _, Normal _ -> false
+
+and same_defining_expr_of_phantom_let
+      (expr1 : Flambda.defining_expr_of_phantom_let)
+      (expr2 : Flambda.defining_expr_of_phantom_let) =
+  match expr1, expr2 with
+  | Const const1, Const const2 -> Flambda.compare_const const1 const2 = 0
+  | Const _, _ | _, Const _ -> false
+  | Var var1, Var var2 -> Variable.equal var1 var2
+  | Var _, _ | _, Var _ -> false
+  | Symbol sym1, Symbol sym2 -> Symbol.equal sym1 sym2
+  | Symbol _, _ | _, Symbol _ -> false
+  | Read_mutable mut_var1, Read_mutable mut_var2 ->
+    Mutable_variable.equal mut_var1 mut_var2
+  | Read_mutable _, _ | _, Read_mutable _ -> false
+  | Read_symbol_field (sym1, field1), Read_symbol_field (sym2, field2) ->
+    Symbol.equal sym1 sym2 && field1 = field2
+  | Read_symbol_field _, _ | _, Read_symbol_field _ -> false
+  | Read_var_field (var1, field1), Read_var_field (var2, field2) ->
+    Variable.equal var1 var2 && field1 = field2
+  | Read_var_field _, _ | _, Read_var_field _ -> false
+  | Block { tag = tag1; fields = fields1; },
+      Block { tag = tag2; fields = fields2; } ->
+    Tag.equal tag1 tag2
+      && Misc.Stdlib.List.equal Variable.equal fields1 fields2
+  | Block _, _ | _, Block _ -> false
+  | Dead, Dead -> true
 
 and sameclosure (c1 : Flambda.function_declaration)
       (c2 : Flambda.function_declaration) =
@@ -318,8 +354,18 @@ let toplevel_substitution sb tree =
     | Prim (prim, args, dbg) ->
       Prim (prim, List.map sb args, dbg)
   in
+  let aux_phantom (expr : Flambda.defining_expr_of_phantom_let)
+        : Flambda.defining_expr_of_phantom_let =
+    match expr with
+    | Var var -> Var (sb var)
+    | Read_var_field (var, field) -> Read_var_field (sb var, field)
+    | Block { tag; fields; } ->
+      Block { tag; fields = List.map sb fields; }
+    | Const _ | Symbol _ | Read_mutable _ | Read_symbol_field _
+    | Dead -> expr
+  in
   if Variable.Map.is_empty sb' then tree
-  else Flambda_iterators.map_toplevel aux aux_named tree
+  else Flambda_iterators.map_toplevel aux aux_named aux_phantom tree
 
 (* CR-someday mshinwell: Fix [Flambda_iterators] so this can be implemented
    properly. *)
@@ -327,7 +373,11 @@ let toplevel_substitution_named sb named =
   let name = Internal_variable_names.toplevel_substitution_named in
   let expr = name_expr named ~name in
   match toplevel_substitution sb expr with
-  | Let let_expr -> let_expr.defining_expr
+  | Let let_expr ->
+    begin match let_expr.defining_expr with
+    | Normal defining_expr -> defining_expr
+    | Phantom _ -> assert false
+    end
   | _ -> assert false
 
 let make_closure_declaration
@@ -469,7 +519,7 @@ let root_symbol (program : Flambda.program) =
   in
   loop program.program_body
 
-let might_raise_static_exn flam stexn =
+let might_raise_static_exn_named flam stexn =
   try
     Flambda_iterators.iter_on_named
       (function
@@ -477,9 +527,15 @@ let might_raise_static_exn flam stexn =
           raise Exit
         | _ -> ())
       (fun _ -> ())
+      (fun _ -> ())
       flam;
     false
   with Exit -> true
+
+let might_raise_static_exn (named:Flambda.defining_expr_of_let) stexn =
+  match named with
+  | Phantom _ -> false
+  | Normal named -> might_raise_static_exn_named named stexn
 
 let make_closure_map program =
   let map = ref Closure_id.Map.empty in
@@ -613,7 +669,7 @@ let substitute_read_symbol_field_for_variables
       let fresh = Variable.rename v in
       bind v fresh (Var fresh)
     | Var _ -> expr
-    | Let ({ var = v; defining_expr = named;
+    | Let ({ var = v; defining_expr;
              free_names_of_defining_expr; _ } as let_expr) ->
       let to_substitute =
         Variable.Set.filter
@@ -626,12 +682,37 @@ let substitute_read_symbol_field_for_variables
         let bindings =
           Variable.Map.of_set (fun var -> Variable.rename var) to_substitute
         in
-        let named =
-          substitute_named bindings named
+        let defining_expr : Flambda.defining_expr_of_let =
+          match defining_expr with
+          | Normal named -> Normal (substitute_named bindings named)
+          | Phantom (Var var) ->
+            begin match Variable.Map.find var bindings with
+            | var -> Phantom (Var var)
+            | exception Not_found -> defining_expr
+            end
+          | Phantom (Read_var_field (var, field)) ->
+            begin match Variable.Map.find var bindings with
+            | var -> Phantom (Read_var_field (var, field))
+            | exception Not_found -> defining_expr
+            end
+          | Phantom (Block { tag; fields; }) ->
+            let fields =
+              List.map (fun var ->
+                  match Variable.Map.find var bindings with
+                  | var -> var
+                  | exception Not_found -> var)
+                fields
+            in
+            Phantom (Block { tag; fields; })
+          | Phantom (Const _)
+          | Phantom (Symbol _)
+          | Phantom (Read_mutable _)
+          | Phantom (Read_symbol_field _)
+          | Phantom Dead -> defining_expr
         in
         let expr =
           let module W = Flambda.With_free_variables in
-          W.create_let_reusing_body v named (W.of_body_of_let let_expr)
+          W.create_let_reusing_body v defining_expr (W.of_body_of_let let_expr)
         in
         Variable.Map.fold (fun to_substitute fresh expr ->
             bind to_substitute fresh expr)
@@ -697,19 +778,28 @@ let substitute_read_symbol_field_for_variables
       bind new_value fresh (Assign { being_assigned; new_value = fresh })
     | Assign _ ->
       expr
-    | Static_raise (exn, args) ->
+    | Static_raise (exn, args)
+      when List.exists (fun v -> Variable.Map.mem v substitution) args ->
       let args, bind_args =
         List.split (List.map make_var_subst args)
       in
       List.fold_right (fun f expr -> f expr) bind_args @@
         Flambda.Static_raise (exn, args)
-    | For { bound_var; from_value; to_value; direction; body } ->
+    | Static_raise _ ->
+      expr
+    | For { bound_var; from_value; to_value; direction; body }
+      when Variable.Map.mem from_value substitution
+        || Variable.Map.mem to_value substitution ->
       let from_value, bind_from_value = make_var_subst from_value in
       let to_value, bind_to_value = make_var_subst to_value in
       bind_from_value @@
       bind_to_value @@
       Flambda.For { bound_var; from_value; to_value; direction; body }
-    | Apply { func; args; kind; dbg; inline; specialise } ->
+    | For _ ->
+      expr
+    | Apply { func; args; kind; dbg; inline; specialise }
+      when Variable.Map.mem func substitution
+        || List.exists (fun v -> Variable.Map.mem v substitution) args ->
       let func, bind_func = make_var_subst func in
       let args, bind_args =
         List.split (List.map make_var_subst args)
@@ -717,7 +807,12 @@ let substitute_read_symbol_field_for_variables
       bind_func @@
       List.fold_right (fun f expr -> f expr) bind_args @@
       Flambda.Apply { func; args; kind; dbg; inline; specialise }
-    | Send { kind; meth; obj; args; dbg } ->
+    | Apply _ ->
+      expr
+    | Send { kind; meth; obj; args; dbg }
+      when Variable.Map.mem meth substitution
+        || Variable.Map.mem obj substitution
+        || List.exists (fun v -> Variable.Map.mem v substitution) args ->
       let meth, bind_meth = make_var_subst meth in
       let obj, bind_obj = make_var_subst obj in
       let args, bind_args =
@@ -727,6 +822,8 @@ let substitute_read_symbol_field_for_variables
       bind_obj @@
       List.fold_right (fun f expr -> f expr) bind_args @@
       Flambda.Send { kind; meth; obj; args; dbg }
+    | Send _ ->
+      expr
     | Proved_unreachable
     | While _
     | Try_with _
@@ -734,7 +831,7 @@ let substitute_read_symbol_field_for_variables
       (* No variables directly used in those expressions *)
       expr
   in
-  Flambda_iterators.map_toplevel f (fun v -> v) expr
+  Flambda_iterators.map_toplevel f (fun v -> v) (fun p -> p) expr
 
 module Switch_storer = Switch.Store (struct
   type t = Flambda.t
@@ -746,10 +843,20 @@ module Switch_storer = Switch.Store (struct
     | Let of Variable.t * key_named * key
     | Static_raise of Static_exception.t * Variable.t list
   and key_named =
+    | Phantom of key_phantom
+    (* CR pchambart: Does it really matter that we merge similar
+       branches comming from different points ? This mean that
+       compiling in debug mode can disable this optimisation.
+       Handling that correclty would require to be able to attach
+       multiple locations to a single code point. *)
     | Symbol of Symbol.t
     | Const of Flambda.const
     | Prim of Clambda_primitives.primitive * Variable.t list
     | Expr of key
+  and key_phantom =
+    | Symbol of Symbol.t
+    | Var of Variable.t
+    | Const of Flambda.const
 
   exception Not_comparable
 
@@ -760,13 +867,27 @@ module Switch_storer = Switch.Store (struct
       Let (var, make_named_key defining_expr, make_expr_key body)
     | Static_raise (e, args) -> Static_raise (e, args)
     | _ -> raise Not_comparable
-  and make_named_key (named:Flambda.named) : key_named =
-    match named with
-    | Symbol s -> Symbol s
-    | Const c -> Const c
-    | Expr e -> Expr (make_expr_key e)
-    | Prim (prim, args, _dbg) -> Prim (prim, args)
-    | _ -> raise Not_comparable
+  and make_named_key (def:Flambda.defining_expr_of_let) : key_named =
+    match def with
+    | Phantom phantom -> begin
+        match phantom with
+        | Const c ->
+            Phantom (Const c)
+        | Symbol s ->
+            Phantom (Symbol s)
+        | Var v ->
+            Phantom (Var v)
+        | _ ->
+            raise Not_comparable
+      end
+    | Normal named -> begin
+        match named with
+        | Symbol s -> Symbol s
+        | Const c -> Const c
+        | Expr e -> Expr (make_expr_key e)
+        | Prim (prim, args, _dbg) -> Prim (prim, args)
+        | _ -> raise Not_comparable
+      end
 
   let make_key expr =
     match make_expr_key expr with
@@ -807,6 +928,9 @@ module Switch_storer = Switch.Store (struct
         else Misc.Stdlib.List.compare (compare_var env) args1 args2
     and compare_named env (n1:key_named) (n2:key_named) : int =
       match n1, n2 with
+      | Phantom p1, Phantom p2 -> compare_key_phantom p1 p2
+      | Phantom _, (Symbol _ | Const _ | Expr _ | Prim _) -> -1
+      | (Symbol _ | Const _ | Expr _ | Prim _), Phantom _ ->  1
       | Symbol s1, Symbol s2 -> Symbol.compare s1 s2
       | Symbol _, (Const _ | Expr _ | Prim _) -> -1
       | (Const _ | Expr _ | Prim _), Symbol _ ->  1
@@ -820,6 +944,15 @@ module Switch_storer = Switch.Store (struct
         let comp_prim = Stdlib.compare prim1 prim2 in
         if comp_prim <> 0 then comp_prim
         else Misc.Stdlib.List.compare (compare_var env) args1 args2
+    and compare_key_phantom (n1:key_phantom) (n2:key_phantom) : int =
+      match n1, n2 with
+      | Symbol s1, Symbol s2 -> Symbol.compare s1 s2
+      | Symbol _, (Const _ | Var _) -> -1
+      | (Const _ | Var _), Symbol _ ->  1
+      | Const c1, Const c2 -> Flambda.compare_const c1 c2
+      | Const _, Var _ -> -1
+      | Var _, Const _ ->  1
+      | Var v1, Var v2 -> Variable.compare v1 v2
     in
     compare_expr Variable.Map.empty e1 e2
 end)

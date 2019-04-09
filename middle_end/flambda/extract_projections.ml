@@ -163,7 +163,7 @@ let rec analyse_expr ~which_variables expr =
     | Move_within_set_of_closures _
     | Expr _ -> ()
   in
-  Flambda_iterators.iter_toplevel for_expr for_named expr;
+  Flambda_iterators.iter_toplevel for_expr for_named (fun _ -> ()) expr;
   let projections = !projections in
   let used_which_variables = !used_which_variables in
   projections, used_which_variables

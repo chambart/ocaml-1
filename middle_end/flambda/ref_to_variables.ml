@@ -47,8 +47,10 @@ let variables_not_used_as_local_reference (tree:Flambda.t) =
       loop e
   and loop (flam : Flambda.t) =
     match flam with
-    | Let { defining_expr; body; _ } ->
-      loop_named defining_expr;
+    | Let { defining_expr = Normal named; body; _ } ->
+      loop_named named;
+      loop body
+    | Let { defining_expr = Phantom _; body; _ } ->
       loop body
     | Let_rec (defs, body) ->
       List.iter (fun (_var, named) -> loop_named named) defs;
@@ -97,15 +99,13 @@ let variables_not_used_as_local_reference (tree:Flambda.t) =
 
 let variables_containing_ref (flam:Flambda.t) =
   let map = ref Variable.Map.empty in
-  let aux (flam : Flambda.t) =
-    match flam with
-    | Let { var;
-            defining_expr = Prim(Pmakeblock(0, Asttypes.Mutable, _), l, _);
-          } ->
+  let f var (named : Flambda.named) =
+    match named with
+    | Prim(Pmakeblock(0, Asttypes.Mutable, _), l, _) ->
       map := Variable.Map.add var (List.length l) !map
     | _ -> ()
   in
-  Flambda_iterators.iter aux (fun _ -> ()) flam;
+  Flambda_iterators.iter_all_immutable_let_and_let_rec_bindings ~f flam;
   !map
 
 let eliminate_ref_of_expr flam =
@@ -135,9 +135,8 @@ let eliminate_ref_of_expr flam =
     in
     let aux (flam : Flambda.t) : Flambda.t =
       match flam with
-      | Let { var;
-              defining_expr = Prim(Pmakeblock(0, Asttypes.Mutable, shape), l,_);
-              body }
+      | Let { var; body; defining_expr =
+          Normal(Prim(Pmakeblock(0, Asttypes.Mutable, shape), l,_)) }
         when convertible_variable var ->
         let shape = match shape with
           | None -> List.map (fun _ -> Lambda.Pgenval) l

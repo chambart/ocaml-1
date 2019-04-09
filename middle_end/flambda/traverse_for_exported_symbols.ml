@@ -181,6 +181,17 @@ let traverse
          | Const _
          | Allocated_const _
          | Read_mutable _ -> ())
+      (fun (phantom : Flambda.defining_expr_of_phantom_let) ->
+         match phantom with
+         | Symbol symbol
+         | Read_symbol_field (symbol, _) ->
+             conditionally_add_symbol symbol
+         | Var _
+         | Const _
+         | Read_mutable _
+         | Read_var_field _
+         | Block _
+         | Dead -> ())
       function_body.body
   in
   let rec loop () =

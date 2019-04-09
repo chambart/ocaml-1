@@ -27,7 +27,13 @@ let rec no_effects (flam : Flambda.t) =
   match flam with
   | Var _ -> true
   | Let { defining_expr; body; _ } ->
-    no_effects_named defining_expr && no_effects body
+    let no_effect_defining_expr =
+      match defining_expr with
+      | Phantom _ -> true
+      | Normal named ->
+        no_effects_named named
+    in
+    no_effect_defining_expr && no_effects body
   | Let_mutable { body } -> no_effects body
   | Let_rec (defs, body) ->
     no_effects body
@@ -58,3 +64,8 @@ and no_effects_named (named : Flambda.named) =
   | Move_within_set_of_closures _ -> true
   | Prim (prim, _, _) -> no_effects_prim prim
   | Expr flam -> no_effects flam
+
+let no_effects_defining_expr (defining_expr : Flambda.defining_expr_of_let) =
+  match defining_expr with
+  | Phantom _ -> true
+  | Normal named -> no_effects_named named

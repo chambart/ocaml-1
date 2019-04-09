@@ -40,6 +40,7 @@ val map_subexpressions
 val iter
    : (Flambda.t -> unit)
   -> (Flambda.named -> unit)
+  -> (Flambda.defining_expr_of_phantom_let -> unit)
   -> Flambda.t
   -> unit
 
@@ -51,6 +52,7 @@ val iter_expr
 val iter_on_named
    : (Flambda.t -> unit)
   -> (Flambda.named -> unit)
+  -> (Flambda.defining_expr_of_phantom_let -> unit)
   -> Flambda.named
   -> unit
 
@@ -76,6 +78,7 @@ val iter_named_on_named
 val iter_toplevel
    : (Flambda.t -> unit)
   -> (Flambda.named -> unit)
+  -> (Flambda.defining_expr_of_phantom_let -> unit)
   -> Flambda.t
   -> unit
 
@@ -144,6 +147,8 @@ val map_named
 val map_toplevel
    : (Flambda.t -> Flambda.t)
   -> (Flambda.named -> Flambda.named)
+  -> (Flambda.defining_expr_of_phantom_let ->
+      Flambda.defining_expr_of_phantom_let)
   -> Flambda.t
   -> Flambda.t
 

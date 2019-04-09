@@ -20,10 +20,16 @@ open! Int_replace_polymorphic_compare
 type ('a, 'b) kind =
   | Initialisation of (Symbol.t * Tag.t * Flambda.t list)
 
-let should_copy (named:Flambda.named) =
+let should_copy_named (named:Flambda.named) =
   match named with
   | Symbol _ | Read_symbol_field _ | Const _ -> true
   | _ -> false
+
+let should_copy (defining_expr : Flambda.defining_expr_of_let) =
+  match defining_expr with
+  | Normal named ->
+    should_copy_named named
+  | Phantom _ -> true
 
 type extracted =
   | Expr of Variable.t * Flambda.t
@@ -31,7 +37,7 @@ type extracted =
   | Block of Variable.t * Tag.t * Variable.t list
 
 type accumulated = {
-  copied_lets : (Variable.t * Flambda.named) list;
+  copied_lets : (Variable.t * Flambda.defining_expr_of_let) list;
   extracted_lets : extracted list;
   terminator : Flambda.expr;
 }
@@ -48,7 +54,7 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
      lifted again. *)
   | Let_rec (defs,
              Let { var; body = Var var';
-                   defining_expr = Prim (Pmakeblock _, fields, _); })
+                   defining_expr = Normal (Prim (Pmakeblock _, fields, _)); })
     when
       Variable.equal var var'
       && List.for_all (fun field ->
@@ -57,7 +63,7 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
     { copied_lets; extracted_lets;
       terminator = Flambda_utils.toplevel_substitution substitution expr;
     }
-  | Let { var; defining_expr = Expr (Var alias); body; _ }
+  | Let { var; defining_expr = Normal (Expr (Var alias)); body; _ }
   | Let_rec ([var, Expr (Var alias)], body) ->
     let alias =
       match Variable.Map.find alias substitution with
@@ -69,18 +75,24 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
       ~copied_lets
       ~extracted_lets
       body
-  | Let { var; defining_expr = named; body; _ }
+  | Let { var; defining_expr = Normal named; body; _ }
   | Let_rec ([var, named], body)
-    when should_copy named ->
+    when should_copy_named named ->
       accumulate body
         ~substitution
-        ~copied_lets:((var, named)::copied_lets)
+        ~copied_lets:((var, (Flambda.Normal named))::copied_lets)
         ~extracted_lets
-  | Let { var; defining_expr = named; body; _ } ->
+  | Let { var; defining_expr; body; _ }
+    when should_copy defining_expr ->
+      accumulate body
+        ~substitution
+        ~copied_lets:((var, defining_expr)::copied_lets)
+        ~extracted_lets
+  | Let { var; defining_expr; body; _ } ->
     let extracted =
       let renamed = Variable.rename var in
-      match named with
-      | Prim (Pmakeblock (tag, Asttypes.Immutable, _value_kind), args, _dbg) ->
+      match defining_expr with
+      | Normal (Prim (Pmakeblock (tag, Asttypes.Immutable, _value_kind), args, _dbg)) ->
         let tag = Tag.create_exn tag in
         let args =
           List.map (fun v ->
@@ -89,10 +101,11 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
             args
         in
         Block (var, tag, args)
-      | named ->
+      | _ ->
         let expr =
           Flambda_utils.toplevel_substitution substitution
-            (Flambda.create_let renamed named (Var renamed))
+            (Flambda.create_let_with_defining_expr
+               renamed defining_expr (Var renamed))
         in
         Expr (var, expr)
     in
@@ -144,7 +157,7 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
 
 let rebuild_expr
       ~(extracted_definitions : (Symbol.t * int list) Variable.Map.t)
-      ~(copied_definitions : Flambda.named Variable.Map.t)
+      ~(copied_definitions : Flambda.defining_expr_of_let Variable.Map.t)
       ~(substitute : bool)
       (expr : Flambda.t) =
   let expr_with_read_symbols =
@@ -167,7 +180,7 @@ let rebuild_expr
   in
   Variable.Map.fold (fun var declaration body ->
       let definition = Variable.Map.find var copied_definitions in
-      Flambda.create_let declaration definition body)
+      Flambda.create_let_with_defining_expr declaration definition body)
     substitution expr_with_read_symbols
 
 let rebuild (accumulated:accumulated) =

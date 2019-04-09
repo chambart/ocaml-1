@@ -82,6 +82,7 @@ module Benefit : sig
 
   val remove_code : Flambda.t -> t -> t
   val remove_code_named : Flambda.named -> t -> t
+  val remove_code_defining_expr : Flambda.defining_expr_of_let -> t -> t
   val remove_projection : Projection.t -> t -> t
 
   val add_code : Flambda.t -> t -> t
