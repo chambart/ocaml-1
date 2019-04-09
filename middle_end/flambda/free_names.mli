@@ -18,21 +18,18 @@ type t
 type free_names = t
 
 val is_free_variable : t -> Variable.t -> bool
-val is_free_phantom_variable : t -> Variable.t -> bool
+val is_variable_used_in_phantom_context : t -> Variable.t -> bool
 
 val free_variables : t -> Variable.Set.t
-(* CR mshinwell: The name is misleading.  It should be "variables used
-   in phantom context". *)
-val free_phantom_variables : t -> Variable.Set.t
-(* val variables_used_in_phantom_context : t -> Variable.Set.t *)
+val variables_used_in_phantom_context : t -> Variable.Set.t
 
 (** Both the normal and phantom free variables in the set. *)
 val all_free_variables : t -> Variable.Set.t
 
 val free_symbols : t -> Symbol.Set.t
-(* CR mshinwell: clarify whether a symbol in free_phantom_symbols may occur
-   in free_symbols *)
-val free_phantom_symbols : t -> Symbol.Set.t
+(* CR mshinwell: clarify whether a symbol in
+   symbols_used_in_phantom_context may occur in free_symbols *)
+val symbols_used_in_phantom_context : t -> Symbol.Set.t
 
 (** Both the normal and phantom free symbols in the set. *)
 val all_free_symbols : t -> Symbol.Set.t
@@ -47,11 +44,11 @@ module Mutable : sig
   val create : unit -> t
 
   val free_variable : t -> Variable.t -> unit
-  val free_phantom_variable : t -> Variable.t -> unit
+  val variables_used_in_phantom_context : t -> Variable.t -> unit
 
   val free_symbol : t -> Symbol.t -> unit
   val free_symbols : t -> Symbol.Set.t -> unit
-  val free_phantom_symbol : t -> Symbol.t -> unit
+  val symbol_used_in_phantom_context : t -> Symbol.t -> unit
 
   val union : t -> free_names -> unit
   val union_free_symbols_only : t -> free_names -> unit

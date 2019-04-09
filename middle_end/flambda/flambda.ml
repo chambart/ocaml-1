@@ -642,11 +642,13 @@ and free_names_phantom ~free_names (phantom : defining_expr_of_phantom_let) =
   match phantom with
   | Const _ | Read_mutable _ | Dead -> ()
   | Var var | Read_var_field (var, _) ->
-    FN.free_phantom_variable free_names var
+    FN.variables_used_in_phantom_context free_names var
   | Symbol sym | Read_symbol_field (sym, _) ->
-    FN.free_phantom_symbol free_names sym
+    FN.symbol_used_in_phantom_context free_names sym
   | Block { tag = _; fields; } ->
-    List.iter (fun field -> FN.free_phantom_variable free_names field) fields
+    List.iter (fun field ->
+        FN.variables_used_in_phantom_context free_names field)
+      fields
 
 and free_names_named ?ignore_uses_in_project_var
     ?ignore_uses_as_callee ?ignore_uses_as_argument ~free_names named =
