@@ -118,6 +118,11 @@ module Env : sig
   val add_subst : t -> Variable.t -> Clambda.ulambda -> t
   val find_subst_exn : t -> Variable.t -> Clambda.ulambda
 
+  val add_phantom_subst
+    : t -> Variable.t -> Clambda.uphantom_defining_expr -> t
+  val find_phantom_subst_exn
+    : t -> Variable.t -> Clambda.uphantom_defining_expr
+
   val add_fresh_ident : t -> Variable.t -> V.t * t
   val ident_for_var_exn : t -> Variable.t -> V.t
 
@@ -132,6 +137,7 @@ end = struct
   type t =
     { subst : Clambda.ulambda Variable.Map.t;
       var : V.t Variable.Map.t;
+      phantom_subst : Clambda.uphantom_defining_expr Variable.Map.t;
       mutable_var : V.t Mutable_variable.Map.t;
       toplevel : bool;
       allocated_constant_for_symbol : Allocated_const.t Symbol.Map.t;
@@ -140,6 +146,7 @@ end = struct
   let empty =
     { subst = Variable.Map.empty;
       var = Variable.Map.empty;
+      phantom_subst = Variable.Map.empty;
       mutable_var = Mutable_variable.Map.empty;
       toplevel = false;
       allocated_constant_for_symbol = Symbol.Map.empty;
@@ -151,6 +158,11 @@ end = struct
   let find_subst_exn t id = Variable.Map.find id t.subst
 
   let ident_for_var_exn t id = Variable.Map.find id t.var
+  let add_phantom_subst t id subst =
+    { t with phantom_subst = Variable.Map.add id subst t.phantom_subst }
+
+  let find_phantom_subst_exn t id = Variable.Map.find id t.phantom_subst
+
 
   let add_fresh_ident t var =
     let id = Variable.rename var in
@@ -190,6 +202,14 @@ let subst_var env var : Clambda.ulambda =
         Variable.print var
 
 let subst_vars env vars = List.map (subst_var env) vars
+
+let phantom_subst_var env var : Clambda.uphantom_defining_expr =
+  try Env.find_phantom_subst_exn env var
+  with Not_found ->
+    try Uphantom_var (Env.ident_for_var_exn env var)
+    with Not_found ->
+      Misc.fatal_errorf "Flambda_to_clambda: unbound variable %a@."
+        Variable.print var
 
 let build_uoffset ulam offset : Clambda.ulambda =
   if offset = 0 then ulam
@@ -238,7 +258,7 @@ let to_clambda_phantom env (def : Flambda.defining_expr_of_phantom_let)
   | Symbol symbol ->
     Some (Uphantom_const (to_clambda_symbol' env symbol))
   | Var var ->
-    Some (Uphantom_var (Env.ident_for_var_exn env var))
+    Some (phantom_subst_var env var)
   | Read_mutable mut_var ->
     Some (Uphantom_var (Env.ident_for_mutable_var_exn env mut_var))
   | Read_symbol_field (sym, field) ->
@@ -557,7 +577,11 @@ and to_clambda_set_of_closures t env
             t.current_unit.fun_offset_table
         in
         let exp : Clambda.ulambda = Uoffset (Uvar env_var, offset - pos) in
-        Env.add_subst env id exp
+        let phantom_exp : Clambda.uphantom_defining_expr =
+          Uphantom_offset_var { var = env_var; offset_in_words = offset - pos }
+        in
+        let env = Env.add_subst env id exp in
+        Env.add_phantom_subst env id phantom_exp
       in
       List.fold_left (add_env_function fun_offset) env all_functions
     in
@@ -601,7 +625,11 @@ and to_clambda_closed_set_of_closures t env symbol
       List.fold_left (fun env (var, _) ->
           let closure_id = Closure_id.wrap var in
           let symbol = Symbol.for_lifted_closure closure_id in
-          Env.add_subst env var (to_clambda_symbol env symbol))
+          let phantom_exp : Clambda.uphantom_defining_expr =
+            Uphantom_const (Uconst_ref (symbol, None))
+          in
+          let env = Env.add_subst env var (to_clambda_symbol env symbol) in
+          Env.add_phantom_subst env id phantom_exp)
         (Env.keep_only_symbols env)
         functions
     in
