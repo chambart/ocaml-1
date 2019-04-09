@@ -1124,14 +1124,40 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
       let free_vars_of_body =
         Free_names.free_variables free_names_of_body
       in
-      if Variable.Set.mem var free_vars_of_body then
-        r, var, Some defining_expr
-      else if Effect_analysis.no_effects_defining_expr defining_expr then
-        let r = R.map_benefit r (B.remove_code_defining_expr defining_expr) in
-        (* CR-pchambart: C'est ici qu'on génère les phantomes *)
-        r, var, None
-      else
-        r, var, Some defining_expr
+      let should_keep_phantom_definition () =
+        Free_names.is_variable_used_in_phantom_context free_names_of_body var
+        || (!Clflags.debug &&
+            Misc.Stdlib.Option.is_some (Variable.original_ident var))
+      in
+      match defining_expr with
+      | Phantom _ ->
+        if should_keep_phantom_definition () then
+          r, var, Some defining_expr
+        else
+          r, var, None
+      | Normal named ->
+        if Variable.Set.mem var free_vars_of_body then
+          r, var, Some defining_expr
+        else if Effect_analysis.no_effects_named named then
+          let r = R.map_benefit r (B.remove_code_named named) in
+          if should_keep_phantom_definition () then
+            let defining_expr =
+              match
+                Flambda_utils.phantomize_defining_expr named
+              with
+              | Dead ->
+                (* Using the approximation enables us to express more computations
+                   as phantom lets (for example a conditional that was fully
+                   evaluated at compile time to some constant). *)
+                Simple_value_approx.phantomize (R.approx r)
+                  ~is_present_in_env:(E.mem env)
+              | defining_expr -> defining_expr
+            in
+            r, var, (Some (Phantom defining_expr : Flambda.defining_expr_of_let))
+          else
+            r, var, None
+        else
+          r, var, Some defining_expr
     in
     Flambda.fold_lets_option tree
       ~init:(env, r)

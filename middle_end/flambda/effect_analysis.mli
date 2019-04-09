@@ -25,5 +25,3 @@
 val no_effects : Flambda.t -> bool
 
 val no_effects_named : Flambda.named -> bool
-
-val no_effects_defining_expr : Flambda.defining_expr_of_let -> bool

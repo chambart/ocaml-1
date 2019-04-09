@@ -32,6 +32,7 @@ type variable = t
 
 val create
    : ?current_compilation_unit:Compilation_unit.t
+  -> ?original_ident:Ident.t
   -> Internal_variable_names.t
   -> t
 val create_with_same_name_as_ident : Ident.t -> t
@@ -48,6 +49,10 @@ val name : t -> string
 val stamp : t -> int
 
 val unique_name : t -> string
+
+(** Returns any identifier as found in the [Lambda] code that exactly
+    corresponds to the given variable. *)
+val original_ident : t -> Ident.t option
 
 val get_compilation_unit : t -> Compilation_unit.t
 

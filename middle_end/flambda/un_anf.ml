@@ -34,17 +34,20 @@ module VP = Variable.With_provenance
 *)
 type var_info =
   { used : V.Set.t;
+    used_in_phantom_context : V.Set.t;
     linear : V.Set.t;
     assigned : V.Set.t;
     closure_environment : V.Set.t;
     let_bound_vars_that_can_be_moved : V.Set.t;
   }
 
+type phantom_movability =
+  | Must_keep_phantom_declaration
+  | Can_drop_declaration
+
 let ignore_uconstant (_ : Clambda.uconstant) = ()
 let ignore_ulambda (_ : Clambda.ulambda) = ()
 let ignore_ulambda_list (_ : Clambda.ulambda list) = ()
-let ignore_uphantom_defining_expr_option
-      (_ : Clambda.uphantom_defining_expr option) = ()
 let ignore_function_label (_ : Clambda.function_label) = ()
 let ignore_debuginfo (_ : Debuginfo.t) = ()
 let ignore_int (_ : int) = ()
@@ -75,6 +78,7 @@ let closure_environment_var (ufunction:Clambda.ufunction) =
 
 let make_var_info (clam : Clambda.ulambda) : var_info =
   let t : int V.Tbl.t = V.Tbl.create 42 in
+  let used_in_phantom_context = ref V.Set.empty in
   let assigned_vars = ref V.Set.empty in
   let environment_vars = ref V.Set.empty in
   let rec loop : Clambda.ulambda -> unit = function
@@ -126,7 +130,23 @@ let make_var_info (clam : Clambda.ulambda) : var_info =
       loop body
     | Uphantom_let (var, defining_expr_opt, body) ->
       ignore_var_with_provenance var;
-      ignore_uphantom_defining_expr_option defining_expr_opt;
+      begin match defining_expr_opt with
+      | None -> ()
+      | Some phantom ->
+        let used_in_phantom_context var =
+          used_in_phantom_context := V.Set.add var !used_in_phantom_context
+        in
+        match phantom with
+        | Uphantom_var var
+        | Uphantom_offset_var { var; offset_in_words = _ }
+        | Uphantom_read_field { var; field = _ } ->
+          used_in_phantom_context var
+        | Uphantom_block { tag = _; fields } ->
+          List.iter used_in_phantom_context fields
+        | Uphantom_const _
+        | Uphantom_read_symbol_field _ ->
+          ()
+      end;
       loop body
     | Uletrec (defs, body) ->
       List.iter (fun (var, def) ->
@@ -211,7 +231,8 @@ let make_var_info (clam : Clambda.ulambda) : var_info =
     V.Tbl.fold (fun var _n acc -> V.Set.add var acc)
       t assigned
   in
-  { used; linear; assigned; closure_environment = !environment_vars;
+  { used; used_in_phantom_context = !used_in_phantom_context;
+    linear; assigned; closure_environment = !environment_vars;
     let_bound_vars_that_can_be_moved = V.Set.empty;
   }
 
@@ -223,7 +244,7 @@ let make_var_info (clam : Clambda.ulambda) : var_info =
    permit substitution of the variables for their defining expressions. *)
 let let_bound_vars_that_can_be_moved var_info (clam : Clambda.ulambda) =
   let obviously_constant = ref V.Set.empty in
-  let can_move = ref V.Set.empty in
+  let can_move = ref V.Map.empty in
   let let_stack = ref [] in
   let examine_argument_list args =
     let rec loop let_bound_vars (args : Clambda.ulambda list) =
@@ -245,7 +266,13 @@ let let_bound_vars_that_can_be_moved var_info (clam : Clambda.ulambda) =
             && not (V.Set.mem arg var_info.assigned) ->
         assert (V.Set.mem arg var_info.used);
         assert (V.Set.mem arg var_info.linear);
-        can_move := V.Set.add arg !can_move;
+        let phantom =
+          if V.Set.mem arg var_info.used_in_phantom_context then
+            Must_keep_phantom_declaration
+          else
+            Can_drop_declaration
+        in
+        can_move := V.Map.add arg phantom !can_move;
         loop let_bound_vars args
       | _::_, _::_ ->
         (* The [let] sequence has ceased to match the evaluation order
@@ -426,7 +453,7 @@ let rec substitute_let_moveable is_let_moveable env (clam : Clambda.ulambda)
       : Clambda.ulambda =
   match clam with
   | Uvar var ->
-    if not (V.Set.mem var is_let_moveable) then
+    if not (V.Map.mem var is_let_moveable) then
       clam
     else
       begin match V.Map.find var env with
@@ -461,26 +488,31 @@ let rec substitute_let_moveable is_let_moveable env (clam : Clambda.ulambda)
     Uoffset (clam, n)
   | Ulet (let_kind, value_kind, var, def, body) ->
     let def = substitute_let_moveable is_let_moveable env def in
-    if V.Set.mem (VP.var var) is_let_moveable then
+    begin match V.Map.find_opt (VP.var var) is_let_moveable with
+    | Some phantom ->
       let env = V.Map.add (VP.var var) def env in
       let body = substitute_let_moveable is_let_moveable env body in
       (* If we are about to delete a [let] in debug mode, keep it for the
          debugger. *)
       (* CR-someday mshinwell: find out why some closure constructions were
          not leaving phantom lets behind after substitution. *)
-      if not !Clflags.debug_full then
-        body
-      else
-        match def with
+      begin match phantom with
+      | Must_keep_phantom_declaration ->
+        begin match def with
         | Uconst const ->
           Uphantom_let (var, Some (Clambda.Uphantom_const const), body)
         | Uvar alias_of ->
           Uphantom_let (var, Some (Clambda.Uphantom_var alias_of), body)
         | _ ->
           Uphantom_let (var, None, body)
-    else
+        end
+      | Can_drop_declaration ->
+        body
+      end
+    | None ->
       Ulet (let_kind, value_kind,
             var, def, substitute_let_moveable is_let_moveable env body)
+    end
   | Uphantom_let (var, defining_expr, body) ->
     let body = substitute_let_moveable is_let_moveable env body in
     Uphantom_let (var, defining_expr, body)

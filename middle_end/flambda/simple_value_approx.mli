@@ -498,3 +498,8 @@ val make_closure_map
   -> function_declarations Closure_id.Map.t
 
 val clear_function_bodies : function_declarations -> function_declarations
+
+val phantomize
+   : t
+  -> is_present_in_env:(Variable.t -> bool)
+  -> Flambda.defining_expr_of_phantom_let

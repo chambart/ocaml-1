@@ -218,13 +218,42 @@ let to_clambda_symbol' env sym : Clambda.uconstant =
 let to_clambda_symbol env sym : Clambda.ulambda =
   Uconst (to_clambda_symbol' env sym)
 
+let to_clambda_const' (const:Flambda.const) : Clambda.uconstant =
+  match const with
+  | Int i -> Uconst_int i
+  | Char c -> Uconst_int (Char.code c)
+  | Const_pointer i -> Uconst_ptr i
+
 let to_clambda_const env (const : Flambda.constant_defining_value_block_field)
       : Clambda.uconstant =
   match const with
   | Symbol symbol -> to_clambda_symbol' env symbol
-  | Const (Int i) -> Uconst_int i
-  | Const (Char c) -> Uconst_int (Char.code c)
-  | Const (Const_pointer i) -> Uconst_ptr i
+  | Const c -> to_clambda_const' c
+
+let to_clambda_phantom env (def : Flambda.defining_expr_of_phantom_let)
+      : Clambda.uphantom_defining_expr option =
+  match def with
+  | Const const ->
+    Some (Uphantom_const (to_clambda_const' const))
+  | Symbol symbol ->
+    Some (Uphantom_const (to_clambda_symbol' env symbol))
+  | Var var ->
+    Some (Uphantom_var (Env.ident_for_var_exn env var))
+  | Read_mutable mut_var ->
+    Some (Uphantom_var (Env.ident_for_mutable_var_exn env mut_var))
+  | Read_symbol_field (sym, field) ->
+    Some (Uphantom_read_symbol_field { sym; field })
+  | Read_var_field (var, field) ->
+    Some (Uphantom_read_field {
+        var = Env.ident_for_var_exn env var;
+        field;
+      })
+  | Block { tag; fields } ->
+    Some (Uphantom_block {
+        tag = Tag.to_int tag;
+        fields = List.map (Env.ident_for_var_exn env) fields;
+      })
+  | Dead -> None
 
 let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
   match flam with
@@ -237,10 +266,10 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
       Ulet (Immutable, Pgenval, VP.create id,
         to_clambda_named t env var named,
         to_clambda t env_body body)
-    | Phantom _phantom ->
-      (* Lots of stuff goes in here *)
-      assert false; (* TODO *)
-      (* to_clambda t env_body body *)
+    | Phantom phantom ->
+      Uphantom_let (VP.create id,
+        to_clambda_phantom env phantom,
+        to_clambda t env_body body)
     end
   | Let_mutable { var = mut_var; initial_value = var; body; contents_kind } ->
     let id, env_body = Env.add_fresh_mutable_ident env mut_var in

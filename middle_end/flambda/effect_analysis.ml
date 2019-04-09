@@ -64,8 +64,3 @@ and no_effects_named (named : Flambda.named) =
   | Move_within_set_of_closures _ -> true
   | Prim (prim, _, _) -> no_effects_prim prim
   | Expr flam -> no_effects flam
-
-let no_effects_defining_expr (defining_expr : Flambda.defining_expr_of_let) =
-  match defining_expr with
-  | Phantom _ -> true
-  | Normal named -> no_effects_named named

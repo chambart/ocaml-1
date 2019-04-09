@@ -20,6 +20,7 @@ include Identifiable.S
 
 val create
    : ?current_compilation_unit:Compilation_unit.t
+  -> ?original_ident:Ident.t
   -> Internal_variable_names.t
   -> t
 

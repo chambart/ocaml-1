@@ -218,3 +218,9 @@ val parameters_specialised_to_the_same_variable
    : function_decls:Flambda.function_declarations
   -> specialised_args:Flambda.specialised_to Variable.Map.t
   -> specialised_to_same_as list Variable.Map.t
+
+(** Turn a [named], intended to be the defining expression of a [Let],
+    into a phantom let defining expression. *)
+val phantomize_defining_expr
+   : Flambda.named
+  -> Flambda.defining_expr_of_phantom_let

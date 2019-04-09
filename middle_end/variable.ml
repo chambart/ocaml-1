@@ -22,6 +22,7 @@ type t = {
   name : string;
   name_stamp : int;
   (** [name_stamp]s are unique within any given compilation unit. *)
+  original_ident : Ident.t option;
 }
 
 type variable = t
@@ -49,22 +50,27 @@ include Identifiable.Make (struct
 
   let hash t = t.name_stamp lxor (Compilation_unit.hash t.compilation_unit)
 
+  let print_original_ident ppf t =
+    match t.original_ident with
+    | None -> ()
+    | Some ident -> Format.fprintf ppf "[=%a]" Ident.print ident
+
   let print ppf t =
     if Compilation_unit.equal t.compilation_unit
         (Compilation_unit.get_current_exn ())
     then begin
-      Format.fprintf ppf "%s/%d"
-        t.name t.name_stamp
+      Format.fprintf ppf "%s/%d%a"
+        t.name t.name_stamp print_original_ident t
     end else begin
-      Format.fprintf ppf "%a.%s/%d"
+      Format.fprintf ppf "%a.%s/%d%a"
         Compilation_unit.print t.compilation_unit
-        t.name t.name_stamp
+        t.name t.name_stamp print_original_ident t
     end
 end)
 
 let previous_name_stamp = ref (-1)
 
-let create_with_name_string ?current_compilation_unit name =
+let create_with_name_string ~original_ident ?current_compilation_unit name =
   let compilation_unit =
     match current_compilation_unit with
     | Some compilation_unit -> compilation_unit
@@ -77,17 +83,23 @@ let create_with_name_string ?current_compilation_unit name =
   { compilation_unit;
     name;
     name_stamp;
+    original_ident;
   }
 
-let create ?current_compilation_unit name =
+let create ?current_compilation_unit ?original_ident name =
   let name = (name : Internal_variable_names.t :> string) in
-  create_with_name_string ?current_compilation_unit name
+  create_with_name_string
+    ~original_ident
+    ?current_compilation_unit name
 
 let create_with_same_name_as_ident ident =
-  create_with_name_string (Ident.name ident)
+  create_with_name_string
+    ~original_ident:(Some ident)
+    (Ident.name ident)
 
 let rename ?current_compilation_unit t =
-  create_with_name_string ?current_compilation_unit t.name
+  create_with_name_string ~original_ident:t.original_ident
+    ?current_compilation_unit t.name
 
 let in_compilation_unit t cu =
   Compilation_unit.equal cu t.compilation_unit
@@ -100,6 +112,8 @@ let stamp t = t.name_stamp
 
 let unique_name t =
   t.name ^ "_" ^ (Int.to_string t.name_stamp)
+
+let original_ident t = t.original_ident
 
 let print_list ppf ts =
   List.iter (fun t -> Format.fprintf ppf "@ %a" print t) ts

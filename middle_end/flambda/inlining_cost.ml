@@ -292,11 +292,6 @@ module Benefit = struct
       (remove_code_helper_named b) lam;
     !b
 
-  let remove_code_defining_expr (lam:Flambda.defining_expr_of_let) b =
-    match lam with
-    | Phantom _ -> b
-    | Normal named -> remove_code_named named b
-
   let remove_projection (_proj : Projection.t) b =
     (* They are all primitives for the moment.  The [Projection.t] argument
        is here for future expansion. *)
