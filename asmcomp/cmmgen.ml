@@ -1985,7 +1985,15 @@ let rec transl env e =
             | Uphantom_const (Uconst_int i) | Uphantom_const (Uconst_ptr i) ->
               Cphantom_const_int (targetint_const i)
             | Uphantom_var var ->
-              Cphantom_var (backend_var_for_var_exn env var)
+              begin match is_unboxed_id var env with
+              | None ->
+                  Cphantom_var (backend_var_for_var_exn env var)
+              | Some (unboxed_id, _bn) ->
+                  (* CR-pchambart: This is incorrect, it should be a phantom
+                     boxed value. But there is nothing to represent it right
+                     now. *)
+                  Cphantom_var (backend_var_for_var_exn env unboxed_id)
+              end
             | Uphantom_read_field { var; field; } ->
               Cphantom_read_field
                 { var = (backend_var_for_var_exn env var); field; }
