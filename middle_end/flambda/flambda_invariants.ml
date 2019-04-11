@@ -326,7 +326,7 @@ let variable_and_symbol_invariants (program : Flambda.program) =
                 (Parameter.Set.vars params)
             in
             let bad =
-              Variable.Set.diff (Free_names.free_variables free_names)
+              Variable.Set.diff (Free_names.all_free_variables free_names)
                 acceptable_free_variables
             in
             if not (Variable.Set.is_empty bad) then begin
