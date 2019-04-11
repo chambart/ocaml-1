@@ -115,11 +115,10 @@ module Env : sig
 
   val empty : t
 
-  val add_subst : t -> Variable.t -> Clambda.ulambda -> t
+  val add_subst
+     : t -> Variable.t -> Clambda.ulambda
+    -> Clambda.uphantom_defining_expr -> t
   val find_subst_exn : t -> Variable.t -> Clambda.ulambda
-
-  val add_phantom_subst
-    : t -> Variable.t -> Clambda.uphantom_defining_expr -> t
   val find_phantom_subst_exn
     : t -> Variable.t -> Clambda.uphantom_defining_expr
 
@@ -152,14 +151,14 @@ end = struct
       allocated_constant_for_symbol = Symbol.Map.empty;
     }
 
-  let add_subst t id subst =
-    { t with subst = Variable.Map.add id subst t.subst }
+  let add_subst t id subst phantom_subst =
+    { t with
+      subst = Variable.Map.add id subst t.subst;
+      phantom_subst = Variable.Map.add id phantom_subst t.phantom_subst }
 
   let find_subst_exn t id = Variable.Map.find id t.subst
 
   let ident_for_var_exn t id = Variable.Map.find id t.var
-  let add_phantom_subst t id subst =
-    { t with phantom_subst = Variable.Map.add id subst t.phantom_subst }
 
   let find_phantom_subst_exn t id = Variable.Map.find id t.phantom_subst
 
@@ -563,14 +562,12 @@ and to_clambda_set_of_closures t env
               Flambda.print_set_of_closures set_of_closures
         in
         let pos = var_offset - fun_offset in
-        let env =
-          Env.add_subst env id
-            (Uprim (Pfield pos, [Clambda.Uvar env_var], Debuginfo.none))
-        in
         let phantom_exp =
           Clambda.Uphantom_read_field { var = env_var; field = pos }
         in
-        Env.add_phantom_subst env id phantom_exp
+        Env.add_subst env id
+          (Uprim (Pfield pos, [Clambda.Uvar env_var], Debuginfo.none))
+          phantom_exp
       in
       let env = Variable.Map.fold add_env_free_variable free_vars env in
       (* Add the Clambda expressions for all functions defined in the current
@@ -586,8 +583,7 @@ and to_clambda_set_of_closures t env
         let phantom_exp : Clambda.uphantom_defining_expr =
           Uphantom_offset_var { var = env_var; offset_in_words = offset - pos }
         in
-        let env = Env.add_subst env id exp in
-        Env.add_phantom_subst env id phantom_exp
+        Env.add_subst env id exp phantom_exp
       in
       List.fold_left (add_env_function fun_offset) env all_functions
     in
@@ -634,8 +630,7 @@ and to_clambda_closed_set_of_closures t env symbol
           let phantom_exp : Clambda.uphantom_defining_expr =
             Uphantom_const (Uconst_ref (symbol, None))
           in
-          let env = Env.add_subst env var (to_clambda_symbol env symbol) in
-          Env.add_phantom_subst env id phantom_exp)
+          Env.add_subst env var (to_clambda_symbol env symbol) phantom_exp)
         (Env.keep_only_symbols env)
         functions
     in
