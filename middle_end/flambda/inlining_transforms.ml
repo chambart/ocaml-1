@@ -164,7 +164,18 @@ let inline_by_copying_function_body ~env ~r
             move_to = Closure_id.wrap another_closure_in_the_same_set;
           })
           expr
-      else expr)
+      else
+        let used_in_phantom_context =
+          Free_names.is_variable_used_in_phantom_context function_body.free_names
+            another_closure_in_the_same_set
+        in
+        if used_in_phantom_context then
+          Flambda.create_let_with_defining_expr another_closure_in_the_same_set
+            (* CR-pchambart phantom move within set of closures *)
+            (Phantom Dead)
+            expr
+        else
+          expr)
       fun_vars
       bindings_for_vars_bound_by_closure_and_params_to_args
   in
