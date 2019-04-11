@@ -352,7 +352,7 @@ let variable_and_symbol_invariants (program : Flambda.program) =
               let (var_env, _, sym_env) = env in
               let var_env =
                 let free_variables =
-                  Free_names.free_variables free_names
+                  Free_names.all_free_variables free_names
                 in
                 Variable.Set.fold (fun var -> Variable.Set.add var)
                   free_variables var_env
