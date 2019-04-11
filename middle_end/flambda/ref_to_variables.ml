@@ -135,12 +135,21 @@ let eliminate_ref_of_expr flam =
     in
     let aux (flam : Flambda.t) : Flambda.t =
       match flam with
-      | Let { var; body; defining_expr =
+      | Let { var; body; free_names_of_body; defining_expr =
           Normal(Prim(Pmakeblock(0, Asttypes.Mutable, shape), l,_)) }
         when convertible_variable var ->
         let shape = match shape with
           | None -> List.map (fun _ -> Lambda.Pgenval) l
           | Some shape -> shape
+        in
+        let body =
+          if Free_names.is_variable_used_in_phantom_context free_names_of_body var then
+            Flambda.create_let_with_defining_expr var
+              (* CR-pchambart Requires Mutable phantom block that takes Mutable_variables. *)
+              (Phantom Dead)
+              body
+          else
+            body
         in
         let _, expr =
           List.fold_left2 (fun (field,body) init kind ->
@@ -161,7 +170,8 @@ let eliminate_ref_of_expr flam =
       | Try_with _ | If_then_else _
       | While _ | For _ | Send _ | Proved_unreachable ->
         flam
-    and aux_named (named : Flambda.named) : Flambda.named =
+    in
+    let aux_named (named : Flambda.named) : Flambda.named =
       match named with
       | Prim(Pfield field, [v], _)
         when convertible_variable v ->
@@ -200,7 +210,25 @@ let eliminate_ref_of_expr flam =
       | Move_within_set_of_closures _ | Project_var _ | Expr _ ->
         named
     in
-    Flambda_iterators.map aux aux_named flam
+    let aux_phantom (phantom : Flambda.defining_expr_of_phantom_let) : Flambda.defining_expr_of_phantom_let =
+      match phantom with
+      | Read_var_field (v, field)
+        when convertible_variable v ->
+        begin match get_variable v field with
+        | None -> Dead
+        | Some (var,_) -> Read_mutable var
+        end
+      | Read_var_field _
+      | Block _
+      | Var _
+      | Const _
+      | Symbol _
+      | Read_mutable _
+      | Read_symbol_field _
+      | Dead
+        -> phantom
+    in
+    Flambda_iterators.map aux aux_named aux_phantom flam
 
 let eliminate_ref (program:Flambda.program) =
   Flambda_iterators.map_exprs_at_toplevel_of_program program

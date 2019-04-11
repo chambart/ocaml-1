@@ -484,11 +484,13 @@ let iter_apply_on_program program ~f =
       (fun _ -> ())
       expr)
 
-let map f f_named tree =
+let map f f_named f_phantom tree =
   map_general ~toplevel:false f (fun _ n -> f_named n)
-    (fun phantom -> phantom) tree
-let map_expr f tree = map f (fun named -> named) tree
-let map_named f_named tree = map (fun expr -> expr) f_named tree
+    f_phantom tree
+let map_expr f tree =
+  map f (fun named -> named) (fun phantom -> phantom) tree
+let map_named f_named tree =
+  map (fun expr -> expr) f_named (fun phantom -> phantom) tree
 let map_defining_expr_of_let f_named f_phantom tree =
   map_general ~toplevel:false (fun expr -> expr) (fun _ n -> f_named n)
     f_phantom tree
@@ -576,7 +578,7 @@ let map_toplevel_sets_of_closures tree ~f =
     tree
 
 let map_apply tree ~f =
-  map (function
+  map_expr (function
       | (Apply apply) as expr ->
         let new_apply = f apply in
         if new_apply == apply then
@@ -584,7 +586,6 @@ let map_apply tree ~f =
         else
           Apply new_apply
       | expr -> expr)
-    (fun named -> named)
     tree
 
 let map_sets_of_closures tree ~f =

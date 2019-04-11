@@ -131,6 +131,8 @@ val iter_apply_on_program
 val map
    : (Flambda.t -> Flambda.t)
   -> (Flambda.named -> Flambda.named)
+  -> (Flambda.defining_expr_of_phantom_let ->
+      Flambda.defining_expr_of_phantom_let)
   -> Flambda.t
   -> Flambda.t
 
