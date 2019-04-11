@@ -563,8 +563,14 @@ and to_clambda_set_of_closures t env
               Flambda.print_set_of_closures set_of_closures
         in
         let pos = var_offset - fun_offset in
-        Env.add_subst env id
-          (Uprim (Pfield pos, [Clambda.Uvar env_var], Debuginfo.none))
+        let env =
+          Env.add_subst env id
+            (Uprim (Pfield pos, [Clambda.Uvar env_var], Debuginfo.none))
+        in
+        let phantom_exp =
+          Clambda.Uphantom_read_field { var = env_var; field = pos }
+        in
+        Env.add_phantom_subst env id phantom_exp
       in
       let env = Variable.Map.fold add_env_free_variable free_vars env in
       (* Add the Clambda expressions for all functions defined in the current
