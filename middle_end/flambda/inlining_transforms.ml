@@ -136,14 +136,18 @@ let inline_by_copying_function_body ~env ~r
   let bindings_for_vars_bound_by_closure_and_params_to_args =
     let bound_variables =
       let params = Parameter.Set.vars function_decl.params in
-      let free_variables = Free_names.free_variables function_body.free_names in
+      let all_free_variables = Free_names.all_free_variables function_body.free_names in
       Variable.Set.diff
-        (Variable.Set.diff free_variables params)
+        (Variable.Set.diff all_free_variables params)
         fun_vars
     in
     fold_over_projections_of_vars_bound_by_closure ~closure_id_being_applied
       ~lhs_of_application ~bound_variables ~init:bindings_for_params_to_args
-      ~f:(fun ~acc:body ~var ~expr -> Flambda.create_let var expr body)
+      ~f:(fun ~acc:body ~var ~expr ->
+          (* We keep it even if it is only used by phantom expressions. It
+             will be simplified away but will still carry an approximation
+             that can be use to phantomize it. *)
+          Flambda.create_let var expr body)
   in
   (* Add bindings for variables corresponding to the functions introduced by
      the whole set of closures.  Each such variable will be bound to a closure;

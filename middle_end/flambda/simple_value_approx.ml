@@ -1065,19 +1065,25 @@ let phantomize t ~is_present_in_env : Flambda.defining_expr_of_phantom_let =
     | Value_int i -> Const (Int i)
     | Value_char c -> Const (Char c)
     | Value_constptr p -> Const (Const_pointer p)
-    | Value_float None -> Dead
+    | Value_symbol symbol -> Symbol symbol
+    | Value_unresolved (Symbol symbol) -> Symbol symbol
+    | Value_unresolved (Set_of_closures_id _)
+    | Value_float None
     (* CR-soon mshinwell: We should be able to make some of these other cases
       work---in particular for allocated constants. *)
-    | Value_float (Some _) -> Dead
-    | Value_boxed_int _ -> Dead
+    | Value_float (Some _)
+    | Value_boxed_int _
     (* CR-soon mshinwell: Fix these closure cases when we fix
       [Flambda_utils.phantomize_defining_expr]. *)
     | Value_set_of_closures _
-    | Value_closure _ -> Dead
-    | Value_string _ -> Dead
-    | Value_float_array _ -> Dead
-    | Value_unknown _ -> Dead
-    | Value_bottom -> Dead
-    | Value_extern _ -> Dead
-    | Value_symbol symbol -> Symbol symbol
-    | Value_unresolved _symbol -> Dead
+    | Value_closure _
+    | Value_string _
+    | Value_float_array _
+    | Value_unknown _
+    | Value_bottom
+    | Value_extern _ ->
+      match t.symbol with
+      | Some (sym, None) -> Symbol sym
+      | Some (sym, Some field) -> Read_symbol_field (sym, field)
+      | None ->
+        Dead
