@@ -370,24 +370,28 @@ and print_named ppf (named : named) =
   | Expr expr ->
     fprintf ppf "*%a" lam expr
 
+and print_defining_expr_of_phantom_let ppf
+    (defining_expr : defining_expr_of_phantom_let) =
+  match defining_expr with
+  | Const const -> print_named ppf (Const const)
+  | Symbol sym -> print_named ppf (Symbol sym)
+  | Var var -> print_named ppf (Expr (Var var))
+  | Read_mutable mut_var -> print_named ppf (Read_mutable mut_var)
+  | Read_symbol_field (sym, field) ->
+    print_named ppf (Read_symbol_field (sym, field))
+  | Read_var_field (var, field) ->
+    print_named ppf (Prim (Pfield field, [var], Debuginfo.none))
+  | Block { tag; fields; } ->
+    fprintf ppf "[%a: %a]" Tag.print tag
+      (Format.pp_print_list Variable.print) fields
+  | Dead -> fprintf ppf "DEAD"
+
 and print_defining_expr_of_let ppf (expr : defining_expr_of_let) =
   match expr with
   | Normal named -> print_named ppf named
   | Phantom defining_expr ->
     fprintf ppf "<phantom:>";
-    match defining_expr with
-    | Const const -> print_named ppf (Const const)
-    | Symbol sym -> print_named ppf (Symbol sym)
-    | Var var -> print_named ppf (Expr (Var var))
-    | Read_mutable mut_var -> print_named ppf (Read_mutable mut_var)
-    | Read_symbol_field (sym, field) ->
-      print_named ppf (Read_symbol_field (sym, field))
-    | Read_var_field (var, field) ->
-      print_named ppf (Prim (Pfield field, [var], Debuginfo.none))
-    | Block { tag; fields; } ->
-      fprintf ppf "[%a: %a]" Tag.print tag
-        (Format.pp_print_list Variable.print) fields
-    | Dead -> fprintf ppf "DEAD"
+    print_defining_expr_of_phantom_let ppf defining_expr
 
 and print_function_declaration ppf var (f : function_declaration) =
   let param ppf p =

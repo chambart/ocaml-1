@@ -661,6 +661,11 @@ val print : Format.formatter -> t -> unit
 
 val print_named : Format.formatter -> named -> unit
 
+val print_defining_expr_of_phantom_let
+   : Format.formatter
+  -> defining_expr_of_phantom_let
+  -> unit
+
 val print_program : Format.formatter -> program -> unit
 
 val print_const : Format.formatter -> const -> unit
