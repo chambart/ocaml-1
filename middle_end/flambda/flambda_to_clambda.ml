@@ -250,29 +250,47 @@ let to_clambda_const env (const : Flambda.constant_defining_value_block_field)
   | Const c -> to_clambda_const' c
 
 let to_clambda_phantom env (def : Flambda.defining_expr_of_phantom_let)
-      : Clambda.uphantom_defining_expr option =
+      : Clambda.uphantom_defining_expr option
+        * (VP.t * Clambda.uphantom_defining_expr) list =
   match def with
   | Const const ->
-    Some (Uphantom_const (to_clambda_const' const))
+    Some (Uphantom_const (to_clambda_const' const)), []
   | Symbol symbol ->
-    Some (Uphantom_const (to_clambda_symbol' env symbol))
+    Some (Uphantom_const (to_clambda_symbol' env symbol)), []
   | Var var ->
-    Some (phantom_subst_var env var)
+    Some (phantom_subst_var env var), []
   | Read_mutable mut_var ->
-    Some (Uphantom_var (Env.ident_for_mutable_var_exn env mut_var))
+    Some (Uphantom_var (Env.ident_for_mutable_var_exn env mut_var)), []
   | Read_symbol_field (sym, field) ->
-    Some (Uphantom_read_symbol_field { sym; field })
+    Some (Uphantom_read_symbol_field { sym; field }), []
   | Read_var_field (var, field) ->
-    Some (Uphantom_read_field {
-        var = Env.ident_for_var_exn env var;
-        field;
-      })
+    let var, bindings =
+      match phantom_subst_var env var with
+      | Uphantom_var var ->
+        var, []
+      | def ->
+        let var = V.rename var in
+        let binding = VP.create var in
+        var, [binding, def]
+    in
+    Some (Uphantom_read_field { var; field }), bindings
   | Block { tag; fields } ->
+    let (fields, bindings) =
+      List.fold_right (fun field (fields, bindings) ->
+          match phantom_subst_var env field with
+          | Uphantom_var var ->
+            var :: fields, bindings
+          | def ->
+            let var = V.rename field in
+            let binding = VP.create var in
+            var :: fields, (binding, def) :: bindings)
+        fields ([], [])
+    in
     Some (Uphantom_block {
         tag = Tag.to_int tag;
-        fields = List.map (Env.ident_for_var_exn env) fields;
-      })
-  | Dead -> None
+        fields;
+      }), bindings
+  | Dead -> None, []
 
 let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
   match flam with
