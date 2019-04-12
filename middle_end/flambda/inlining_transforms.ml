@@ -542,6 +542,7 @@ let rewrite_function ~lhs_of_application ~closure_id_being_applied
       function_body.body
   in
   let body =
+    (* CR pchambart: Should this be !state_ref instead of state ? *)
     Flambda_utils.toplevel_substitution state.old_inside_to_new_inside body
   in
   let new_function_decl =
