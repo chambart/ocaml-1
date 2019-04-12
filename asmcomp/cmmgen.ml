@@ -1985,15 +1985,7 @@ let rec transl env e =
             | Uphantom_const (Uconst_int i) | Uphantom_const (Uconst_ptr i) ->
               Cphantom_const_int (targetint_const i)
             | Uphantom_var var ->
-              begin match is_unboxed_id var env with
-              | None ->
-                  Cphantom_var (backend_var_for_var_exn env var)
-              | Some (unboxed_id, _bn) ->
-                  (* CR-pchambart: This is incorrect, it should be a phantom
-                     boxed value. But there is nothing to represent it right
-                     now. *)
-                  Cphantom_var (backend_var_for_var_exn env unboxed_id)
-              end
+              Cphantom_var (backend_var_for_var_exn env var)
             | Uphantom_read_field { var; field; } ->
               Cphantom_read_field
                 { var = (backend_var_for_var_exn env var); field; }
@@ -2873,14 +2865,27 @@ and transl_let env str kind (id:VarP.t) exp body =
       Clet(id, transl env exp, transl env_body body)
   | Boxed (boxed_number, _false) ->
       let unboxed_id = VarP.rename id in
+      let bv_boxed_id, env_body =
+        (* Used only for the phantom *)
+        add_fresh_backend_var_with_provenance env id
+      in
       let bv_unboxed_id, env_body =
-        add_fresh_backend_var_with_provenance env unboxed_id
+        add_fresh_backend_var_with_provenance env_body unboxed_id
       in
       let env_body =
         add_unboxed_id (VarP.var id) (VarP.var unboxed_id) boxed_number env_body
       in
+      let kind =
+        match boxed_number with
+        | Boxed_float _ -> Bfloat
+        | Boxed_integer (Pnativeint, _) -> Bnativeint
+        | Boxed_integer (Pint32, _) -> Bint32
+        | Boxed_integer (Pint64, _)-> Bint64
+      in
       Clet(bv_unboxed_id, transl_unbox_number dbg env boxed_number exp,
-           transl env_body body)
+           Cphantom_let(bv_boxed_id,
+             Some (Cphantom_boxed_value { var = VP.var bv_unboxed_id; kind }),
+             transl env_body body))
 
 and make_catch ncatch body handler = match body with
 | Cexit (nexit,[]) when nexit=ncatch -> handler

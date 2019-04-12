@@ -304,9 +304,13 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
         to_clambda_named t env var named,
         to_clambda t env_body body)
     | Phantom phantom ->
-      Uphantom_let (VP.create id,
-        to_clambda_phantom env phantom,
-        to_clambda t env_body body)
+      let definition, bindings = to_clambda_phantom env phantom in
+      let body : Clambda.ulambda =
+        Uphantom_let (VP.create id, definition, to_clambda t env_body body)
+      in
+      List.fold_left (fun body (binding, definition) : Clambda.ulambda ->
+          Uphantom_let (binding, Some definition, body))
+        body bindings
     end
   | Let_mutable { var = mut_var; initial_value = var; body; contents_kind } ->
     let id, env_body = Env.add_fresh_mutable_ident env mut_var in

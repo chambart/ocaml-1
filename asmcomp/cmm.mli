@@ -93,6 +93,9 @@ type raise_kind =
 
 type rec_flag = Nonrecursive | Recursive
 
+type boxed_number_kind =
+    Bfloat | Bnativeint | Bint32 | Bint64
+
 type phantom_defining_expr =
   (* CR-soon mshinwell: Convert this to [Targetint.OCaml.t] (or whatever the
      representation of "target-width OCaml integers of type [int]"
@@ -119,6 +122,10 @@ type phantom_defining_expr =
   | Cphantom_block of { tag : int; fields : Backend_var.t list; }
   (** The phantom-let-bound variable points at a block with the given
       structure. *)
+  | Cphantom_boxed_value of { var : Backend_var.t; kind : boxed_number_kind }
+  (** The phantom-let-bound variable points boxed number. Var is the
+      unboxed version. *)
+
 
 type memory_chunk =
     Byte_unsigned

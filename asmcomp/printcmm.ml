@@ -77,6 +77,12 @@ let raise_kind fmt = function
   | Raise_withtrace -> Format.fprintf fmt "raise_withtrace"
   | Raise_notrace -> Format.fprintf fmt "raise_notrace"
 
+let boxed_number_kind = function
+  | Bfloat -> "float"
+  | Bnativeint -> "nativeint"
+  | Bint32 -> "int32"
+  | Bint64 -> "int64"
+
 let phantom_defining_expr ppf defining_expr =
   match defining_expr with
   | Cphantom_const_int i -> Targetint.print ppf i
@@ -94,6 +100,10 @@ let phantom_defining_expr ppf defining_expr =
         Format.fprintf ppf "%a; " V.print field)
       fields;
     Format.fprintf ppf "]"
+  | Cphantom_boxed_value  { var; kind } ->
+      Format.fprintf ppf "Box<%s>[%a]"
+        (boxed_number_kind kind)
+        V.print var
 
 let phantom_defining_expr_opt ppf defining_expr =
   match defining_expr with

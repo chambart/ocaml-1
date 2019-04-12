@@ -116,6 +116,9 @@ type raise_kind =
 
 type rec_flag = Nonrecursive | Recursive
 
+type boxed_number_kind =
+    Bfloat | Bnativeint | Bint32 | Bint64
+
 type phantom_defining_expr =
   | Cphantom_const_int of Targetint.t
   | Cphantom_const_symbol of Backend_sym.t
@@ -124,6 +127,7 @@ type phantom_defining_expr =
   | Cphantom_read_field of { var : Backend_var.t; field : int; }
   | Cphantom_read_symbol_field of { sym : Backend_sym.t; field : int; }
   | Cphantom_block of { tag : int; fields : Backend_var.t list; }
+  | Cphantom_boxed_value of { var : Backend_var.t; kind : boxed_number_kind }
 
 type memory_chunk =
     Byte_unsigned
