@@ -1099,6 +1099,11 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
       | Pmakeblock (tag, Immutable, _) as p, args, args_approxs ->
         begin match E.find_constructed_block env ~tag args with
         | Some constructed_var ->
+            Format.eprintf "[31mACTIVATED[m@ at %s:\n%a\n=========\n%a\n"
+              (Debuginfo.to_string dbg)
+              Flambda.print_named tree
+              Flambda.print_named (Flambda.Expr (Var constructed_var))
+            ;
             Flambda.Expr (Var constructed_var),
             R.map_benefit r (B.remove_code_named tree)
         | _ -> default p args args_approxs
