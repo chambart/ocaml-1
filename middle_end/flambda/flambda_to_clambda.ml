@@ -345,6 +345,8 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
   | Proved_unreachable -> Uunreachable
 
 and to_clambda_named t env var (named : Flambda.named) : Clambda.ulambda =
+  let r =
+    let open Clambda in
   match named with
   | Symbol sym -> to_clambda_symbol env sym
   | Const (Const_pointer n) -> Uconst (Uconst_ptr n)
@@ -392,9 +394,16 @@ and to_clambda_named t env var (named : Flambda.named) : Clambda.ulambda =
       [check_field (check_closure ulam (Expr (Var closure))) pos (Some named)],
       Debuginfo.none)
   | Prim (Pfield index, [block], dbg) ->
+      (* (match Sys.getenv_opt "STUFF" with
+       *  | None | Some "" -> ()
+       *  | _ ->
+       *    Format.eprintf "[34mto_clambda_named Pfield[m Pfield %d => %a == %a@."
+       *      index
+       *      Printclambda_primitives.primitive (Pfield index)
+       *      Printclambda_primitives.primitive pf); *)
     Uprim (Pfield index, [check_field (subst_var env block) index None], dbg)
   | Prim (Psetfield (index, maybe_ptr, init), [block; new_value], dbg) ->
-    Uprim (Psetfield (index, maybe_ptr, init), [
+    Uprim (Psetfield (index, maybe_ptr, init), [ (* <<===== look here *)
         check_field (subst_var env block) index None;
         subst_var env new_value;
       ], dbg)
@@ -403,6 +412,15 @@ and to_clambda_named t env var (named : Flambda.named) : Clambda.ulambda =
   | Prim (p, args, dbg) ->
     Uprim (p, subst_vars env args, dbg)
   | Expr expr -> to_clambda t env expr
+  in
+  match Sys.getenv_opt "STUFF" with
+  | None | Some "" -> r
+  | _ ->
+      Format.eprintf "[32mto_clambda_named[m %a => %a@."
+        Flambda.print_named named
+        Printclambda.clambda r
+      ;
+      r
 
 and to_clambda_switch t env cases num_keys default =
   let num_keys =

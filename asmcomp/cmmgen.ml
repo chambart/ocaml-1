@@ -2499,7 +2499,14 @@ and transl_prim_1 env p arg dbg =
     | Pbigarraydim _ | Pstring_load _ | Pbytes_load _ | Pbytes_set _
     | Pbigstring_load _ | Pbigstring_set _)
     ->
-      fatal_errorf "Cmmgen.transl_prim_1: %a"
+      let o = Obj.repr p in
+      fatal_errorf "[31mCmmgen.transl_prim_1:[m\n  tag %d sz %d\n   fld1 %d %d\n   fld2 %d\n       %a"
+        (Obj.tag o)
+        (Obj.size o)
+        (Obj.tag (Obj.field o 0))
+        (Obj.size (Obj.field o 0))
+        (Obj.tag (Obj.field o 1))
+        (* (Obj.size (Obj.field o 1)) *)
         Printclambda_primitives.primitive p
 
 and transl_prim_2 env p arg1 arg2 dbg =
