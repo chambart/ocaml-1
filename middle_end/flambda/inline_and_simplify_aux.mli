@@ -61,6 +61,11 @@ module Env : sig
   (** Like [add], but for mutable variables. *)
   val add_mutable : t -> Mutable_variable.t -> Simple_value_approx.t -> t
 
+  (** Like [add], but bind a phantom variable. Variables bound as phantom
+      are not recovered by find. Phantom variables can only be used in
+      phantom expressions. *)
+  val add_phantom : t -> Variable.t -> Simple_value_approx.t -> t
+
   (** Find the approximation of a given variable, raising a fatal error if
       the environment does not know about the variable.  Use [find_opt]
       instead if you need to catch the failure case. *)
@@ -79,6 +84,13 @@ module Env : sig
 
   (** Like [find_exn], but for a list of variables. *)
   val find_list_exn : t -> Variable.t list -> Simple_value_approx.t list
+
+  (** Like [find_exn], but look for phantom bound variables rather than
+      live variables. Raises a fatal error if the environment does not
+      know about the variable *)
+  val find_phantom_exn : t -> Variable.t -> Simple_value_approx.t
+
+  val find_phantom_opt : t -> Variable.t -> Simple_value_approx.t option
 
   val does_not_bind : t -> Variable.t list -> bool
 

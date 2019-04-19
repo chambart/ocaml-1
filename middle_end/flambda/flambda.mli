@@ -469,12 +469,12 @@ val fold_lets_option
    : t
   -> init:'a
   -> for_defining_expr:('a -> Variable.t
-     -> defining_expr_of_let -> 'a * Variable.t * defining_expr_of_let)
+     -> defining_expr_of_let -> 'a * Variable.t * defining_expr_of_let * 'c)
   -> for_last_body:('a -> t -> t * 'b)
   (* CR-someday mshinwell: consider making [filter_defining_expr]
      optional *)
   -> filter_defining_expr:('b -> Variable.t
-     -> defining_expr_of_let -> Free_names.t
+     -> defining_expr_of_let -> 'c -> Free_names.t
      -> 'b * Variable.t * defining_expr_of_let option)
   -> t * 'b
 

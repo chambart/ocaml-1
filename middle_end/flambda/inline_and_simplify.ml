@@ -172,6 +172,28 @@ let simplify_named_using_approx_and_env env r original_named approx =
   in
   named, r
 
+let simplify_free_phantom_variable env original_var =
+  let var = Freshening.apply_variable (E.freshening env) original_var in
+  match E.find_phantom_opt env var with
+  | None ->
+    (* CR-pchambart: Thid case shouldn't happen, but there are still a
+       few situations that are not well handled yet. *)
+    None
+  | Some approx ->
+    let var =
+      match approx.var with
+      | Some var when E.mem env var -> var
+      | Some _ | None -> var
+    in
+    Some (var, approx)
+
+let simplify_phantom_definintion_using_approx_and_env env original_definition
+    (approx:A.t)
+   : Flambda.defining_expr_of_phantom_let =
+  match approx.var with
+  | Some var when E.mem env var -> Var var
+  | Some _ | None -> original_definition
+
 let simplify_const (const : Flambda.const) =
   match const with
   | Int i -> A.value_int i
@@ -1111,14 +1133,22 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
       in
       let var, sb = Freshening.add_variable (E.freshening env) var in
       let env = E.set_freshening env sb in
-      let env = E.add env var (R.approx r) in
-      (env, r), var, defining_expr
+      let approx = R.approx r in
+      let env =
+        match defining_expr with
+        | Normal _ ->
+          E.add env var approx
+        | Phantom _ ->
+          E.add_phantom env var approx
+      in
+      (env, r), var, defining_expr, approx
     in
     let for_last_body (env, r) body =
       simplify env r body
     in
     let filter_defining_expr r var
         (defining_expr : Flambda.defining_expr_of_let)
+        approx
         free_names_of_body :
       R.t * Variable.t * Flambda.defining_expr_of_let option =
       let free_vars_of_body =
@@ -1149,7 +1179,7 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
                 (* Using the approximation enables us to express more computations
                    as phantom lets (for example a conditional that was fully
                    evaluated at compile time to some constant). *)
-                Simple_value_approx.phantomize (R.approx r)
+                Simple_value_approx.phantomize approx
                   ~is_present_in_env:(E.mem env)
               | defining_expr -> defining_expr
             in
@@ -1422,26 +1452,68 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
 
 and simplify_defining_expr_of_phantom_let env r
       (tree : Flambda.defining_expr_of_phantom_let) =
-  let simplified : Flambda.defining_expr_of_phantom_let =
+  let simplified_approx : Flambda.defining_expr_of_phantom_let * _ =
     let freshening = E.freshening env in
     match tree with
     | Symbol sym | Read_symbol_field (sym, _) ->
       ignore ((E.find_or_load_symbol env sym) : A.t);
-      tree
-    | Const _ -> tree
+      tree, A.value_unknown Other
+    | Const _ ->
+      tree, A.value_unknown Other
     | Read_mutable mut_var ->
-      Read_mutable (Freshening.apply_mutable_variable freshening mut_var)
-    | Var var -> Var (Freshening.apply_variable freshening var)
-    | Read_var_field (var, field) ->
-      Read_var_field (Freshening.apply_variable freshening var, field)
+      Read_mutable (Freshening.apply_mutable_variable freshening mut_var),
+      A.value_unknown Other
+    | Var var ->
+      begin match simplify_free_phantom_variable env var with
+      | None ->
+        Dead, A.value_unknown Other
+      | Some (var, approx) ->
+        Var var, approx
+      end
+    | Read_var_field (var, field_index) ->
+      begin match simplify_free_phantom_variable env var with
+      | None ->
+        Dead, A.value_unknown Other
+      | Some (var, approx) ->
+        begin match A.get_field approx ~field_index with
+        | Unreachable ->
+          (* In fact the expression is probably really unreachable.
+             But we stay on the safe side and keep it as is, just in
+             case of a compiler bug.
+
+             It might still be worth eliminating: This would not only
+             eliminate the phantom variable, but also all the following
+             non-phantom code. But it still seems suspicious that some
+             code might get better optimized in debug mode. *)
+          Read_var_field (var, field_index), A.value_bottom
+        | Ok approx ->
+          simplify_phantom_definintion_using_approx_and_env env
+            (Read_var_field (var, field_index)) approx, approx
+        end
+      end
     | Block { tag; fields; } ->
-      let fields =
-        List.map (fun var -> Freshening.apply_variable freshening var) fields
-      in
-      Block { tag; fields; }
-    | Dead -> Dead
+      begin
+        let fields =
+          List.map (fun var ->
+              match simplify_free_phantom_variable env var with
+              | Some (var, _approx) -> Some var
+              | None as v -> v)
+            fields
+        in
+        match Misc.Stdlib.List.some_if_all_elements_are_some fields with
+        | None ->
+          Dead, A.value_unknown Other
+        | Some fields ->
+          let approx =
+            let approxs = List.map (E.find_phantom_exn env) fields in
+            A.value_block tag (Array.of_list approxs)
+          in
+          Block { tag; fields; }, approx
+      end
+    | Dead -> Dead, A.value_unknown Other
   in
-  simplified, ret r (A.value_unknown Other)
+  let simplified, approx = simplified_approx in
+  simplified, ret r approx
 
 and simplify_list env r l =
   match l with

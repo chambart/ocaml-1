@@ -25,6 +25,7 @@ module Env = struct
     round : int;
     ppf_dump : Format.formatter;
     approx : (scope * Simple_value_approx.t) Variable.Map.t;
+    approx_phantom : (scope * Simple_value_approx.t) Variable.Map.t;
     approx_mutable : Simple_value_approx.t Mutable_variable.Map.t;
     approx_sym : Simple_value_approx.t Symbol.Map.t;
     projections : Variable.t Projection.Map.t;
@@ -51,6 +52,7 @@ module Env = struct
       round;
       ppf_dump;
       approx = Variable.Map.empty;
+      approx_phantom = Variable.Map.empty;
       approx_mutable = Mutable_variable.Map.empty;
       approx_sym = Symbol.Map.empty;
       projections = Projection.Map.empty;
@@ -77,6 +79,7 @@ module Env = struct
   let local env =
     { env with
       approx = Variable.Map.empty;
+      approx_phantom = Variable.Map.empty;
       projections = Projection.Map.empty;
       freshening = Freshening.empty_preserving_activation_state env.freshening;
       inlined_debuginfo = Debuginfo.none;
@@ -98,6 +101,7 @@ module Env = struct
       Freshening.print t.freshening
 
   let mem t var = Variable.Map.mem var t.approx
+  let mem_phantom t var = Variable.Map.mem var t.approx_phantom
 
   let add_internal t var (approx : Simple_value_approx.t) ~scope =
     let approx =
@@ -113,6 +117,17 @@ module Env = struct
 
   let add t var approx = add_internal t var approx ~scope:Current
   let add_outer_scope t var approx = add_internal t var approx ~scope:Outer
+
+  let add_phantom_internal t var (approx : Simple_value_approx.t) ~scope =
+    let approx =
+      (* See comment in [add_internal] *)
+      match approx.var with
+      | Some var when mem t var || mem_phantom t var -> approx
+      | _ -> Simple_value_approx.augment_with_variable approx var
+    in
+    { t with approx_phantom = Variable.Map.add var (scope, approx) t.approx_phantom }
+  let add_phantom t var approx =
+    add_phantom_internal t var approx ~scope:Current
 
   let add_mutable t mut_var approx =
     { t with approx_mutable =
@@ -222,6 +237,38 @@ module Env = struct
     try Some (really_import_approx t
                 (snd (Variable.Map.find id t.approx)))
     with Not_found -> None
+
+  let find_phantom_with_scope_exn t id =
+    try
+      really_import_approx_with_scope t
+        (Variable.Map.find id t.approx_phantom)
+    with Not_found ->
+      Misc.fatal_errorf "Env.find_phantom_with_scope_exn: Unbound phantom \
+          variable %a@.%s@. Environment: %a@."
+        Variable.print id
+        (Printexc.raw_backtrace_to_string (Printexc.get_callstack max_int))
+        print t
+
+  let find_phantom_exn t id =
+    match find_opt t id with
+    | Some a -> a
+    | None ->
+      snd (find_phantom_with_scope_exn t id)
+
+
+  let find_phantom_opt_internal t id =
+    try
+      Some
+        (snd (really_import_approx_with_scope t
+                (Variable.Map.find id t.approx_phantom)))
+    with Not_found ->
+      None
+
+  let find_phantom_opt t id =
+    match find_opt t id with
+    | Some _ as a -> a
+    | None ->
+      find_phantom_opt_internal t id
 
   let activate_freshening t =
     { t with freshening = Freshening.activate t.freshening }

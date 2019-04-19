@@ -993,18 +993,18 @@ end
 let fold_lets_option
     t ~init
     ~(for_defining_expr:('a -> Variable.t -> defining_expr_of_let
-      -> 'a * Variable.t * defining_expr_of_let))
+      -> 'a * Variable.t * defining_expr_of_let * 'c))
     ~for_last_body
     ~(filter_defining_expr:('b -> Variable.t
-      -> defining_expr_of_let -> Free_names.t
+      -> defining_expr_of_let -> 'c -> Free_names.t
       -> 'b * Variable.t * defining_expr_of_let option)) =
   let finish ~last_body ~acc ~rev_lets =
     let module W = With_free_variables in
     let acc, t =
-      List.fold_left (fun (acc, t) (var, defining_expr) ->
+      List.fold_left (fun (acc, t) (var, defining_expr, value) ->
           let free_names_of_body = W.free_names t in
           let acc, var, defining_expr =
-            filter_defining_expr acc var defining_expr free_names_of_body
+            filter_defining_expr acc var defining_expr value free_names_of_body
           in
           match defining_expr with
           | None -> acc, t
@@ -1021,10 +1021,10 @@ let fold_lets_option
   let rec loop (t : t) ~acc ~rev_lets =
     match t with
     | Let { var; defining_expr; body; _ } ->
-      let acc, var, defining_expr =
+      let acc, var, defining_expr, value =
         for_defining_expr acc var defining_expr
       in
-      let rev_lets = (var, defining_expr) :: rev_lets in
+      let rev_lets = (var, defining_expr, value) :: rev_lets in
       loop body ~acc ~rev_lets
     | t ->
       let last_body, acc = for_last_body acc t in
