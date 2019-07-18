@@ -174,6 +174,39 @@ let transform_exn_continuation env
     extra_args = exn_continuation.extra_args @ more_extra_args;
   }
 
+let transform_switch env id (switch : Ilambda.switch) : Ilambda.t =
+  let id = Env.rename_variable env id in
+  let add_cont cont new_conts =
+    let extra_args = Env.extra_args_for_continuation env cont in
+    match extra_args with
+    | [] -> new_conts, cont
+    | _ :: _ ->
+        let new_cont = Continuation.create () in
+        (new_cont, cont, extra_args) :: new_conts, new_cont
+  in
+  let wrapper_continuations, consts =
+    List.fold_right (fun (i, cont) (wrapper_continuations, consts) ->
+        let wrapper_continuations, cont = add_cont cont wrapper_continuations in
+        (wrapper_continuations, (i, cont) :: consts))
+      switch.consts ([], [])
+  in
+  let wrapper_continuations, failaction =
+    match switch.failaction with
+    | None -> wrapper_continuations, switch.failaction
+    | Some cont ->
+        let wrapper_continuations, cont = add_cont cont wrapper_continuations in
+        wrapper_continuations, Some cont
+  in
+  let body : Ilambda.t = Switch (id, { switch with consts; failaction }) in
+  List.fold_left (fun body (name, prev_cont, args) : Ilambda.t ->
+      Let_cont {
+        name; is_exn_handler = false; params = [];
+        recursive = Nonrecursive; body;
+        handler = Apply_cont (prev_cont, None, args);
+      })
+    body
+    wrapper_continuations
+
 let rec transform_expr env (expr : Ilambda.t) : Ilambda.t =
   match expr with
   | Let (id, user_visible, kind, named, body) ->
@@ -199,8 +232,7 @@ let rec transform_expr env (expr : Ilambda.t) : Ilambda.t =
     let extra_args = Env.extra_args_for_continuation env cont in
     Apply_cont (cont, trap_action, args @ extra_args)
   | Switch (id, switch) ->
-    let id = Env.rename_variable env id in
-    Switch (id, switch)
+    transform_switch env id switch
 
 and transform_named env id user_visible kind (named : Ilambda.named) k
       : Ilambda.t =
