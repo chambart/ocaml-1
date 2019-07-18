@@ -91,7 +91,7 @@ end = struct
     in
     { t with
       typing_env;
-      continuation_scope_level = Scope.next t.continuation_scope_level;
+      continuation_scope_level;
     }
 
   let enter_closure { backend; round; typing_env;
