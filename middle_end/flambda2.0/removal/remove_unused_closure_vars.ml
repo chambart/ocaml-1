@@ -33,9 +33,15 @@ let rec collect_vars_expr used_closure_vars expr =
       Continuation_params_and_handler.pattern_match
         (Continuation_handler.params_and_handler cont_handler)
         ~f:(fun _params ~handler -> collect_vars_expr used_closure_vars handler)
-    | Recursive _ ->
-      (* CR mshinwell: implement *)
-      Misc.fatal_error "Not yet implemented"
+    | Recursive let_conts ->
+      Recursive_let_cont_handlers.pattern_match let_conts
+        ~f:(fun ~body handlers ->
+          collect_vars_expr used_closure_vars body;
+          Continuation.Map.iter (fun _cont handler ->
+            Continuation_params_and_handler.pattern_match
+              (Continuation_handler.params_and_handler handler)
+              ~f:(fun _params ~handler -> collect_vars_expr used_closure_vars handler))
+            (Continuation_handlers.to_map handlers))
     end
   | Apply _
   | Apply_cont _
@@ -74,27 +80,34 @@ let rec remove_vars_expr used_closure_vars expr =
       let body = remove_vars_expr used_closure_vars body in
       Expr.create_let bound_var defining_expr body)
   | Let_cont let_cont ->
+    let rewrite_handler cont_handler =
+      let params_and_handler =
+        Continuation_params_and_handler.pattern_match
+          (Continuation_handler.params_and_handler cont_handler)
+          ~f:(fun params ~handler ->
+            let handler = remove_vars_expr used_closure_vars handler in
+            Continuation_params_and_handler.create params ~handler)
+      in
+      Continuation_handler.with_params_and_handler cont_handler
+        params_and_handler
+    in
     begin match let_cont with
     | Non_recursive { handler; _ } ->
       Non_recursive_let_cont_handler.pattern_match handler
         ~f:(fun cont ~body ->
           let body = remove_vars_expr used_closure_vars body in
           let cont_handler = Non_recursive_let_cont_handler.handler handler in
-          let params_and_handler =
-            Continuation_params_and_handler.pattern_match
-              (Continuation_handler.params_and_handler cont_handler)
-              ~f:(fun params ~handler ->
-                let handler = remove_vars_expr used_closure_vars handler in
-                Continuation_params_and_handler.create params ~handler)
-          in
-          let cont_handler =
-            Continuation_handler.with_params_and_handler cont_handler
-              params_and_handler
-          in
+          let cont_handler = rewrite_handler cont_handler in
           Let_cont.create_non_recursive cont cont_handler ~body)
-    | Recursive _ ->
-      (* CR mshinwell: implement *)
-      Misc.fatal_error "Not yet implemented"
+    | Recursive let_conts ->
+      Recursive_let_cont_handlers.pattern_match let_conts
+        ~f:(fun ~body cont_handlers ->
+          let body = remove_vars_expr used_closure_vars body in
+          let cont_handlers =
+            Continuation.Map.map rewrite_handler
+              (Continuation_handlers.to_map cont_handlers)
+          in
+          Let_cont.create_recursive ~body cont_handlers)
     end
   | Apply _
   | Apply_cont _
