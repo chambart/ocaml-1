@@ -219,7 +219,10 @@ let allocate_registers() =
   (* First pass: preallocate spill registers and split remaining regs
      Second pass: assign locations to constrained regs
      Third pass: assign locations to unconstrained regs *)
-  List.iter remove_reg (Reg.all_registers());
-  OrderedRegSet.iter assign_location !constrained;
-  List.iter assign_location !unconstrained;
+  Profile.record ~accumulate:true "first_pass"
+    (List.iter remove_reg) (Reg.all_registers());
+  Profile.record ~accumulate:true "second_pass"
+    (OrderedRegSet.iter assign_location) !constrained;
+  Profile.record ~accumulate:true "third_pass"
+    (List.iter assign_location) !unconstrained;
   num_stack_slots

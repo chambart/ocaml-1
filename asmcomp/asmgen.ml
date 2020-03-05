@@ -52,10 +52,12 @@ let rec regalloc ~ppf_dump round fd =
       Linscan.allocate_registers()
     end else begin
       (* Graph Coloring *)
-      Interf.build_graph fd;
+      Profile.record ~accumulate:true "interference"
+        Interf.build_graph fd;
       if !dump_interf then Printmach.interferences ppf_dump ();
       if !dump_prefer then Printmach.preferences ppf_dump ();
-      Coloring.allocate_registers()
+      Profile.record ~accumulate:true "coloring"
+        Coloring.allocate_registers()
     end
   in
   dump_if ppf_dump dump_regalloc "After register allocation" fd;
