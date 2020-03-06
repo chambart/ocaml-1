@@ -382,18 +382,8 @@ let meet env t1 t2 =
 
 (* CR mshinwell: [env_at_fork] -> [env_at_cut] *)
 
-let join_types ~env_at_fork ~params envs_with_levels =
+let join_types ~env_at_fork ~params:_ envs_with_levels =
   let symbols_at_fork = Typing_env.defined_symbols env_at_fork in
-  let joined_types =
-    (* The [defined_vars] in the different levels may overlap. *)
-    List.fold_left (fun joined_types (_env_at_use, _id, _use_kind, t) ->
-        Variable.Map.fold (fun var kind joined_types ->
-            Name.Map.add (Name.var var) (Type_grammar.bottom kind) joined_types)
-          t.defined_vars
-          joined_types)
-      Name.Map.empty
-      envs_with_levels
-  in
   let envs_with_levels =
     List.map (fun (env_at_use, id, use_kind, t) ->
         let symbols_defined_during_level =
@@ -402,27 +392,6 @@ let join_types ~env_at_fork ~params envs_with_levels =
         in
         env_at_use, id, use_kind, t, symbols_defined_during_level)
       envs_with_levels
-  in
-  let joined_types =
-    List.fold_left
-      (fun joined_types
-           (_env_at_use, _id, _use_kind, _t, symbols_defined_during_level) ->
-        Symbol.Set.fold (fun symbol joined_types ->
-            Name.Map.add (Name.symbol symbol)
-              (Type_grammar.bottom Flambda_kind.value)
-              joined_types)
-          symbols_defined_during_level
-          joined_types)
-      joined_types
-      envs_with_levels
-  in
-  let joined_types =
-    List.fold_left (fun joined_types param ->
-        Name.Map.add (Kinded_parameter.name param)
-          (Type_grammar.bottom (Kinded_parameter.kind param))
-          joined_types)
-      joined_types
-      params
   in
   let env_at_fork =
     List.fold_left
@@ -433,123 +402,109 @@ let join_types ~env_at_fork ~params envs_with_levels =
       env_at_fork
       envs_with_levels
   in
-  List.fold_left
-    (fun (joined_types, env_at_fork, code_age_relation)
-         (env_at_use, _id, _use_kind, t, symbols_defined_during_level) ->
-      (*
-      Format.eprintf "join_types with level:@ %a\n%!" print t;
-      *)
-      let env_at_fork =
-        Variable.Map.fold (fun var kind env ->
-            Typing_env.add_definition env
-              (Name_in_binding_pos.var
-                (Var_in_binding_pos.create var Name_mode.in_types))
-              kind)
-          t.defined_vars
-          env_at_fork
-      in
-      let code_age_relation =
-        Code_age_relation.union code_age_relation
-          (Typing_env.code_age_relation env_at_use)
-      in
-      let left_env =
-        let level =
-          { defined_vars = Variable.Map.empty;
-            equations = joined_types;
-            cse = Flambda_primitive.Eligible_for_cse.Map.empty;
-          }
-        in
-        let env_extension = Typing_env_extension.create level in
-        let left_env = Typing_env.add_env_extension env_at_fork env_extension in
-        Typing_env.with_code_age_relation left_env code_age_relation
-      in
-      let equations =
-        (* If the parameter is not present, it is considered as bottom
-           by the Name.Map.union while it should be unknown.
-           By default non present equations are unknown, but here we must
-           make it explicit. *)
-        List.fold_left (fun equations param ->
-          let param_name = Kinded_parameter.name param in
-          if not (Name.Map.mem param_name equations) then
-            Name.Map.add param_name
-              (Type_grammar.unknown (Kinded_parameter.kind param))
-              equations
-          else
-            equations)
-          t.equations
-          params
-      in
-      let equations =
-        (* Same as just above, but for symbols. *)
-        Symbol.Set.fold (fun symbol equations ->
-            let name = Name.symbol symbol in
-            if not (Name.Map.mem name equations) then
-              Name.Map.add name (Type_grammar.any_value ()) equations
+  let populate_env_at_fork env_at_fork
+        (_env_at_use, _id, _use_kind, t, _symbols_defined_during_level) =
+    Variable.Map.fold (fun var kind env ->
+      Typing_env.add_definition env
+        (Name_in_binding_pos.var
+           (Var_in_binding_pos.create var Name_mode.in_types))
+        kind)
+      t.defined_vars
+      env_at_fork
+  in
+  let join_equations env_at_fork ~left_env left ~right_env right =
+    Name.Map.merge (fun name joined_ty use_ty ->
+        (*
+        Format.eprintf "Processing name:@ %a\n%!" Name.print name;
+        *)
+        match joined_ty, use_ty with
+        | None, None -> assert false
+        | Some joined_ty, Some use_ty ->
+          let joined_ty =
+            (* Recall: the order of environments matters here. *)
+            Type_grammar.join ~bound_name:name
+              env_at_fork
+              ~left_env ~left_ty:joined_ty
+              ~right_env ~right_ty:use_ty
+          in
+          (*
+             Format.eprintf "joined type:@ %a\n%!"
+             Type_grammar.print joined_ty;
+          *)
+          Some joined_ty
+        | Some joined_ty, None ->
+          let joined_ty =
+            if Typing_env.mem env_at_fork name then
+              Type_grammar.join ~bound_name:name
+                env_at_fork
+                ~left_env ~left_ty:joined_ty
+                ~right_env
+                ~right_ty:(Type_grammar.unknown_like joined_ty)
             else
-              equations)
-          symbols_defined_during_level
-          equations
-      in
-      let equations =
-        Variable.Map.fold (fun var kind equations ->
-          let name = Name.var var in
-          if not (Name.Map.mem name equations) then
-            Name.Map.add name (Type_grammar.unknown kind) equations
-          else
-            equations)
-          t.defined_vars
-          equations
-      in
-      let joined_types =
-        Name.Map.merge (fun name joined_ty use_ty ->
-            (*
-            Format.eprintf "Processing name:@ %a\n%!" Name.print name;
-            *)
-            match joined_ty, use_ty with
-            | None, None -> assert false
-            | Some joined_ty, Some use_ty ->
-              let joined_ty =
-                (* Recall: the order of environments matters here. *)
-                Type_grammar.join ~bound_name:name
-                  env_at_fork
-                  ~left_env ~left_ty:joined_ty
-                  ~right_env:env_at_use ~right_ty:use_ty
-              in
-              (*
-                 Format.eprintf "joined type:@ %a\n%!"
-                 Type_grammar.print joined_ty;
-              *)
-              Some joined_ty
-            | Some joined_ty, None ->
-              let joined_ty =
-                if Typing_env.mem env_at_fork name then
-                  Type_grammar.join ~bound_name:name
-                    env_at_fork
-                    ~left_env ~left_ty:joined_ty
-                    ~right_env:env_at_use
-                    ~right_ty:(Type_grammar.unknown_like joined_ty)
-                else
-                  joined_ty
-              in
-              Some joined_ty
-            | None, Some use_ty ->
-              let joined_ty =
-                if Typing_env.mem env_at_fork name then
-                  Type_grammar.join ~bound_name:name
-                    env_at_fork
-                    ~left_env ~left_ty:(Type_grammar.unknown_like use_ty)
-                    ~right_env:env_at_use ~right_ty:use_ty
-                else
-                  use_ty
-              in
-              Some joined_ty
-        )
-          joined_types
-          equations
-      in
-      joined_types, env_at_fork, code_age_relation)
-    (joined_types, env_at_fork, Typing_env.code_age_relation env_at_fork)
-    envs_with_levels
+              joined_ty
+          in
+          Some joined_ty
+        | None, Some use_ty ->
+          let joined_ty =
+            if Typing_env.mem env_at_fork name then
+              Type_grammar.join ~bound_name:name
+                env_at_fork
+                ~left_env ~left_ty:(Type_grammar.unknown_like use_ty)
+                ~right_env ~right_ty:use_ty
+            else
+              use_ty
+          in
+          Some joined_ty
+    )
+      left right
+  in
+  match envs_with_levels with
+  | [] -> assert false
+  | [(env_at_use, _, _, t, _) as env_with_level] ->
+    let env_at_fork = populate_env_at_fork env_at_fork env_with_level in
+    t.equations, env_at_fork, Typing_env.code_age_relation env_at_use
+  | ((left_env, _, _, left_types, _) as left) ::
+    ((right_env, _, _, right_types, _) as right) :: other_envs_with_levels ->
+    let env_at_fork = populate_env_at_fork env_at_fork left in
+    let env_at_fork = populate_env_at_fork env_at_fork right in
+    let code_age_relation =
+      Code_age_relation.union
+        (Typing_env.code_age_relation left_env)
+        (Typing_env.code_age_relation right_env)
+    in
+    let joined_types =
+      join_equations env_at_fork ~left_env left_types.equations
+        ~right_env right_types.equations
+    in
+    List.fold_left
+      (fun (joined_types, env_at_fork, code_age_relation)
+          ((env_at_use, _id, _use_kind, t, _symbols_defined_during_level)
+           as env_with_level) ->
+        (*
+        Format.eprintf "join_types with level:@ %a\n%!" print t;
+        *)
+        let env_at_fork = populate_env_at_fork env_at_fork env_with_level in
+        let code_age_relation =
+          Code_age_relation.union code_age_relation
+            (Typing_env.code_age_relation env_at_use)
+        in
+        let left_env =
+          let level =
+            { defined_vars = Variable.Map.empty;
+              equations = joined_types;
+              cse = Flambda_primitive.Eligible_for_cse.Map.empty;
+            }
+          in
+          let env_extension = Typing_env_extension.create level in
+          let left_env = Typing_env.add_env_extension env_at_fork env_extension in
+          Typing_env.with_code_age_relation left_env code_age_relation
+        in
+        let joined_types =
+          join_equations env_at_fork ~left_env joined_types ~right_env:env_at_use t.equations
+        in
+        joined_types, env_at_fork, code_age_relation)
+      (joined_types, env_at_fork, code_age_relation)
+      other_envs_with_levels
 
 module Rhs_kind = struct
   type t =
