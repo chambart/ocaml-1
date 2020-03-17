@@ -109,39 +109,44 @@ let rec live env i finally =
       i.live <- !at_fork;
       Reg.add_set_array !at_fork arg
   | Icatch(rec_flag, handlers, body) ->
+      let next_instr_previous_live = i.next.live in
       let at_join = live env i.next finally in
-      let aux env (nfail, ts, handler) (nfail', before_handler) =
-        assert(nfail = nfail');
-        let env = env_from_trap_stack env ts in
-        let before_handler' = live env handler at_join in
-        nfail, Reg.Set.union before_handler before_handler'
-      in
-      let aux_equal (nfail, before_handler) (nfail', before_handler') =
-        assert(nfail = nfail');
-        Reg.Set.equal before_handler before_handler'
-      in
-      let rec fixpoint before_handlers =
-        let env = { env with at_exit = before_handlers @ env.at_exit; } in
-        let before_handlers' = List.map2 (aux env) handlers before_handlers in
-        match rec_flag with
-        | Cmm.Nonrecursive ->
-            before_handlers'
-        | Cmm.Recursive ->
-            if List.for_all2 aux_equal before_handlers before_handlers'
-            then before_handlers'
-            else fixpoint before_handlers'
-      in
-      let init_state =
-        List.map (fun (nfail, _ts, _handler) -> nfail, Reg.Set.empty) handlers
-      in
-      let before_handler = fixpoint init_state in
-      (* We could use handler.live instead of Reg.Set.empty as the initial
-         value but we would need to clean the live field before doing the
-         analysis (to remove remnants of previous passes). *)
-      let env = { env with at_exit = before_handler @ env.at_exit; } in
-      let before_body = live env body at_join in
-      i.live <- before_body;
-      before_body
+      if Reg.Set.equal next_instr_previous_live at_join then
+        i.live
+      else begin
+        let aux env (nfail, ts, handler) (nfail', before_handler) =
+          assert(nfail = nfail');
+          let env = env_from_trap_stack env ts in
+          let before_handler' = live env handler at_join in
+          nfail, Reg.Set.union before_handler before_handler'
+        in
+        let aux_equal (nfail, before_handler) (nfail', before_handler') =
+          assert(nfail = nfail');
+          Reg.Set.equal before_handler before_handler'
+        in
+        let rec fixpoint before_handlers =
+          let env = { env with at_exit = before_handlers @ env.at_exit; } in
+          let before_handlers' = List.map2 (aux env) handlers before_handlers in
+          match rec_flag with
+          | Cmm.Nonrecursive ->
+              before_handlers'
+          | Cmm.Recursive ->
+              if List.for_all2 aux_equal before_handlers before_handlers'
+              then before_handlers'
+              else fixpoint before_handlers'
+        in
+        let init_state =
+          List.map (fun (nfail, _ts, _handler) -> nfail, Reg.Set.empty) handlers
+        in
+        let before_handler = fixpoint init_state in
+        (* We could use handler.live instead of Reg.Set.empty as the initial
+           value but we would need to clean the live field before doing the
+           analysis (to remove remnants of previous passes). *)
+        let env = { env with at_exit = before_handler @ env.at_exit; } in
+        let before_body = live env body at_join in
+        i.live <- before_body;
+        before_body
+      end
   | Iexit (nfail, _traps) ->
       let this_live = find_live_at_exit env nfail in
       i.live <- this_live ;
