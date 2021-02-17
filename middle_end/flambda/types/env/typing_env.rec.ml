@@ -43,15 +43,15 @@ module Cached : sig
     -> Type_grammar.t
     -> Binding_time.t
     -> Name_mode.t
-    -> new_aliases:Aliases.t
     -> t
 
   val replace_variable_binding
      : t
     -> Variable.t
     -> Type_grammar.t
-    -> new_aliases:Aliases.t
     -> t
+
+  val with_aliases : t -> aliases:Aliases.t -> t
 
   val add_symbol_projection : t -> Variable.t -> Symbol_projection.t -> t
 
@@ -131,16 +131,16 @@ end = struct
      (used to be add-or-replace), the [names_to_types] map addition was a
      major source of allocation. *)
 
-  let add_or_replace_binding t (name : Name.t) ty binding_time name_mode ~new_aliases =
+  let add_or_replace_binding t (name : Name.t) ty binding_time name_mode =
     let names_to_types =
       Name.Map.add name (ty, binding_time, name_mode) t.names_to_types
     in
     { names_to_types;
-      aliases = new_aliases;
+      aliases = t.aliases;
       symbol_projections = t.symbol_projections;
     }
 
-  let replace_variable_binding t var ty ~new_aliases =
+  let replace_variable_binding t var ty =
     let names_to_types =
       Name.Map.replace (Name.var var)
         (function (_old_ty, binding_time, name_mode) ->
@@ -148,9 +148,12 @@ end = struct
         t.names_to_types
     in
     { names_to_types;
-      aliases = new_aliases;
+      aliases = t.aliases;
       symbol_projections = t.symbol_projections;
     }
+
+  let with_aliases t ~aliases =
+    { t with aliases; }
 
   let add_symbol_projection t var proj =
     let symbol_projections = Variable.Map.add var proj t.symbol_projections in
@@ -259,6 +262,12 @@ module One_level = struct
   let scope t = t.scope
   let level t = t.level
   let just_after_level t = t.just_after_level
+
+  let with_aliases t ~aliases =
+    let just_after_level =
+      Cached.with_aliases t.just_after_level ~aliases
+    in
+    { t with just_after_level; }
 
   let is_empty t = Typing_env_level.is_empty t.level
 
@@ -781,6 +790,12 @@ let with_current_level_and_next_binding_time t ~current_level
   invariant t;
   t
 
+let with_aliases t ~aliases =
+  let current_level =
+    One_level.with_aliases t.current_level ~aliases
+  in
+  with_current_level t ~current_level
+
 let cached t = One_level.just_after_level t.current_level
 
 let add_variable_definition t var kind name_mode =
@@ -810,7 +825,6 @@ let add_variable_definition t var kind name_mode =
     Cached.add_or_replace_binding (cached t)
       name (Type_grammar.unknown kind)
       t.next_binding_time name_mode
-      ~new_aliases:(aliases t)
   in
   let current_level =
     One_level.create (current_scope t) level ~just_after_level
@@ -911,7 +925,7 @@ let invariant_for_new_equation t aliases name ty =
     end
   end
 
-let rec add_equation0 t aliases name ty =
+let rec add_equation0 t name ty =
   if !Clflags.Flambda.Debug.concrete_types_only_on_canonicals then begin
     let is_concrete =
       match Type_grammar.get_alias_exn ty with
@@ -943,12 +957,11 @@ let rec add_equation0 t aliases name ty =
           then
             Cached.replace_variable_binding
               (One_level.just_after_level t.current_level)
-              var ty ~new_aliases:aliases
+              var ty
           else
             Cached.add_or_replace_binding
               (One_level.just_after_level t.current_level)
               name ty Binding_time.imported_variables Name_mode.in_types
-              ~new_aliases:aliases
         in
         just_after_level)
       ~symbol:(fun _ ->
@@ -956,7 +969,6 @@ let rec add_equation0 t aliases name ty =
           Cached.add_or_replace_binding
             (One_level.just_after_level t.current_level)
             name ty Binding_time.symbols Name_mode.normal
-            ~new_aliases:aliases
         in
         just_after_level)
   in
@@ -1011,7 +1023,7 @@ and add_equation t name ty =
           end)
         ~const:(fun _ -> ())
   end;
-  let aliases, simple, t, ty =
+  let simple, t, ty =
     let aliases = aliases t in
     match Type_grammar.get_alias_exn ty with
     | exception Not_found ->
@@ -1019,7 +1031,7 @@ and add_equation t name ty =
          element as known by the alias tracker (the actual canonical, ignoring
          any name modes). *)
       let canonical = Aliases.get_canonical_ignoring_name_mode aliases name in
-      aliases, canonical, t, ty
+      canonical, t, ty
     | alias_of ->
       let alias_of = Simple.without_coercion alias_of in
       let alias = Simple.name name in
@@ -1033,10 +1045,11 @@ and add_equation t name ty =
         Aliases.add aliases alias binding_time_and_mode_alias
           alias_of binding_time_and_mode_alias_of
       in
+      let t = with_aliases t ~aliases in
       let ty =
         Type_grammar.alias_type_of kind canonical_element
       in
-      aliases, alias_of_demoted_element, t, ty
+      alias_of, t, ty
   in
   (* Beware: if we're about to add the equation on a name which is different
      from the one that the caller passed in, then we need to make sure that the
@@ -1064,7 +1077,15 @@ and add_equation t name ty =
     in
     Simple.pattern_match simple ~name ~const:(fun _ -> ty, t)
   in
-  let [@inline always] name name = add_equation0 t aliases name ty in
+  let ty =
+    match rec_info with
+    | None -> ty
+    | Some rec_info ->
+      match Type_grammar.apply_rec_info ty rec_info with
+      | Bottom -> Type_grammar.bottom (Type_grammar.kind ty)
+      | Ok ty -> ty
+  in
+  let [@inline always] name name = add_equation0 t name ty in
   Simple.pattern_match simple ~name ~const:(fun _ -> t)
 
 and add_env_extension t (env_extension : Typing_env_extension.t) =
