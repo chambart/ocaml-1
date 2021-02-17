@@ -771,8 +771,17 @@ let mem ?min_name_mode t name =
     ~symbol:(fun sym ->
       (* CR mshinwell: This might not take account of symbols in missing
          .cmx files *)
-      Symbol.Set.mem sym t.defined_symbols
-        || Name.Set.mem name (t.get_imported_names ()))
+      let comp_unit = Symbol.compilation_unit sym in
+      if Compilation_unit.equal comp_unit (Compilation_unit.get_current_exn ())
+      then
+        Symbol.Set.mem sym t.defined_symbols
+      else
+        match (resolver t) comp_unit with
+        | None ->
+          (* The cmx is unavailable, but the symbol is valid *)
+          true
+        | Some _ ->
+          Name.Set.mem name (t.get_imported_names ()))
 
 let mem_simple ?min_name_mode t simple =
   Simple.pattern_match simple
