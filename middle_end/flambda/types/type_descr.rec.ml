@@ -468,10 +468,12 @@ module Make (Head : Type_head_intf.S
         | None, (Ok _ | Unknown), _, _
         | _, _, None, (Ok _ | Unknown) -> Aliases.Alias_set.empty
         | Some simple1, _, _, Bottom ->
-          assert (Typing_env.mem_simple (Join_env.target_join_env join_env) simple1);
+          if (Typing_env.mem_simple (Join_env.target_join_env join_env) simple1) then ()
+          else Misc.fatal_errorf "Missing simple %a in join target env" Simple.print simple1;
           Aliases.Alias_set.singleton simple1
         | _, Bottom, Some simple2, _ ->
-          assert (Typing_env.mem_simple (Join_env.target_join_env join_env) simple2);
+          if (Typing_env.mem_simple (Join_env.target_join_env join_env) simple2) then ()
+          else Misc.fatal_errorf "Missing simple %a in join target env" Simple.print simple2;
           Aliases.Alias_set.singleton simple2
         | Some simple1, _, Some simple2, _ ->
           if Simple.same simple1 simple2
