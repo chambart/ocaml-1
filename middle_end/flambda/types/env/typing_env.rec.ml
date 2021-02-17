@@ -934,18 +934,22 @@ let rec add_equation0 (t:t) name ty =
       | exception Not_found -> true
       | _ -> false
     in
-    if is_concrete then begin
-      let canonical =
-        Aliases.get_canonical_ignoring_name_mode (aliases t) name
-        |> Simple.without_coercion
-      in
-      if not (Simple.equal canonical (Simple.name name)) then begin
-        Misc.fatal_errorf "Trying to add equation giving concrete type on %a \
-            which is not canonical (its canonical is %a): %a"
-          Name.print name
-          Simple.print canonical
-          Type_grammar.print ty
-      end
+    let canonical =
+      Aliases.get_canonical_ignoring_name_mode (aliases t) name
+      |> Simple.without_coercion
+    in
+    if is_concrete && not (Simple.equal canonical (Simple.name name)) then begin
+      Misc.fatal_errorf "Trying to add equation giving concrete type on %a \
+          which is not canonical (its canonical is %a): %a"
+        Name.print name
+        Simple.print canonical
+        Type_grammar.print ty
+    end;
+    if not is_concrete && Simple.equal canonical (Simple.name name) then begin
+      Misc.fatal_errorf "Trying to add equation giving alias type on %a \
+          which is canonical: %a"
+        Name.print name
+        Type_grammar.print ty
     end
   end;
   invariant_for_new_equation t name ty;
