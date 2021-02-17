@@ -215,7 +215,7 @@ module Typing_env : sig
   end
 end
 
-val meet : Typing_env.t -> t -> t -> (t * Typing_env_extension.t) Or_bottom.t
+val meet : Typing_env.t -> t -> t -> (t, Typing_env_extension.t) Meet_result.t
 
 val meet_shape
    : Typing_env.t

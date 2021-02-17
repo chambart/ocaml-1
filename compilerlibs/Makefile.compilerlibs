@@ -262,6 +262,7 @@ MIDDLE_END_FLAMBDA_TYPES=\
   middle_end/flambda/types/env/aliases.cmo \
   middle_end/flambda/types/basic/meet_or_join_op.cmo \
   middle_end/flambda/types/basic/or_bottom.cmo \
+  middle_end/flambda/types/basic/meet_result.cmo \
   middle_end/flambda/types/basic/string_info.cmo \
   middle_end/flambda/types/basic/or_unknown_or_bottom.cmo \
   middle_end/flambda/types/structures/code_age_relation.cmo \

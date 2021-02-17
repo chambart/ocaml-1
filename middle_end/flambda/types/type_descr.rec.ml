@@ -137,7 +137,7 @@ module Make (Head : Type_head_intf.S
       | Some simple -> Ok (create_equals simple)
       end
     | No_alias Unknown -> Ok t
-    | No_alias Bottom -> Bottom
+    | No_alias Bottom -> Ok t
     | No_alias (Ok head) ->
       Or_bottom.map (Head.apply_coercion head coercion)
         ~f:(fun head -> create head)
@@ -274,24 +274,18 @@ module Make (Head : Type_head_intf.S
     let head2 = expand_head ~force_to_kind right_ty right_env kind in
     canonical_simple1, head1, canonical_simple2, head2
 
-  type meet_or_join_head_or_unknown_or_bottom_result =
-    | Left_head_unchanged
-    | Right_head_unchanged
-    | New_head of Head.t Or_unknown_or_bottom.t * TEE.t
-
   let meet_head_or_unknown_or_bottom (env : Meet_env.t)
         (head1 : _ Or_unknown_or_bottom.t)
         (head2 : _ Or_unknown_or_bottom.t)
-        : meet_or_join_head_or_unknown_or_bottom_result =
+        : _ Meet_result.t =
     match head1, head2 with
-    | _, Unknown -> Left_head_unchanged
-    | Unknown, _ -> Right_head_unchanged
-    | Bottom, _ -> Left_head_unchanged
-    | _, Bottom -> Right_head_unchanged
+    | Unknown, Unknown -> Ok (Both_inputs, TEE.empty ())
+    | _, Unknown -> Ok (Left_input, TEE.empty ())
+    | Unknown, _ -> Ok (Right_input, TEE.empty ())
+    | Bottom, _ -> Bottom
+    | _, Bottom -> Bottom
     | Ok head1, Ok head2 ->
-      match Head.meet env head1 head2 with
-      | Ok (head, env_extension) -> New_head (Ok head, env_extension)
-      | Bottom -> New_head (Bottom, TEE.empty ())
+      Head.meet env head1 head2
 
   let join_head_or_unknown_or_bottom (env : Join_env.t)
         (head1 : _ Or_unknown_or_bottom.t)
@@ -333,7 +327,7 @@ module Make (Head : Type_head_intf.S
      which is just the same as that already in the environment.  This
      shouldn't have been emitted from [meet]. *)
 
-  let meet ~force_to_kind ~to_type env kind ty1 ty2 t1 t2 : _ Or_bottom.t =
+  let meet ~force_to_kind ~to_type env kind t1 t2 : _ Meet_result.t =
     let typing_env = Meet_env.env env in
     let head1 = expand_head ~force_to_kind t1 typing_env kind in
     let head2 = expand_head ~force_to_kind t2 typing_env kind in
@@ -348,33 +342,28 @@ module Make (Head : Type_head_intf.S
       with
       | exception Not_found ->
         begin match meet_head_or_unknown_or_bottom env head1 head2 with
-        | Left_head_unchanged -> Ok (ty1, TEE.empty ())
-        | Right_head_unchanged -> Ok (ty2, TEE.empty ())
-        | New_head (head, env_extension) ->
-          match head with
-          | Bottom -> Bottom
-          | Unknown -> Ok (to_type (unknown ()), env_extension)
-          | Ok head -> Ok (to_type (create head), env_extension)
+        | Bottom -> Bottom
+        | (Ok ((Left_input | Right_input | Both_inputs), _) as r) -> r
+        | Ok (New_result head, env_extension) ->
+          Ok (New_result (to_type (create head)), env_extension)
         end
       | simple2 ->
         begin match meet_head_or_unknown_or_bottom env head1 head2 with
-        | Left_head_unchanged ->
+        | Ok (Left_input, ext) ->
           let env_extension =
-            TEE.empty ()
+            ext
             |> add_equation env simple2 (to_type (create_no_alias head1))
           in
-          Ok (to_type (create_equals simple2), env_extension)
-        | Right_head_unchanged ->
-          Ok (to_type (create_equals simple2), TEE.empty ())
-        | New_head (head, env_extension) ->
+          Ok (Right_input, env_extension)
+        | Ok ((Right_input | Both_inputs), ext) ->
+          Ok (Right_input, ext)
+        | Ok (New_result head, env_extension) ->
           let env_extension =
             env_extension
-            |> add_equation env simple2 (to_type (create_no_alias head))
+            |> add_equation env simple2 (to_type (create head))
           in
-          match head with
-          | Bottom -> Bottom
-          | Unknown | Ok _ ->
-            Ok (to_type (create_equals simple2), env_extension)
+          Ok (Right_input, env_extension)
+        | Bottom -> Bottom
         end
       end
     | simple1 ->
@@ -384,23 +373,21 @@ module Make (Head : Type_head_intf.S
       with
       | exception Not_found ->
         begin match meet_head_or_unknown_or_bottom env head1 head2 with
-        | Left_head_unchanged ->
-          Ok (to_type (create_equals simple1), TEE.empty ())
-        | Right_head_unchanged ->
+        | Ok (Right_input, ext) ->
           let env_extension =
-            TEE.empty ()
+            ext
             |> add_equation env simple1 (to_type (create_no_alias head2))
           in
-          Ok (to_type (create_equals simple1), env_extension)
-        | New_head (head, env_extension) ->
+          Ok (Left_input, env_extension)
+        | Ok ((Left_input | Both_inputs), ext) ->
+          Ok (Left_input, ext)
+        | Ok (New_result head, env_extension) ->
           let env_extension =
             env_extension
-            |> add_equation env simple1 (to_type (create_no_alias head))
+            |> add_equation env simple1 (to_type (create head))
           in
-          match head with
-          | Bottom -> Bottom
-          | Unknown | Ok _ ->
-            Ok (to_type (create_equals simple1), env_extension)
+          Ok (Left_input, env_extension)
+        | Bottom -> Bottom
         end
       | simple2 ->
         if Simple.equal simple1 simple2
@@ -409,7 +396,7 @@ module Make (Head : Type_head_intf.S
           (* This produces "=simple" for the output rather than a type that
              might need transformation back from an expanded head (as would
              happen if we used the next case). *)
-          Ok (to_type (create_equals simple1), TEE.empty ())
+          Ok (Both_inputs, TEE.empty ())
         end else begin
           assert (not (Simple.equal simple1 simple2));
           let env = Meet_env.now_meeting env simple1 simple2 in
@@ -420,33 +407,33 @@ module Make (Head : Type_head_intf.S
           (* CR mshinwell: May be able to improve efficiency by not
              doing [meet] again (via [TE.add_env_extension]) if we tried
              here to emit the equations the correct way around *)
+          (* Format.eprintf "Type_descr.meet:@.Head1 =@ %a@.Head2 =@ %a@."
+           *   Descr.print (Descr.No_alias head1) Descr.print (Descr.No_alias head2); *)
           match meet_head_or_unknown_or_bottom env head1 head2 with
-          | Left_head_unchanged ->
+          (* Note: in the case where both heads are equal, we arbitrarily
+             pick the left side as the unchanged one.
+             Since for the other side we actually add an alias, it would be
+             wrong to claim that Both_inputs are returned. *)
+          | Ok ((Left_input | Both_inputs), ext) ->
             let env_extension =
-              TEE.empty ()
+              ext
               |> add_equation env simple2 (to_type (create_equals simple1))
             in
-            Ok (to_type (create_equals simple1), env_extension)
-          | Right_head_unchanged ->
+            Ok (Left_input, env_extension)
+          | Ok (Right_input, ext) ->
             let env_extension =
-              TEE.empty ()
+              ext
               |> add_equation env simple1 (to_type (create_equals simple2))
             in
-            Ok (to_type (create_equals simple2), env_extension)
-          | New_head (head, env_extension) ->
+            Ok (Right_input, env_extension)
+          | Ok (New_result head, env_extension) ->
             let env_extension =
               env_extension
-              |> add_equation env simple1 (to_type (create_no_alias head))
+              |> add_equation env simple1 (to_type (create head))
               |> add_equation env simple2 (to_type (create_equals simple1))
             in
-            (* It makes things easier (to check if the result of [meet] was
-               bottom) to not return "=simple" in the bottom case.  This is ok
-               because no constraint is being dropped; the type cannot be
-               refined any further. *)
-            match head with
-            | Bottom -> Bottom
-            | Unknown | Ok _ ->
-              Ok (to_type (create_equals simple1), env_extension)
+            Ok (Left_input, env_extension)
+          | Bottom -> Bottom
         end
 
   let join ?bound_name ~force_to_kind ~to_type join_env kind _ty1 _ty2 t1 t2
@@ -481,8 +468,10 @@ module Make (Head : Type_head_intf.S
         | None, (Ok _ | Unknown), _, _
         | _, _, None, (Ok _ | Unknown) -> Aliases.Alias_set.empty
         | Some simple1, _, _, Bottom ->
+          assert (Typing_env.mem_simple (Join_env.target_join_env join_env) simple1);
           Aliases.Alias_set.singleton simple1
         | _, Bottom, Some simple2, _ ->
+          assert (Typing_env.mem_simple (Join_env.target_join_env join_env) simple2);
           Aliases.Alias_set.singleton simple2
         | Some simple1, _, Some simple2, _ ->
           if Simple.same simple1 simple2

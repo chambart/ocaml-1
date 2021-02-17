@@ -61,8 +61,10 @@ let meet env
       { function_decls = function_decls2;
         closure_types = closure_types2;
         closure_var_types = closure_var_types2;
-      } : _ Or_bottom.t =
+      } : _ Meet_result.t =
   let any_bottom = ref false in
+  let all_left = ref true in
+  let all_right = ref true in
   let env_extensions = ref (TEE.empty ()) in
   let function_decls =
     Closure_id.Map.merge (fun _closure_id func_decl1 func_decl2 ->
@@ -74,36 +76,87 @@ let meet env
         | Bottom ->
           any_bottom := true;
           None
-        | Ok (func_decl, env_extension) ->
+        | Ok (meet_result, env_extension) ->
           begin match TEE.meet env !env_extensions env_extension with
           | Bottom ->
             any_bottom := true;
           | Ok env_extension ->
             env_extensions := env_extension
           end;
-          Some func_decl)
+          begin match meet_result with
+          | Left_input ->
+            all_right := false;
+            Some func_decl1
+          | Right_input ->
+            all_left := false;
+            Some func_decl2
+          | Both_inputs ->
+            Some func_decl1
+          | New_result func_decl ->
+            all_left := false;
+            all_right := false;
+            Some func_decl
+          end)
       function_decls1 function_decls2
   in
   if !any_bottom then
     Bottom
   else
-    Or_bottom.bind
-      (PC.meet env closure_types1 closure_types2)
-      ~f:(fun (closure_types, env_extension1) ->
-        Or_bottom.bind
-          (PV.meet env closure_var_types1 closure_var_types2)
-          ~f:(fun (closure_var_types, env_extension2) ->
+    let closure_types_meet =
+      PC.meet env closure_types1 closure_types2
+    in
+    let closure_var_types_meet =
+      PV.meet env closure_var_types1 closure_var_types2
+    in
+    match closure_types_meet, closure_var_types_meet with
+    | Bottom, _ | _, Bottom -> Bottom
+    | Ok (closure_types_res, env_extension1),
+      Ok (closure_var_types_res, env_extension2) ->
+      match TEE.meet env !env_extensions env_extension1 with
+      | Bottom -> Bottom
+      | Ok env_extension ->
+        match TEE.meet env env_extension env_extension2 with
+        | Bottom -> Bottom
+        | Ok env_extension ->
+          begin match closure_types_res,
+                      closure_var_types_res,
+                      !all_left,
+                      !all_right with
+          | Both_inputs, Both_inputs, true, true ->
+            Ok (Both_inputs, env_extension)
+          | (Left_input | Both_inputs),
+            (Left_input | Both_inputs),
+            true, _ ->
+            Ok (Left_input, env_extension)
+          | (Right_input | Both_inputs),
+            (Right_input | Both_inputs),
+            _, true ->
+            Ok (Right_input, env_extension)
+          | New_result _, _, _, _
+          | _, New_result _, _, _
+          | _, _, false, false
+          | Left_input, Right_input, _, _
+          | Left_input, _, false, _
+          | Right_input, Left_input, _, _
+          | Right_input, _, _, false
+          | _, Left_input, false, _
+          | _, Right_input, _, false ->
+            let closure_types =
+              Meet_result.extract_value closure_types_res
+                closure_types1 closure_types2
+            in
+            let closure_var_types =
+              Meet_result.extract_value closure_var_types_res
+                closure_var_types1 closure_var_types2
+            in
             let closures_entry =
               { function_decls;
                 closure_types;
                 closure_var_types;
               }
             in
-            Or_bottom.bind (TEE.meet env !env_extensions env_extension1)
-              ~f:(fun env_extension ->
-                Or_bottom.bind (TEE.meet env env_extension env_extension2)
-                  ~f:(fun env_extension ->
-                    Ok (closures_entry, env_extension)))))
+            Ok (New_result closures_entry, env_extension)
+          end
 
 let join env
       { function_decls = function_decls1;

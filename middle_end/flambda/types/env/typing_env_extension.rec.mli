@@ -45,6 +45,8 @@ val from_map : Type_grammar.t Name.Map.t -> t
 
 val add_or_replace_equation : t -> Name.t -> Type_grammar.t -> t
 
+(* Note: this doesn't use Meet_result.t, as the meet function here is used
+   to merge extensions together. *)
 val meet : Meet_env.t -> t -> t -> t Or_bottom.t
 
 val join : Join_env.t -> t -> t -> t

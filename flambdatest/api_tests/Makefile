@@ -60,7 +60,7 @@ CAMLDEP=$(CAMLRUN) $(ROOTDIR)/boot/ocamlc -depend
 DEPFLAGS=-slash
 DEPINCLUDES=$(INCLUDES)
 
-SOURCES=extension_meet.ml import_test.ml
+SOURCES=extension_meet.ml import_test.ml join_tests.ml
 
 COMPILERLIBS=\
   $(ROOTDIR)/compilerlibs/ocamlcommon.cma \

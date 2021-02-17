@@ -446,7 +446,7 @@ let these_tagged_immediates0 ~no_alias imms : t =
     else
       Value (T_V.create_no_alias (Ok (Variant (Variant.create
         ~is_unique:false
-        ~immediates:(Known (these_naked_immediates imms))
+        ~immediates:(Known (these_naked_immediates0 ~no_alias imms))
         ~blocks:(Known (Row_like.For_blocks.create_bottom ()))))))
 
 let these_tagged_immediates imms =
@@ -872,32 +872,32 @@ let meet env t1 t2 =
   match t1, t2 with
   | Value ty1, Value ty2 ->
     T_V.meet env
-      K.value t1 t2 ty1 ty2
+      K.value ty1 ty2
       ~force_to_kind:force_to_kind_value
       ~to_type:(fun ty -> Value ty)
   | Naked_immediate ty1, Naked_immediate ty2 ->
     T_NI.meet env
-      K.naked_immediate t1 t2 ty1 ty2
+      K.naked_immediate ty1 ty2
       ~force_to_kind:force_to_kind_naked_immediate
       ~to_type:(fun ty -> Naked_immediate ty)
   | Naked_float ty1, Naked_float ty2 ->
     T_Nf.meet env
-      K.naked_float t1 t2 ty1 ty2
+      K.naked_float ty1 ty2
       ~force_to_kind:force_to_kind_naked_float
       ~to_type:(fun ty -> Naked_float ty)
   | Naked_int32 ty1, Naked_int32 ty2 ->
     T_N32.meet env
-      K.naked_int32 t1 t2 ty1 ty2
+      K.naked_int32 ty1 ty2
       ~force_to_kind:force_to_kind_naked_int32
       ~to_type:(fun ty -> Naked_int32 ty)
   | Naked_int64 ty1, Naked_int64 ty2 ->
     T_N64.meet env
-      K.naked_int64 t1 t2 ty1 ty2
+      K.naked_int64 ty1 ty2
       ~force_to_kind:force_to_kind_naked_int64
       ~to_type:(fun ty -> Naked_int64 ty)
   | Naked_nativeint ty1, Naked_nativeint ty2 ->
     T_NN.meet env
-      K.naked_nativeint t1 t2 ty1 ty2
+      K.naked_nativeint ty1 ty2
       ~force_to_kind:force_to_kind_naked_nativeint
       ~to_type:(fun ty -> Naked_nativeint ty)
   | (Value _ | Naked_immediate _ | Naked_float _ | Naked_int32 _

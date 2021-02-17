@@ -117,8 +117,7 @@ let try_to_reify dacc (term : Simplified_named.t) ~bound_to ~allow_lifting =
   match term with
   | Invalid _ ->
     let ty = T.bottom_like ty in
-    let denv = DE.add_equation_on_variable denv bound_to ty in
-    Simplified_named.invalid (), DA.with_denv dacc denv, ty
+    Simplified_named.invalid (), dacc, ty
   | Reachable _ ->
     let typing_env = DE.typing_env denv in
     let reify_result =

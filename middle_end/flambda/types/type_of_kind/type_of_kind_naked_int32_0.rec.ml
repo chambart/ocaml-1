@@ -38,10 +38,9 @@ let apply_coercion t coercion : _ Or_bottom.t =
 
 let eviscerate _ : _ Or_unknown.t = Unknown
 
-let meet _env t1 t2 : _ Or_bottom.t =
-  let t = Int32.Set.inter t1 t2 in
-  if Int32.Set.is_empty t then Bottom
-  else Ok (t, TEE.empty ())
+let meet _env t1 t2 =
+  Meet_result.set_meet ~no_extension:(TEE.empty ())
+    (module Int32.Set) t1 t2
 
 let join _env t1 t2 : _ Or_unknown.t =
   Known (Int32.Set.union t1 t2)

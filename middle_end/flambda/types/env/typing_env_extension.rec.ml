@@ -115,9 +115,18 @@ let rec meet0 env (t1 : t) (t2 : t) extra_extensions =
         | Some ty0 ->
           begin match Type_grammar.meet env ty0 ty with
           | Bottom -> raise Bottom_meet
-          | Ok (ty, new_ext) ->
-            Type_grammar.check_equation name ty;
-            Name.Map.add (*replace*) name ty eqs, new_ext :: extra_extensions
+          | Ok (res, new_ext) ->
+            let extra_extensions = new_ext :: extra_extensions in
+            begin match res with
+            | Left_input | Both_inputs ->
+              (* The equation is already there *)
+              eqs, extra_extensions
+            | Right_input ->
+              Name.Map.add (*replace*) name ty eqs, extra_extensions
+            | New_result ty ->
+              Type_grammar.check_equation name ty;
+              Name.Map.add (*replace*) name ty eqs, extra_extensions
+            end
           end)
       t2.equations
       (t1.equations, extra_extensions)

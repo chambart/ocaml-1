@@ -90,11 +90,9 @@ module type S = sig
     -> to_type:(t -> flambda_type)
     -> meet_env
     -> Flambda_kind.t
-    -> flambda_type
-    -> flambda_type
     -> t
     -> t
-    -> (flambda_type * typing_env_extension) Or_bottom.t
+    -> (flambda_type, typing_env_extension) Meet_result.t
 
   val join
      : ?bound_name:Name.t

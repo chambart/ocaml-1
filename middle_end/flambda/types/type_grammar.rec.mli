@@ -207,7 +207,7 @@ val make_suitable_for_environment
 val expand_head : t -> Typing_env.t -> Resolved_type.t
 
 (** Greatest lower bound of two types. *)
-val meet : Meet_env.t -> t -> t -> (t * Typing_env_extension.t) Or_bottom.t
+val meet : Meet_env.t -> t -> t -> (t, Typing_env_extension.t) Meet_result.t
 
 (** Least upper bound of two types. *)
 val join

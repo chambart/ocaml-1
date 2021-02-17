@@ -35,7 +35,7 @@ module type S = sig
      : meet_env
     -> t
     -> t
-    -> (t * typing_env_extension) Or_bottom.t
+    -> (t, typing_env_extension) Meet_result.t
 
   val join
      : join_env

@@ -31,7 +31,7 @@ module type S = sig
 
   (* CR mshinwell: Add [bottom] here?  Probably [is_bottom] too *)
 
-  val meet : meet_env -> t -> t -> (t * typing_env_extension) Or_bottom.t
+  val meet : meet_env -> t -> t -> (t, typing_env_extension) Meet_result.t
 
   (* Note that unlike the [join] function on regular types, for structures
      the return type is [t] (and not [t Or_unknown.t]).

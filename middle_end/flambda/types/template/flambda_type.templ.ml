@@ -35,7 +35,7 @@ include Type_grammar
 
 type flambda_type = t
 
-let meet env t1 t2 : _ Or_bottom.t =
+let meet env t1 t2 : _ Meet_result.t =
   let meet_env = Meet_env.create env in
   meet meet_env t1 t2
 

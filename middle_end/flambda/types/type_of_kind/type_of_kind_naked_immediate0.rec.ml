@@ -67,63 +67,93 @@ let apply_coercion t coercion : _ Or_bottom.t =
 
 let eviscerate _ : _ Or_unknown.t = Unknown
 
-let meet env t1 t2 : _ Or_bottom.t =
-    match t1, t2 with
-    | Naked_immediates is1, Naked_immediates is2 ->
-      let is = I.Set.inter is1 is2 in
-      if I.Set.is_empty is then Bottom
-      else Ok (Naked_immediates is, TEE.empty ())
-    | Is_int ty1, Is_int ty2 ->
-      Or_bottom.map (T.meet env ty1 ty2)
-        ~f:(fun (ty, env_extension) -> Is_int ty, env_extension)
-    | Get_tag ty1, Get_tag ty2 ->
-      Or_bottom.map (T.meet env ty1 ty2)
-        ~f:(fun (ty, env_extension) -> Get_tag ty, env_extension)
-    | Is_int ty, Naked_immediates is_int
-    | Naked_immediates is_int, Is_int ty ->
-      begin match I.Set.elements is_int with
-      | [] -> Bottom
-      | [is_int] ->
-        let shape =
-          if I.equal is_int I.zero then Some (T.any_block ())
-          else if I.equal is_int I.one then Some (T.any_tagged_immediate ())
-          else None
-        in
-        begin match shape with
-        | Some shape ->
-          Or_bottom.map
-            (T.meet env ty shape)
-            ~f:(fun (ty, env_extension) -> Is_int ty, env_extension)
-        | None -> Bottom
-        end
-      | _ :: _ :: _ ->
-        (* Note: we're potentially losing precision because the set could end up
-           not containing either 0 or 1 or both, but this should be uncommon. *)
-        Ok (Is_int ty, TEE.empty ())
+type side = Left | Right
+
+let meet env t1 t2 : _ Meet_result.t =
+  let keep_side side : _ Meet_result.t =
+    match side with
+    | Left -> Ok (Left_input, TEE.empty ())
+    | Right -> Ok (Right_input, TEE.empty ())
+  in
+  let keep_other_side side : _ Meet_result.t =
+    match side with
+    | Left -> Ok (Right_input, TEE.empty ())
+    | Right -> Ok (Left_input, TEE.empty ())
+  in
+  let is_int_immediate ~is_int_ty ~immediates ~is_int_side =
+    begin match I.Set.elements immediates with
+    | [] ->
+      (* Keep the type of the immediates, no extension *)
+      keep_other_side is_int_side
+    | [imm] ->
+      let shape =
+        if I.equal imm I.zero then Some (T.any_block ())
+        else if I.equal imm I.one then Some (T.any_tagged_immediate ())
+        else None
+      in
+      begin match shape with
+      | Some shape ->
+        Meet_result.map_result
+          (match is_int_side with
+           | Left -> T.meet env is_int_ty shape
+           | Right -> T.meet env shape is_int_ty)
+          ~f:(fun ty -> Is_int ty)
+      | None -> Meet_result.Bottom
       end
-    | Get_tag ty, Naked_immediates tags
-    | Naked_immediates tags, Get_tag ty ->
+    | _ :: _ :: _ ->
+      (* Note: we're potentially losing precision because the set could end up
+         not containing either 0 or 1 or both, but this should be uncommon. *)
+      keep_side is_int_side
+    end
+  in
+  let get_tag_immediate ~get_tag_ty ~immediates ~get_tag_side =
+    if I.Set.is_empty immediates then keep_other_side get_tag_side
+    else
       let tags =
         I.Set.fold (fun tag tags ->
-            match Target_imm.to_tag tag with
-            | Some tag -> Tag.Set.add tag tags
-            | None -> tags (* No blocks exist with this tag *))
-          tags
+          match Target_imm.to_tag tag with
+          | Some tag -> Tag.Set.add tag tags
+          | None -> tags (* No blocks exist with this tag *))
+          immediates
           Tag.Set.empty
       in
-      begin match T.blocks_with_these_tags tags with
-      | Known shape ->
-        Or_bottom.map
-          (T.meet env ty shape)
-          ~f:(fun (ty, env_extension) -> Get_tag ty, env_extension)
-      | Unknown ->
-        Ok (Get_tag ty, TEE.empty ())
-      end
-    | (Is_int _ | Get_tag _), (Is_int _ | Get_tag _) ->
-      (* We can't return Bottom, as it would be unsound, so we need to either
-         do the actual meet with Naked_immediates, or just give up and return
-         one of the arguments. *)
-      Ok (t1, TEE.empty ())
+      if Tag.Set.is_empty tags then Meet_result.Bottom
+      else
+        begin match T.blocks_with_these_tags tags with
+        | Known shape ->
+          Meet_result.map_result
+            (match get_tag_side with
+             | Left -> T.meet env get_tag_ty shape
+             | Right -> T.meet env shape get_tag_ty)
+            ~f:(fun ty -> Get_tag ty)
+        | Unknown -> keep_side get_tag_side
+        end
+  in
+  match t1, t2 with
+  | Naked_immediates is1, Naked_immediates is2 ->
+    Meet_result.map_result
+      (Meet_result.set_meet ~no_extension:(TEE.empty ())
+         (module I.Set) is1 is2)
+      ~f:(fun is -> Naked_immediates is)
+  | Is_int ty1, Is_int ty2 ->
+    Meet_result.map_result (T.meet env ty1 ty2)
+      ~f:(fun ty -> Is_int ty)
+  | Get_tag ty1, Get_tag ty2 ->
+    Meet_result.map_result (T.meet env ty1 ty2)
+      ~f:(fun ty -> Get_tag ty)
+  | Is_int is_int_ty, Naked_immediates immediates ->
+    is_int_immediate ~is_int_ty ~immediates ~is_int_side:Left
+  | Naked_immediates immediates, Is_int is_int_ty ->
+    is_int_immediate ~is_int_ty ~immediates ~is_int_side:Right
+  | Get_tag get_tag_ty, Naked_immediates immediates ->
+    get_tag_immediate ~get_tag_ty ~immediates ~get_tag_side:Left
+  | Naked_immediates immediates, Get_tag get_tag_ty ->
+    get_tag_immediate ~get_tag_ty ~immediates ~get_tag_side:Right
+  | (Is_int _ | Get_tag _), (Is_int _ | Get_tag _) ->
+    (* We can't return Bottom, as it would be unsound, so we need to either
+       do the actual meet with Naked_immediates, or just give up and return
+       one of the arguments. *)
+    Ok (Left_input, TEE.empty ())
 
 let join env t1 t2 : _ Or_unknown.t =
   match t1, t2 with

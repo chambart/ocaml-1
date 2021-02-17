@@ -147,7 +147,7 @@ struct
    *    *   other_tags = Bottom;
    *    * } *\) *)
 
-  let meet (meet_env : Meet_env.t) t1 t2 : (t * Typing_env_extension.t) Or_bottom.t =
+  let meet (meet_env : Meet_env.t) t1 t2 : _ Meet_result.t =
     let ({ known_tags = known1; other_tags = other1; } : t) = t1 in
     let ({ known_tags = known2; other_tags = other2; } : t) = t2 in
     let env_extension = ref None in
@@ -175,6 +175,8 @@ struct
     let join_env =
       Join_env.create env ~left_env:env ~right_env:env
     in
+    let result_is_t1 = ref true in
+    let result_is_t2 = ref true in
     let join_env_extension ext =
       match !env_extension with
       | None -> env_extension := Some ext
@@ -182,39 +184,80 @@ struct
         assert need_join;
         env_extension := Some (TEE.join join_env ext2 ext)
     in
-    let meet_index i1 i2 : index Or_bottom.t =
+    let meet_index i1 i2 : (index, unit) Meet_result.t =
       match i1, i2 with
       | Known i1', Known i2' ->
         if Index.equal i1' i2' then
-          Ok i1
+          Ok (Both_inputs, ())
         else
           Bottom
-      | Known known, At_least at_least
-      | At_least at_least, Known known ->
-        if Index.subset at_least known then
+      | Known known, At_least at_least ->
           (* [at_least] is included in [known] hence
              [Known known] is included in [At_least at_least], hence
              [Known known] \inter [At_least at_least] = [Known known] *)
-          Ok (Known known)
+        if Index.subset at_least known then
+          Ok (Left_input, ())
+        else
+          Bottom
+      | At_least at_least, Known known ->
+        if Index.subset at_least known then
+          Ok (Right_input, ())
         else
           Bottom
       | At_least i1', At_least i2' ->
-        Ok (At_least (Index.union i1' i2'))
+        if Index.equal i1' i2' then
+          Ok (Both_inputs, ())
+        else
+          let index = Index.union i1' i2' in
+          if Index.equal i1' index then
+            Ok (Left_input, ())
+          else if Index.equal i2' index then
+            Ok (Right_input, ())
+          else
+            Ok (New_result (At_least index), ())
+    in
+    let bottom_case () =
+      result_is_t1 := false;
+      result_is_t2 := false;
+      None
     in
     let meet_case case1 case2 =
       match meet_index case1.index case2.index with
-      | Bottom -> None
-      | Ok index ->
+      | Bottom -> bottom_case ()
+      | Ok (index_result, ()) ->
         match Maps_to.meet meet_env case1.maps_to case2.maps_to with
-        | Bottom -> None
-        | Ok (maps_to, env_extension') ->
+        | Bottom -> bottom_case ()
+        | Ok (maps_to_result, env_extension') ->
           match TEE.meet meet_env case1.env_extension case2.env_extension with
-          | Bottom -> None
+          | Bottom -> bottom_case ()
           | Ok env_extension'' ->
             match TEE.meet meet_env env_extension' env_extension'' with
-            | Bottom -> None
+            | Bottom -> bottom_case ()
             | Ok env_extension ->
               join_env_extension env_extension;
+              begin match index_result with
+              | Both_inputs -> ()
+              | Left_input -> result_is_t2 := false
+              | Right_input -> result_is_t1 := false
+              | New_result _ ->
+                result_is_t1 := false;
+                result_is_t2 := false
+              end;
+              begin match maps_to_result with
+              | Both_inputs -> ()
+              | Left_input -> result_is_t2 := false
+              | Right_input -> result_is_t1 := false
+              | New_result _ ->
+                result_is_t1 := false;
+                result_is_t2 := false
+              end;
+              let index =
+                Meet_result.extract_value index_result case1.index case2.index
+              in
+              let maps_to =
+                Meet_result.extract_value maps_to_result
+                  case1.maps_to case2.maps_to
+              in
               let env_extension =
                 if need_join then env_extension
                 else TEE.empty ()
@@ -226,13 +269,17 @@ struct
       | None, None -> None
       | Some case1, None -> begin
           match other2 with
-          | Bottom -> None
+          | Bottom ->
+            result_is_t1 := false;
+            None
           | Ok other_case ->
             meet_case case1 other_case
         end
       | None, Some case2 -> begin
           match other1 with
-          | Bottom -> None
+          | Bottom ->
+            result_is_t2 := false;
+            None
           | Ok other_case ->
             meet_case other_case case2
         end
@@ -245,7 +292,13 @@ struct
     in
     let other_tags : case Or_bottom.t =
       match other1, other2 with
-      | Bottom, _ | _, Bottom -> Bottom
+      | Bottom, Bottom -> Bottom
+      | Bottom, Ok _ ->
+        result_is_t2 := false;
+        Bottom
+      | Ok _, Bottom ->
+        result_is_t1 := false;
+        Bottom
       | Ok other1, Ok other2 ->
         match meet_case other1 other2 with
         | None -> Bottom
@@ -260,7 +313,11 @@ struct
         | None -> assert false (* This should be bottom *)
         | Some ext -> ext
       in
-      Ok (result, env_extension)
+      match !result_is_t1, !result_is_t2 with
+      | true, true -> Ok (Both_inputs, env_extension)
+      | true, false -> Ok (Left_input, env_extension)
+      | false, true -> Ok (Right_input, env_extension)
+      | false, false -> Ok (New_result result, env_extension)
 
     let join (env : Join_env.t) t1 t2 =
       let ({ known_tags = known1; other_tags = other1; } : t) = t1 in
@@ -476,6 +533,9 @@ struct
 
   end
 
+  (* This module represents non-empty sets of integers closed under the
+     predecessor relation.
+     They can be efficiently represented by their upper bound. *)
   module Targetint_ocaml_index = struct
     include Targetint.OCaml
     let subset t1 t2 = Stdlib.(<=) (compare t1 t2) 0
