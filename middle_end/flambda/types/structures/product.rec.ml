@@ -72,33 +72,43 @@ module Make (Index : Product_intf.Index) = struct
     let all_right = ref true in
     let env_extension = ref (TEE.empty ()) in
     let components_by_index =
-      Index.Map.union (fun _index ty1 ty2 ->
-          match Type_grammar.meet env ty1 ty2 with
-          | Ok (meet_result, env_extension') ->
-            begin match TEE.meet env !env_extension env_extension' with
+      Index.Map.merge (fun _index ty1_opt ty2_opt ->
+          match ty1_opt, ty2_opt with
+          | None, None -> assert false
+          | Some ty1, None ->
+            all_right := false;
+            Some ty1
+          | None, Some ty2 ->
+            all_left := false;
+            Some ty2
+          | Some ty1, Some ty2 ->
+            begin match Type_grammar.meet env ty1 ty2 with
+            | Ok (meet_result, env_extension') ->
+              begin match TEE.meet env !env_extension env_extension' with
+              | Bottom ->
+                any_bottom := true;
+                Some (Type_grammar.bottom_like ty1)
+              | Ok extension ->
+                env_extension := extension;
+                begin match meet_result with
+                | Left_input ->
+                  all_right := false;
+                  Some ty1
+                | Right_input ->
+                  all_left := false;
+                  Some ty2
+                | Both_inputs ->
+                  Some ty1
+                | New_result ty ->
+                  all_left := false;
+                  all_right := false;
+                  Some ty
+                end
+              end
             | Bottom ->
               any_bottom := true;
               Some (Type_grammar.bottom_like ty1)
-            | Ok extension ->
-              env_extension := extension;
-              begin match meet_result with
-              | Left_input ->
-                all_right := false;
-                Some ty1
-              | Right_input ->
-                all_left := false;
-                Some ty2
-              | Both_inputs ->
-                Some ty1
-              | New_result ty ->
-                all_left := false;
-                all_right := false;
-                Some ty
-              end
-            end
-          | Bottom ->
-            any_bottom := true;
-            Some (Type_grammar.bottom_like ty1))
+            end)
         components_by_index1
         components_by_index2
     in
@@ -247,7 +257,12 @@ module Int_indexed = struct
         in
         match get_opt fields1, get_opt fields2 with
         | None, None -> assert false
-        | Some t, None | None, Some t -> t
+        | Some t, None ->
+          all_right := false;
+          t
+        | None, Some t ->
+          all_left := false;
+          t
         | Some ty1, Some ty2 ->
           begin match Type_grammar.meet env ty1 ty2 with
           | Ok (meet_result, env_extension') ->
