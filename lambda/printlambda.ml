@@ -53,23 +53,42 @@ let boxed_integer_name = function
   | Pint32 -> "int32"
   | Pint64 -> "int64"
 
-let value_kind ppf = function
-  | Pgenval -> ()
+
+let rec value_kind' ppf = function
+  | Pgenval -> fprintf ppf "[val]"
   | Pintval -> fprintf ppf "[int]"
   | Pfloatval -> fprintf ppf "[float]"
   | Pboxedintval bi -> fprintf ppf "[%s]" (boxed_integer_name bi)
+  | Pblock { tag; fields } ->
+    fprintf ppf "[%i: %a]" tag
+      (Format.pp_print_list ~pp_sep:(fun ppf () -> fprintf ppf ",@ ")
+         value_kind') fields
+
+let value_kind ppf kind = match kind with
+  | Pgenval -> ()
+  | Pintval | Pfloatval
+  | Pboxedintval _ | Pblock _ ->
+      value_kind' ppf kind
 
 let return_kind ppf = function
   | Pgenval -> ()
   | Pintval -> fprintf ppf ": int@ "
   | Pfloatval -> fprintf ppf ": float@ "
   | Pboxedintval bi -> fprintf ppf ": %s@ " (boxed_integer_name bi)
+  | Pblock { tag; fields } ->
+    fprintf ppf ": [%i: %a]" tag
+      (Format.pp_print_list ~pp_sep:(fun ppf () -> fprintf ppf ",@ ")
+         value_kind') fields
 
-let field_kind = function
-  | Pgenval -> "*"
-  | Pintval -> "int"
-  | Pfloatval -> "float"
-  | Pboxedintval bi -> boxed_integer_name bi
+let field_kind ppf = function
+  | Pgenval -> pp_print_string ppf "*"
+  | Pintval -> pp_print_string ppf "int"
+  | Pfloatval -> pp_print_string ppf "float"
+  | Pboxedintval bi -> pp_print_string ppf (boxed_integer_name bi)
+  | Pblock { tag; fields } ->
+    fprintf ppf "[%i: %a]" tag
+      (Format.pp_print_list ~pp_sep:(fun ppf () -> fprintf ppf ",@ ")
+         value_kind') fields
 
 let print_boxed_integer_conversion ppf bi1 bi2 =
   fprintf ppf "%s_of_%s" (boxed_integer_name bi2) (boxed_integer_name bi1)
@@ -118,11 +137,11 @@ let block_shape ppf shape = match shape with
   | None | Some [] -> ()
   | Some l when List.for_all ((=) Pgenval) l -> ()
   | Some [elt] ->
-      Format.fprintf ppf " (%s)" (field_kind elt)
+      Format.fprintf ppf " (%a)" field_kind elt
   | Some (h :: t) ->
-      Format.fprintf ppf " (%s" (field_kind h);
+      Format.fprintf ppf " (%a" field_kind h;
       List.iter (fun elt ->
-          Format.fprintf ppf ",%s" (field_kind elt))
+          Format.fprintf ppf ",%a" field_kind elt)
         t;
       Format.fprintf ppf ")"
 
