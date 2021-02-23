@@ -154,7 +154,7 @@ let bigarray_type_kind_and_layout env typ =
   | _ ->
       (Pbigarray_unknown, Pbigarray_unknown_layout)
 
-let value_kind env ty =
+let rec value_kind env ty =
   match scrape env ty with
   | Tconstr(p, _, _) when Path.same p Predef.path_int ->
       Pintval
@@ -168,6 +168,26 @@ let value_kind env ty =
       Pboxedintval Pint64
   | Tconstr(p, _, _) when Path.same p Predef.path_nativeint ->
       Pboxedintval Pnativeint
+  | Tconstr(p, _, _) -> begin
+      let constructors, _labels = Env.find_type_descrs p env in
+      let is_constant = function
+        | { cstr_tag = Cstr_constant _ } -> true
+        | _ -> false
+      in
+      if List.for_all is_constant constructors then
+        Pintval
+      else
+        match constructors with
+        | [ { cstr_tag = Cstr_block { tag }; cstr_args } ] ->
+          let fields = List.map (value_kind env) cstr_args in
+          Pblock { tag; fields }
+        | _ ->
+          Pgenval
+    end
+  | Ttuple fields -> begin
+      let fields = List.map (value_kind env) fields in
+      Pblock { tag = 0; fields }
+    end
   | _ ->
       Pgenval
 
@@ -211,5 +231,6 @@ let classify_lazy_argument : Typedtree.expression ->
        `Other
 
 let value_kind_union k1 k2 =
+  (* TODO, block union *)
   if k1 = k2 then k1
   else Pgenval
