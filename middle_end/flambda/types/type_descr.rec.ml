@@ -507,9 +507,15 @@ module Make (Head : Type_head_intf.S
     (* CR mshinwell: Add shortcut when the canonical simples are equal *)
     let shared_aliases =
       let shared_aliases =
-        match canonical_simple1, canonical_simple2 with
-        | None, _ | _, None -> Simple.Set.empty
-        | Some simple1, Some simple2 ->
+        match canonical_simple1, head1, canonical_simple2, head2 with
+        | None, _, None, _
+        | None, (Ok _ | Unknown), _, _
+        | _, _, None, (Ok _ | Unknown) -> Simple.Set.empty
+        | Some simple1, _, _, Bottom ->
+          Simple.Set.singleton simple1
+        | _, Bottom, Some simple2, _ ->
+          Simple.Set.singleton simple2
+        | Some simple1, _, Some simple2, _ ->
           if Simple.same simple1 simple2
           then Simple.Set.singleton simple1
           else
