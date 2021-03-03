@@ -41,6 +41,8 @@ val is_empty : t -> bool
 
 val one_equation : Name.t -> Type_grammar.t -> t
 
+val from_map : Type_grammar.t Name.Map.t -> t
+
 val add_or_replace_equation : t -> Name.t -> Type_grammar.t -> t
 
 val meet : Meet_env.t -> t -> t -> t Or_bottom.t

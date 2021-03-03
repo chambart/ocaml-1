@@ -283,35 +283,42 @@ let join_types ~env_at_fork envs_with_levels ~extra_lifted_consts_in_use_envs =
      Any such variable will be given type [Unknown] on a branch where it
      was not originally present.
      Iterating on [level.binding_times] instead of [level.defined_vars] ensures
-     consistency of binding time order in the branches and the result. *)
+     consistency of binding time order in the branches and the result.
+     In addition, this also aggregates the code age relations of the branches.
+  *)
   let env_at_fork =
-    List.fold_left (fun env_at_fork (_, _, _, level) ->
-        Binding_time.Map.fold (fun _ vars env ->
-            Variable.Set.fold (fun var env ->
-                if Typing_env.mem env (Name.var var) then env
-                else
-                  let kind = Variable.Map.find var level.defined_vars in
-                  Typing_env.add_definition env
-                    (Name_in_binding_pos.var
-                       (Var_in_binding_pos.create var Name_mode.in_types))
-                    kind)
-              vars
-              env)
-          level.binding_times
-          env_at_fork)
+    List.fold_left (fun env_at_fork (env_at_use, _, _, level) ->
+        let env_with_variables =
+          Binding_time.Map.fold (fun _ vars env ->
+              Variable.Set.fold (fun var env ->
+                  if Typing_env.mem env (Name.var var) then env
+                  else
+                    let kind = Variable.Map.find var level.defined_vars in
+                    Typing_env.add_definition env
+                      (Name_in_binding_pos.var
+                         (Var_in_binding_pos.create var Name_mode.in_types))
+                      kind)
+                vars
+                env)
+            level.binding_times
+            env_at_fork
+        in
+        let code_age_relation =
+          Code_age_relation.union (Typing_env.code_age_relation env_at_fork)
+            (Typing_env.code_age_relation env_at_use)
+        in
+        Typing_env.with_code_age_relation env_with_variables code_age_relation)
       env_at_fork
       envs_with_levels
   in
   (* Now fold over the levels doing the actual join operation on equations. *)
   ListLabels.fold_left envs_with_levels
-    ~init:(env_at_fork, Name.Map.empty, true)
-    ~f:(fun (join_env, joined_types, is_first_join) (env_at_use, _, _, t) ->
-      let join_env =
-        Code_age_relation.union (Typing_env.code_age_relation join_env)
-          (Typing_env.code_age_relation env_at_use)
-        |> Typing_env.with_code_age_relation join_env
+    ~init:(Name.Map.empty, true)
+    ~f:(fun (joined_types, is_first_join) (env_at_use, _, _, t) ->
+      let left_env =
+        Typing_env.add_env_extension env_at_fork
+          (Typing_env_extension.from_map joined_types)
       in
-      let next_join_env = ref join_env in
       let join_types name joined_ty use_ty =
         (* CR mshinwell for vlaviron: Looks like [Typing_env.mem] needs
            fixing with respect to names from other units with their
@@ -360,16 +367,11 @@ let join_types ~env_at_fork envs_with_levels ~extra_lifted_consts_in_use_envs =
                   let expected_kind = Some (Type_grammar.kind use_ty) in
                   Typing_env.find env_at_fork name expected_kind
               in
-              (* Recall: the order of environments matters for [join].
-                 Also note that we use [env_at_fork] not [env_at_use] for
-                 the right-hand environment.  This is done because there may
-                 be names in types in [env_at_fork] that are not defined in
-                 [env_at_use] -- see the comment in [check_join_inputs]
-                 below. *)
+              (* Recall: the order of environments matters for [join]. *)
               let join_env =
                 Join_env.create env_at_fork
-                  ~left_env:join_env
-                  ~right_env:env_at_fork
+                  ~left_env
+                  ~right_env:env_at_use
               in
               Type_grammar.join ~bound_name:name
                 join_env left_ty use_ty
@@ -384,7 +386,7 @@ let join_types ~env_at_fork envs_with_levels ~extra_lifted_consts_in_use_envs =
               let right_ty = Typing_env.find env_at_fork name expected_kind in
               let join_env =
                 Join_env.create env_at_fork
-                  ~left_env:join_env
+                  ~left_env
                   ~right_env:env_at_fork
               in
               Type_grammar.join ~bound_name:name
@@ -396,7 +398,7 @@ let join_types ~env_at_fork envs_with_levels ~extra_lifted_consts_in_use_envs =
               assert (not is_first_join);
               let join_env =
                 Join_env.create env_at_fork
-                  ~left_env:join_env
+                  ~left_env
                   ~right_env:env_at_use
               in
               Type_grammar.join ~bound_name:name
@@ -405,15 +407,13 @@ let join_types ~env_at_fork envs_with_levels ~extra_lifted_consts_in_use_envs =
           in
           begin match joined_ty with
           | Known joined_ty ->
-            next_join_env :=
-              Typing_env.add_equation !next_join_env name joined_ty;
             Some joined_ty
           | Unknown -> None
           end
       in
       let joined_types = Name.Map.merge join_types joined_types t.equations in
-      !next_join_env, joined_types, false)
-  |> fun (_, joined_types, _) ->
+      joined_types, false)
+  |> fun (joined_types, _) ->
   joined_types
 
 let construct_joined_level envs_with_levels ~env_at_fork ~allowed

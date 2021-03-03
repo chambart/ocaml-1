@@ -54,6 +54,9 @@ let empty () = { equations = Name.Map.empty; }
 
 let is_empty { equations } = Name.Map.is_empty equations
 
+let from_map equations =
+  { equations; }
+
 let one_equation name ty =
   Type_grammar.check_equation name ty;
   { equations = Name.Map.singleton name ty; }
