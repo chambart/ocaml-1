@@ -277,7 +277,7 @@ let concat (t1 : t) (t2 : t) =
     symbol_projections;
   }
 
-let join_types ~env_at_fork envs_with_levels ~extra_lifted_consts_in_use_envs =
+let join_types ~env_at_fork envs_with_levels =
   (* Add all the variables defined by the branches as existentials to the
      [env_at_fork].
      Any such variable will be given type [Unknown] on a branch where it
@@ -332,17 +332,15 @@ let join_types ~env_at_fork envs_with_levels ~extra_lifted_consts_in_use_envs =
             Name.print name
             Typing_env.print env_at_fork
         end;
-        let is_lifted_const_symbol =
-          match Name.must_be_symbol_opt name with
-          | None -> false
-          | Some symbol ->
-            Symbol.Set.mem symbol extra_lifted_consts_in_use_envs
-        in
         (* If [name] is that of a lifted constant symbol generated during one
            of the levels, then ignore it.  [Simplify_expr] will already have
            made its type suitable for [env_at_fork] and inserted it into that
-           environment. *)
-        if is_lifted_const_symbol then None
+           environment.
+           If [name] is a symbol that is not a lifted constant, then it was
+           defined before the fork and already has an equation in env_at_fork.
+           While it is possible that its type could be refined by all of the
+           branches, it is unlikely. *)
+        if Name.is_symbol name then None
         else
           let joined_ty =
             match joined_ty, use_ty with
@@ -517,7 +515,7 @@ let join ~env_at_fork envs_with_levels ~params
     ~extra_lifted_consts_in_use_envs;
   (* Calculate the joined types of all the names involved. *)
   let joined_types =
-    join_types ~env_at_fork envs_with_levels ~extra_lifted_consts_in_use_envs
+    join_types ~env_at_fork envs_with_levels
   in
   (* Next calculate which equations (describing joined types) to propagate to
      the join point.  (Recall that the environment at the fork point includes
