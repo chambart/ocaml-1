@@ -293,7 +293,12 @@ let prove_is_int env t : bool proof =
   | Const _ -> wrong_kind ()
   | Value (Ok (Variant blocks_imms)) ->
     begin match blocks_imms.blocks, blocks_imms.immediates with
-    | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
+    | Unknown, Unknown | Unknown, Known _ -> Unknown
+    | Known blocks, Unknown ->
+      if Row_like.For_blocks.is_bottom blocks then
+        Proved true
+      else
+        Unknown
     | Known blocks, Known imms ->
       (* CR mshinwell: Should we tighten things up by causing fatal errors
          in cases such as [blocks] and [imms] both being bottom? *)
