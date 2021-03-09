@@ -154,7 +154,7 @@ let bigarray_type_kind_and_layout env typ =
   | _ ->
       (Pbigarray_unknown, Pbigarray_unknown_layout)
 
-let rec value_kind env ty =
+let rec value_kind' env ~visited ty : Lambda.value_kind =
   match scrape env ty with
   | Tconstr(p, _, _) when Path.same p Predef.path_int ->
       Pintval
@@ -168,28 +168,39 @@ let rec value_kind env ty =
       Pboxedintval Pint64
   | Tconstr(p, _, _) when Path.same p Predef.path_nativeint ->
       Pboxedintval Pnativeint
-  | Tconstr(p, _, _) -> begin
-      let constructors, _labels = Env.find_type_descrs p env in
-      let is_constant = function
-        | { cstr_tag = Cstr_constant _ } -> true
-        | _ -> false
-      in
-      if List.for_all is_constant constructors then
-        Pintval
-      else
-        match constructors with
-        | [ { cstr_tag = Cstr_block { tag }; cstr_args } ] ->
-          let fields = List.map (value_kind env) cstr_args in
-          Pblock { tag; fields }
-        | _ ->
-          Pgenval
-    end
-  | Ttuple fields -> begin
-      let fields = List.map (value_kind env) fields in
-      Pblock { tag = 0; fields }
-    end
+  | Tconstr(p, _, _) ->
+      if Numbers.Int.Set.mem ty.id visited then
+        Pgenval
+      else begin
+        let constructors, _labels = Env.find_type_descrs p env in
+        let is_constant = function
+          | { cstr_tag = Cstr_constant _ } -> true
+          | _ -> false
+        in
+        if List.for_all is_constant constructors then
+          Pintval
+        else
+          match constructors with
+          | [ { cstr_tag = Cstr_block { tag }; cstr_args } ] ->
+              let visited = Numbers.Int.Set.add ty.id visited in
+              let fields = List.map (value_kind' env ~visited) cstr_args in
+              Pblock { tag; fields }
+          | _ ->
+              Pgenval
+      end
+  | Ttuple fields ->
+      if Numbers.Int.Set.mem ty.id visited then
+        Pgenval
+      else begin
+        let visited = Numbers.Int.Set.add ty.id visited in
+        let fields = List.map (value_kind' env ~visited) fields in
+        Pblock { tag = 0; fields }
+      end
   | _ ->
       Pgenval
+
+let value_kind env ty = value_kind' env ~visited:Numbers.Int.Set.empty ty
+
 
 let function_return_value_kind env ty =
   match is_function_type env ty with
