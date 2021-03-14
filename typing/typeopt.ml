@@ -173,20 +173,21 @@ let rec value_kind' env ~visited ty : Lambda.value_kind =
         Pgenval
       else begin
         let constructors, _labels = Env.find_type_descrs p env in
-        let is_constant = function
-          | { cstr_tag = Cstr_constant _ } -> true
-          | _ -> false
-        in
-        if List.for_all is_constant constructors then
-          Pintval
-        else
-          match constructors with
-          | [ { cstr_tag = Cstr_block { tag }; cstr_args } ] ->
-              let visited = Numbers.Int.Set.add ty.id visited in
-              let fields = List.map (value_kind' env ~visited) cstr_args in
-              Pblock { tag; fields }
-          | _ ->
-              Pgenval
+        match constructors with
+        | [] -> Pgenval
+        | [ { cstr_tag = Cstr_block { tag }; cstr_args } ] ->
+          let visited = Numbers.Int.Set.add ty.id visited in
+          let fields = List.map (value_kind' env ~visited) cstr_args in
+          Pblock { tag; fields }
+        | _ ->
+          let is_constant = function
+            | { cstr_tag = Cstr_constant _ } -> true
+            | _ -> false
+          in
+          if List.for_all is_constant constructors then
+            Pintval
+          else
+            Pgenval
       end
   | Ttuple fields ->
       if Numbers.Int.Set.mem ty.id visited then
