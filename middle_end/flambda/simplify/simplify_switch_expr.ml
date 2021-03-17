@@ -23,7 +23,7 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
   let new_let_conts, arms, identity_arms, not_arms =
     Target_imm.Map.fold
       (fun arm (action, use_id, arity)
-           (new_let_conts, arms, identity_arms, not_arms) ->
+        (new_let_conts, arms, identity_arms, not_arms) ->
         match
           EB.add_wrapper_for_switch_arm uacc action
             ~use_id (Flambda_arity.With_subkinds.of_arity arity)
@@ -35,7 +35,7 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
                continuation without trap action) into the [Switch] expression
                itself. *)
             if not (Apply_cont.is_goto action) then Some action
-            else
+            else begin
               let cont = Apply_cont.continuation action in
               let check_handler ~handler ~action =
                 match RE.to_apply_cont handler with
@@ -59,6 +59,7 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
                     in [UA]:@ %a"
                   Continuation.print cont
                   UA.print uacc
+            end
           in
           begin match action with
           | None ->

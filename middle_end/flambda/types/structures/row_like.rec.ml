@@ -550,13 +550,60 @@ struct
         else
           Known by_tag
 
-    let get_field t field_index : _ Or_unknown.t =
+    let all_tags_and_fields { known_tags; other_tags; }
+      : Type_grammar.t array Tag.Map.t Or_unknown.t =
+      match other_tags with
+      | Ok _ -> Unknown
+      | Bottom ->
+        begin try
+          let map =
+            Tag.Map.map (fun { maps_to; index; } ->
+              match index with
+              | At_least _ -> raise Exit
+              | Known index ->
+                Array.init (Targetint.OCaml.to_int index)
+                  (fun i ->
+                     match Product.Int_indexed.project maps_to i with
+                     | Unknown -> Type_grammar.any_value ()
+                     | Known ty -> ty)
+            ) known_tags
+          in
+          Known map
+        with Exit ->
+          Unknown
+        end
+
+    let get_field t field_index : _ Or_unknown_or_bottom.t =
       match get_singleton t with
       | None -> Unknown
       | Some ((_tag, size), maps_to) ->
         let index = Target_imm.to_targetint field_index in
-        if Targetint.OCaml.(<=) size index then Unknown
-        else Product.Int_indexed.project maps_to (Targetint.OCaml.to_int index)
+        if Targetint.OCaml.(<=) size index then Bottom
+        else
+          match Product.Int_indexed.project maps_to
+                  (Targetint.OCaml.to_int index) with
+          | Unknown -> Unknown
+          | Known res -> Ok res
+
+    let get_variant_field t variant_tag field_index : _ Or_unknown_or_bottom.t =
+      let index = Target_imm.to_targetint field_index in
+      let aux { index = size; maps_to; } : _ Or_unknown_or_bottom.t =
+        match size with
+        | Known i when i <= index -> Bottom
+        | _ ->
+          match Product.Int_indexed.project maps_to
+                  (Targetint.OCaml.to_int index) with
+          | Unknown -> Unknown
+          | Known res -> Ok res
+      in
+      match Tag.Map.find variant_tag t.known_tags with
+      | case -> aux case
+      | exception Not_found ->
+        begin match t.other_tags with
+        | Bottom -> Bottom
+        | Ok case -> aux case
+        end
+
   end
 
   module For_closures_entry_by_set_of_closures_contents = struct

@@ -546,6 +546,10 @@ let create_switch uacc ~scrutinee ~arms =
 let rebuild_invalid uacc ~after_rebuild =
   after_rebuild (RE.create_invalid ()) uacc
 
+type rewrite_use_ctx =
+  | Apply_cont
+  | Apply_expr of Simple.t list
+
 type rewrite_use_result =
   | Apply_cont of Apply_cont.t
   | Expr of (
@@ -555,7 +559,7 @@ type rewrite_use_result =
 
 let no_rewrite apply_cont = Apply_cont apply_cont
 
-let rewrite_use uacc rewrite id apply_cont : rewrite_use_result =
+let rewrite_use uacc rewrite ~ctx id apply_cont : rewrite_use_result =
   let args = Apply_cont.args apply_cont in
   let original_params = Apply_cont_rewrite.original_params rewrite in
   if List.compare_lengths args original_params <> 0 then begin
@@ -588,8 +592,24 @@ let rewrite_use uacc rewrite id apply_cont : rewrite_use_result =
              Named.create_prim prim Debuginfo.none)
               :: extra_lets
           in
-          extra_args_rev, extra_lets)
-      ([], [])
+          extra_args_rev, extra_lets
+        | New_let_binding_with_named_args (temp, gen_prim) ->
+          let prim =
+            match (ctx :rewrite_use_ctx) with
+            | Apply_expr args -> gen_prim args
+            | Apply_cont ->
+              Misc.fatal_errorf "Apply_cont rewrites should not need to name \
+                                 arguments, since they are aleady named."
+          in
+          let extra_args_rev = Simple.var temp :: extra_args_rev in
+          let extra_lets =
+            (Var_in_binding_pos.create temp Name_mode.normal,
+             Code_size.prim prim,
+             Named.create_prim prim Debuginfo.none)
+            :: extra_lets
+          in
+          extra_args_rev, extra_lets
+      ) ([], [])
       extra_args_list
   in
   let args = args @ List.rev extra_args_rev in
@@ -644,7 +664,7 @@ let rewrite_exn_continuation rewrite id exn_cont =
       (fun param (arg : Continuation_extra_params_and_args.Extra_arg.t) ->
         match arg with
         | Already_in_scope simple -> simple, KP.kind param
-        | New_let_binding _ ->
+        | New_let_binding _ | New_let_binding_with_named_args _ ->
           Misc.fatal_error "[New_let_binding] not expected here")
       used_extra_params extra_args_list
   in
@@ -711,7 +731,8 @@ let add_wrapper_for_fixed_arity_continuation0 uacc cont_or_apply_cont
       let params = List.map2 KP.create params arity in
       let args = List.map KP.simple params in
       let apply_cont = Apply_cont.create cont ~args ~dbg:Debuginfo.none in
-      begin match rewrite_use uacc rewrite use_id apply_cont with
+      let ctx = Apply_expr args in
+      begin match rewrite_use uacc rewrite use_id ~ctx apply_cont with
       | Apply_cont apply_cont ->
         let cost_metrics =
           Cost_metrics.from_size (Code_size.apply_cont apply_cont)
@@ -731,7 +752,7 @@ let add_wrapper_for_fixed_arity_continuation0 uacc cont_or_apply_cont
       end
     | Apply_cont apply_cont ->
       let apply_cont = Apply_cont.update_continuation apply_cont cont in
-      match rewrite_use uacc rewrite use_id apply_cont with
+      match rewrite_use uacc rewrite ~ctx:Apply_cont use_id apply_cont with
       | Apply_cont apply_cont -> Apply_cont apply_cont
       | Expr build_expr ->
         let expr, cost_metrics, free_names =

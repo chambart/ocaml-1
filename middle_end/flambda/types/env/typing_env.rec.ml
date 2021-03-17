@@ -854,7 +854,7 @@ let add_definition t (name : Name_in_binding_pos.t) kind =
       add_symbol_definition t sym)
 
 let invariant_for_new_equation t name ty =
-  if !Clflags.flambda_invariant_checks then begin
+  if (Sys.getenv_opt "TEST" <> None) || !Clflags.flambda_invariant_checks then begin
     (* CR mshinwell: This should check that precision is not decreasing. *)
     let defined_names =
       Name_occurrences.create_names
@@ -865,6 +865,7 @@ let invariant_for_new_equation t name ty =
     let free_names =
       Name_occurrences.without_code_ids (Type_grammar.free_names ty)
     in
+    let free_names = Name_occurrences.add_name free_names name Name_mode.in_types in
     if not (Name_occurrences.subset_domain free_names defined_names) then begin
       let unbound_names = Name_occurrences.diff free_names defined_names in
       Misc.fatal_errorf "New equation@ %a@ =@ %a@ has unbound names@ (%a):@ %a"

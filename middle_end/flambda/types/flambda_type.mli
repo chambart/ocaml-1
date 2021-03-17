@@ -157,6 +157,14 @@ module Typing_env : sig
     -> Simple.t
     -> flambda_type
 
+  (** Raises [Not_found] if no canonical [Simple] was found. *)
+  val get_alias_then_canonical_simple_exn
+     : t
+    -> ?min_name_mode:Name_mode.t
+    -> ?name_mode_of_existing_simple:Name_mode.t
+    -> flambda_type
+    -> Simple.t
+
   val add_to_code_age_relation : t -> newer:Code_id.t -> older:Code_id.t -> t
 
   val code_age_relation : t -> Code_age_relation.t
@@ -433,6 +441,11 @@ val closure_with_at_least_this_closure_var
   -> closure_element_var:Variable.t
   -> flambda_type
 
+val closure_with_at_least_these_closure_vars
+   : this_closure:Closure_id.t
+  -> Variable.t Var_within_closure.Map.t
+  -> flambda_type
+
 val array_of_length : length:flambda_type -> flambda_type
 
 (** Construct a type equal to the type of the given name.  (The name
@@ -501,15 +514,15 @@ val prove_naked_int64s : Typing_env.t -> t -> Numbers.Int64.Set.t proof
 
 val prove_naked_nativeints : Typing_env.t -> t -> Targetint.Set.t proof
 
-type variant_proof = private {
-  const_ctors : Target_imm.Set.t;
+type variant_like_proof = private {
+  const_ctors : Target_imm.Set.t Or_unknown.t;
   non_const_ctors_with_sizes : Targetint.OCaml.t Tag.Scannable.Map.t;
 }
 
-val prove_variant
+val prove_variant_like
    : Typing_env.t
   -> t
-  -> variant_proof proof_allowing_kind_mismatch
+  -> variant_like_proof proof_allowing_kind_mismatch
 
 val prove_is_a_tagged_immediate
    : Typing_env.t
@@ -570,10 +583,54 @@ val prove_single_closures_entry'
 
 val prove_strings : Typing_env.t -> t -> String_info.Set.t proof
 
+val prove_untagged_int_simple
+  : Typing_env.t
+  -> min_name_mode:Name_mode.t
+  -> t
+  -> Simple.t proof
+
+val prove_untagged_int_simple_maybe
+  : Typing_env.t
+  -> min_name_mode:Name_mode.t
+  -> t
+  -> Simple.t proof
+
+val prove_unboxed_float_simple
+   : Typing_env.t
+  -> min_name_mode:Name_mode.t
+  -> t
+  -> Simple.t proof
+
+val prove_unboxed_int32_simple
+   : Typing_env.t
+  -> min_name_mode:Name_mode.t
+  -> t
+  -> Simple.t proof
+
+val prove_unboxed_int64_simple
+   : Typing_env.t
+  -> min_name_mode:Name_mode.t
+  -> t
+  -> Simple.t proof
+
+val prove_unboxed_nativeint_simple
+   : Typing_env.t
+  -> min_name_mode:Name_mode.t
+  -> t
+  -> Simple.t proof
+
 val prove_block_field_simple
    : Typing_env.t
   -> min_name_mode:Name_mode.t
   -> t
+  -> Target_imm.t
+  -> Simple.t proof
+
+val prove_variant_field_simple
+   : Typing_env.t
+  -> min_name_mode:Name_mode.t
+  -> t
+  -> Tag.t
   -> Target_imm.t
   -> Simple.t proof
 
@@ -583,6 +640,22 @@ val prove_project_var_simple
   -> t
   -> Var_within_closure.t
   -> Simple.t proof
+
+type untagged_const_ctor_name =
+  | Named of Variable.t
+  | Not_named
+  | Absent
+
+type variant_shape = {
+  untagged_const_ctor : untagged_const_ctor_name;
+  non_const_ctors_names : Variable.t array Tag.Scannable.Map.t;
+}
+
+val name_variant
+  : Typing_env.t
+ -> Variable.t
+ -> variant_shape
+ -> Typing_env.t
 
 type var_or_symbol_or_tagged_immediate = private
   | Var of Variable.t

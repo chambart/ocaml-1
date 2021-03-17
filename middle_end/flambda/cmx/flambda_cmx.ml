@@ -39,6 +39,8 @@ let rec load_cmx_file_contents backend comp_unit ~imported_units ~imported_names
       let typing_env, code =
         Flambda_cmx_format.import_typing_env_and_code cmx
       in
+      if Sys.getenv_opt "TEST" <> None then
+        Format.eprintf "imported:@\n%a@." TE.Serializable.print typing_env;
       let typing_env =
         TE.Serializable.to_typing_env ~resolver ~get_imported_names typing_env
       in

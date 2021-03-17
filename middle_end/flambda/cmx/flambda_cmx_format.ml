@@ -151,7 +151,8 @@ let import_typing_env_and_code0 t =
 let import_typing_env_and_code t =
   match t with
   | [] -> Misc.fatal_error "Flambda cmx info should never be empty"
-  | [ t0 ] -> import_typing_env_and_code0 t0
+  | [ t0 ] ->
+    import_typing_env_and_code0 t0
   | t0 :: rem ->
     List.fold_left (fun (typing_env, code) t0 ->
         let (typing_env0, code0) = import_typing_env_and_code0 t0 in

@@ -670,15 +670,11 @@ let at_least_the_closures_with_ids ~this_closure closure_ids_and_bindings =
   in
   Value (T_V.create (Closures { by_closure_id; }))
 
-let closure_with_at_least_this_closure_var ~this_closure
-    closure_var ~closure_element_var : t =
+let closure_with_at_least_these_closure_vars ~this_closure closure_vars : t =
   let closure_var_types =
-    let closure_var_type =
-      alias_type_of K.value (Simple.var closure_element_var)
-    in
-    Product.Var_within_closure_indexed.create
-      Flambda_kind.value
-      (Var_within_closure.Map.singleton closure_var closure_var_type)
+    let type_of_var v = alias_type_of K.value (Simple.var v) in
+    let map = Var_within_closure.Map.map type_of_var closure_vars in
+    Product.Var_within_closure_indexed.create Flambda_kind.value map
   in
   let closures_entry =
     Closures_entry.create ~function_decls:Closure_id.Map.empty
@@ -689,7 +685,7 @@ let closure_with_at_least_this_closure_var ~this_closure
     let set_of_closures_contents =
       Set_of_closures_contents.create
         Closure_id.Set.empty
-        (Var_within_closure.Set.singleton closure_var)
+        (Var_within_closure.Map.keys closure_vars)
     in
     Row_like.For_closures_entry_by_set_of_closures_contents.
       create_at_least
@@ -698,6 +694,11 @@ let closure_with_at_least_this_closure_var ~this_closure
       closures_entry
   in
   Value (T_V.create (Closures { by_closure_id; }))
+
+let closure_with_at_least_this_closure_var ~this_closure
+      closure_var ~closure_element_var : t =
+  closure_with_at_least_these_closure_vars ~this_closure
+    (Var_within_closure.Map.singleton closure_var closure_element_var)
 
 let array_of_length ~length =
   Value (T_V.create (Array { length; }))

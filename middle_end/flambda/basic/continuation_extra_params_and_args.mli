@@ -20,6 +20,8 @@ module Extra_arg : sig
   type t =
     | Already_in_scope of Simple.t
     | New_let_binding of Variable.t * Flambda_primitive.t
+    | New_let_binding_with_named_args of
+        Variable.t * (Simple.t list -> Flambda_primitive.t)
 
   val print : Format.formatter -> t -> unit
 
@@ -45,6 +47,12 @@ val add
    : t
   -> extra_param:Kinded_parameter.t
   -> extra_args:Extra_arg.t Apply_cont_rewrite_id.Map.t
+  -> t
+
+val add_list
+   : t
+  -> extra_params:Kinded_parameter.t list
+  -> extra_args:Extra_arg.t list Apply_cont_rewrite_id.Map.t
   -> t
 
 val concat : t -> t -> t
