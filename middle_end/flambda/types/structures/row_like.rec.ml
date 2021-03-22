@@ -47,6 +47,14 @@ struct
   type index =
     | Known of Index.t (** Known x represents the singleton set: { x } *)
     | At_least of Index.t (** At_least x represents the set { y | x \subset y } *)
+    | Range of { at_least : Index.t; at_most : Index.t; }
+    (** Range { at_least; at_most represents the set
+        { x | at_least \subset x /\ x \subset at_most }
+        or { x | at_least \subset x } if at_most is None
+
+        invariant: at_least is strictly smaller than at_most. If they are
+        equal, this is a Known. This invariant is usefull to simplify bottom
+        checks *)
 
   type case = { maps_to : Maps_to.t; index : index }
 
@@ -66,6 +74,10 @@ struct
     | At_least min_index ->
       Format.fprintf ppf "(At_least @[<2>%a@])"
         Index.print min_index
+    | Range { at_least = min_index; at_most = max_index } ->
+      Format.fprintf ppf "(Range @[<2>%a@ %a@])"
+        Index.print min_index
+        Index.print max_index
 
   let print_with_cache ~cache ppf (({ known_tags; other_tags } as t) : t) =
     if is_bottom t then
@@ -94,6 +106,17 @@ struct
     print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   let _invariant _t = ()
+
+  (** Produces Range constructor verifying its invariant. *)
+  let range ~at_least ~at_most : index Or_bottom.t =
+    if Index.subset at_most at_least then
+      if Index.equal at_least at_most then
+        Ok (Known at_least)
+      else
+        (* at_least is strictly greater than at_most => the set is empty *)
+        Bottom
+    else
+      Ok (Range { at_least; at_most })
 
   let create_bottom () =
     { known_tags = Tag.Map.empty;
@@ -157,8 +180,30 @@ struct
           Ok (Known known)
         else
           Bottom
-      | At_least i1', At_least i2' ->
-        Ok (At_least (Index.union i1' i2'))
+      | Known known, Range { at_least; at_most }
+      | Range { at_least; at_most }, Known known ->
+        if Index.subset at_least known then
+          if Index.subset known at_most then
+          (* [at_least] is included in [known] and
+             [known] is included in [at_most] hence
+             [Known known] is included in [Range { at_least; at_most }], hence
+             [Known known] \inter [Range { at_least; at_most }] = [Known known] *)
+            Ok (Known known)
+          else
+            Bottom
+        else
+          Bottom
+      | At_least at_least1, At_least at_least2 ->
+        Ok (At_least (Index.union at_least1 at_least2))
+      | At_least at_least1, Range { at_least = at_least2; at_most }
+      | Range { at_least = at_least1; at_most }, At_least at_least2 ->
+        let at_least = Index.union at_least1 at_least2 in
+        range ~at_least ~at_most
+      | Range { at_least = at_least1; at_most = at_most1 },
+        Range { at_least = at_least2; at_most = at_most2 } ->
+        let at_least = Index.union at_least1 at_least2 in
+        let at_most = Index.inter at_most1 at_most2 in
+        range ~at_least ~at_most
     in
     let meet_case case1 case2 =
       match meet_index case1.index case2.index with
@@ -220,16 +265,42 @@ struct
           if Index.equal i1' i2' then
             i1
           else
-            (* We can't represent exactly the union,
-               This is the best approximation *)
-            At_least (Index.inter i1' i2')
+            Range {
+              at_least = Index.inter i1' i2';
+              at_most = Index.union i1' i2';
+            }
         | Known i1', At_least i2'
         | At_least i1', Known i2'
-        | At_least i1', At_least i2' ->
+        | At_least i1', At_least i2'
+        | Range { at_least = i1'; at_most = _ }, At_least i2'
+        | At_least i1', Range { at_least = i2'; at_most = _ } ->
           At_least (Index.inter i1' i2')
+        | Known known, Range { at_least; at_most = at_most }
+        | Range { at_least; at_most = at_most }, Known known ->
+          Range {
+            at_least = Index.inter known at_least;
+            at_most = Index.union known at_most;
+          }
+        | Range { at_least = at_least1; at_most = at_most1 },
+          Range { at_least = at_least2; at_most = at_most2 } ->
+          Range {
+            at_least = Index.inter at_least1 at_least2;
+            at_most = Index.union at_most1 at_most2;
+          }
       in
       let join_case env case1 case2 =
         let index = join_index case1.index case2.index in
+        (* CR pchambart: This join ignores the index. If we join
+           [ 1 => a ] with [ 1 => b, 2 => c ] we end up with
+           [ 1 => join a b, 2 => join top c ] but we would like
+           [ 1 => join a b, 2 => join bottom c ]
+           Maps_to.join needs to be aware that the left branch can't have
+           the index 2 to be able to do the right thing here.
+
+           This can happen when joining polymophic variants:
+           `A (1, 2) \/ `B (1, 2, 3)
+           will result in a type where the 3rd field is unknown.
+        *)
         let maps_to = Maps_to.join env case1.maps_to case2.maps_to in
         { maps_to; index }
       in
@@ -304,6 +375,8 @@ struct
         | Ok other1, Ok other2 ->
           Ok (join_case env other1 other2)
       in
+      Format.printf "Join blocks:@ %a@ %a@ %a@."
+        print t1 print t2 print { known_tags; other_tags };
       { known_tags; other_tags }
 
     let get_singleton { known_tags; other_tags; } =
@@ -314,7 +387,7 @@ struct
         | None -> None
         | Some (tag, { maps_to; index }) ->
           match index with
-          | At_least _ -> None
+          | At_least _ | Range _ -> None
           | Known index ->
             Some ((tag, index), maps_to)
 
@@ -388,7 +461,13 @@ struct
     let apply_renaming ({ known_tags; other_tags; } as t) renaming =
       let rename_index = function
         | Known index -> Known (Index.apply_renaming index renaming)
-        | At_least index -> At_least (Index.apply_renaming index renaming)
+        | Range { at_least; at_most } ->
+          Range {
+            at_least = Index.apply_renaming at_least renaming;
+            at_most = Index.apply_renaming at_most renaming;
+          }
+        | At_least at_least ->
+          At_least (Index.apply_renaming at_least renaming)
       in
       let known_tags' =
         Tag.Map.map_sharing (fun { index; maps_to } ->
@@ -540,9 +619,10 @@ struct
           Tag.Map.map (fun index ->
               match index with
               | Known index -> index
-              | At_least index ->
+              | At_least at_least
+              | Range { at_least; _ } ->
                 any_unknown := true;
-                index)
+                at_least)
             tags_and_indexes
         in
         if !any_unknown then
