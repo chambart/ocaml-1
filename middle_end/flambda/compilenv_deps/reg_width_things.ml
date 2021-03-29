@@ -49,7 +49,7 @@ module Const_data = struct
           Target_imm.print i
           (Flambda_colours.normal ())
       | Naked_immediate (Poison, i) ->
-        Format.fprintf ppf "@<0>%s#Poison %a@<0>%s"
+        Format.fprintf ppf "@<0>%s#Poison_%a@<0>%s"
           (Flambda_colours.naked_number ())
           Target_imm.print i
           (Flambda_colours.normal ())
@@ -59,7 +59,7 @@ module Const_data = struct
           Target_imm.print i
           (Flambda_colours.normal ())
       | Tagged_immediate (Poison, i) ->
-        Format.fprintf ppf "@<0>%sPoison %a@<0>%s"
+        Format.fprintf ppf "@<0>%sPoison_%a@<0>%s"
           (Flambda_colours.tagged_immediate ())
           Target_imm.print i
           (Flambda_colours.normal ())
@@ -69,7 +69,7 @@ module Const_data = struct
           Numbers.Float_by_bit_pattern.print f
           (Flambda_colours.normal ())
       | Naked_float (Poison, f) ->
-        Format.fprintf ppf "@<0>%s#Poison %a@<0>%s"
+        Format.fprintf ppf "@<0>%s#Poison_%a@<0>%s"
           (Flambda_colours.naked_number ())
           Numbers.Float_by_bit_pattern.print f
           (Flambda_colours.normal ())
@@ -79,7 +79,7 @@ module Const_data = struct
           n
           (Flambda_colours.normal ())
       | Naked_int32 (Poison, n) ->
-        Format.fprintf ppf "@<0>%s#Poison %ldl@<0>%s"
+        Format.fprintf ppf "@<0>%s#Poison_%ldl@<0>%s"
           (Flambda_colours.naked_number ())
           n
           (Flambda_colours.normal ())
@@ -89,7 +89,7 @@ module Const_data = struct
           n
           (Flambda_colours.normal ())
       | Naked_int64 (Poison, n) ->
-        Format.fprintf ppf "@<0>%s#Poison %LdL@<0>%s"
+        Format.fprintf ppf "@<0>%s#Poison_%LdL@<0>%s"
           (Flambda_colours.naked_number ())
           n
           (Flambda_colours.normal ())
@@ -99,7 +99,7 @@ module Const_data = struct
           Targetint.print n
           (Flambda_colours.normal ())
       | Naked_nativeint (Poison, n) ->
-        Format.fprintf ppf "@<0>%s#Poison %an@<0>%s"
+        Format.fprintf ppf "@<0>%s#Poison_%an@<0>%s"
           (Flambda_colours.naked_number ())
           Targetint.print n
           (Flambda_colours.normal ())
