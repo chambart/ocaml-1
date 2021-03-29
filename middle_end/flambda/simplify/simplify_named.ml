@@ -71,7 +71,7 @@ let record_any_symbol_projection dacc (defining_expr : Simplified_named.t)
         Simple.pattern_match index
           ~const:(fun const ->
             match Reg_width_const.descr const with
-            | Tagged_immediate imm ->
+            | Tagged_immediate (_, imm) ->
               Simple.pattern_match' block
                 ~const:(fun _ -> None)
                 ~symbol:(fun symbol_projected_from ->

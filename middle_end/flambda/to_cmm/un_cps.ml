@@ -75,15 +75,15 @@ let targetint_of_imm i = Targetint.OCaml.to_targetint i.Target_imm.value
 
 let const _env cst =
   match Reg_width_const.descr cst with
-  | Naked_immediate i ->
+  | Naked_immediate (_, i) ->
     C.targetint (targetint_of_imm i)
-  | Tagged_immediate i ->
+  | Tagged_immediate (_, i) ->
     C.targetint (tag_targetint (targetint_of_imm i))
-  | Naked_float f ->
+  | Naked_float (_, f) ->
     C.float (Numbers.Float_by_bit_pattern.to_float f)
-  | Naked_int32 i -> C.int32 i
-  | Naked_int64 i -> C.int64 i
-  | Naked_nativeint t -> C.targetint t
+  | Naked_int32 (_, i) -> C.int32 i
+  | Naked_int64 (_, i) -> C.int64 i
+  | Naked_nativeint (_, t) -> C.targetint t
 
 let default_of_kind (k : Flambda_kind.t) =
   match k with

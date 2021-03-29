@@ -52,19 +52,30 @@ module Const : sig
   val naked_int64 : Int64.t -> t
   val naked_nativeint : Targetint.t -> t
 
+  val naked_immediate_poison : t
+  val tagged_immediate_poison : t
+  val naked_float_poison : t
+  val naked_int32_poison : t
+  val naked_int64_poison : t
+  val naked_nativeint_poison : t
+
   module Descr : sig
+    type is_poison = private Value | Poison
+
     type t = private
-      | Naked_immediate of Target_imm.t
-      | Tagged_immediate of Target_imm.t
-      | Naked_float of Numbers.Float_by_bit_pattern.t
-      | Naked_int32 of Int32.t
-      | Naked_int64 of Int64.t
-      | Naked_nativeint of Targetint.t
+      | Naked_immediate of is_poison * Target_imm.t
+      | Tagged_immediate of is_poison * Target_imm.t
+      | Naked_float of is_poison * Numbers.Float_by_bit_pattern.t
+      | Naked_int32 of is_poison * Int32.t
+      | Naked_int64 of is_poison * Int64.t
+      | Naked_nativeint of is_poison * Targetint.t
 
     include Identifiable.S with type t := t
   end
 
   val descr : t -> Descr.t
+
+  val is_poison : t -> Descr.is_poison
 
   val export : t -> exported
 

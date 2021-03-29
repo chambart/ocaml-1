@@ -41,7 +41,10 @@ let simplify_field_of_block dacc (field : Field_of_block.t) =
             ~symbol:(fun sym -> Field_of_block.Symbol sym, ty))
         ~const:(fun const ->
           match Reg_width_const.descr const with
-          | Tagged_immediate imm -> Field_of_block.Tagged_immediate imm, ty
+          | Tagged_immediate (Value, imm) -> Field_of_block.Tagged_immediate imm, ty
+          | Tagged_immediate (Poison, _) ->
+            (* CR pchambart: This should be "invalid" and propagate up *)
+            field, T.bottom K.value
           | Naked_immediate _ | Naked_float _ | Naked_int32 _
               | Naked_int64 _ | Naked_nativeint _ ->
             (* CR mshinwell: This should be "invalid" and propagate up *)

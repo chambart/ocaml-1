@@ -55,18 +55,18 @@ let name_static env name =
 
 let const_static _env cst =
   match Reg_width_const.descr cst with
-  | Naked_immediate i ->
+  | Naked_immediate (_, i) ->
       [C.cint (nativeint_of_targetint (targetint_of_imm i))]
-  | Tagged_immediate i ->
+  | Tagged_immediate (_, i) ->
       [C.cint (nativeint_of_targetint (tag_targetint (targetint_of_imm i)))]
-  | Naked_float f ->
+  | Naked_float (_, f) ->
       [C.cfloat (Numbers.Float_by_bit_pattern.to_float f)]
-  | Naked_int32 i ->
+  | Naked_int32 (_, i) ->
       [C.cint (Nativeint.of_int32 i)]
-  | Naked_int64 i ->
+  | Naked_int64 (_, i) ->
       if C.arch32 then todo() (* split int64 on 32-bit archs *)
       else [C.cint (Int64.to_nativeint i)]
-  | Naked_nativeint t ->
+  | Naked_nativeint (_, t) ->
       [C.cint (nativeint_of_targetint t)]
 
 let simple_static env s =

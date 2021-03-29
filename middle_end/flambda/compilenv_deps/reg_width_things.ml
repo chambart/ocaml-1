@@ -26,13 +26,15 @@ let const_flags = 2
 let simple_flags = 3
 
 module Const_data = struct
-  type t =
-    | Naked_immediate of Target_imm.t
-    | Tagged_immediate of Target_imm.t
-    | Naked_float of Numbers.Float_by_bit_pattern.t
-    | Naked_int32 of Int32.t
-    | Naked_int64 of Int64.t
-    | Naked_nativeint of Targetint.t
+    type is_poison = Value | Poison
+
+    type t =
+      | Naked_immediate of is_poison * Target_imm.t
+      | Tagged_immediate of is_poison * Target_imm.t
+      | Naked_float of is_poison * Numbers.Float_by_bit_pattern.t
+      | Naked_int32 of is_poison * Int32.t
+      | Naked_int64 of is_poison * Int64.t
+      | Naked_nativeint of is_poison * Targetint.t
 
   let flags = const_flags
 
@@ -41,33 +43,63 @@ module Const_data = struct
 
     let print ppf (t : t) =
       match t with
-      | Naked_immediate i ->
+      | Naked_immediate (Value, i) ->
         Format.fprintf ppf "@<0>%s#%a@<0>%s"
           (Flambda_colours.naked_number ())
           Target_imm.print i
           (Flambda_colours.normal ())
-      | Tagged_immediate i ->
+      | Naked_immediate (Poison, i) ->
+        Format.fprintf ppf "@<0>%s#Poison %a@<0>%s"
+          (Flambda_colours.naked_number ())
+          Target_imm.print i
+          (Flambda_colours.normal ())
+      | Tagged_immediate (Value, i) ->
         Format.fprintf ppf "@<0>%s%a@<0>%s"
           (Flambda_colours.tagged_immediate ())
           Target_imm.print i
           (Flambda_colours.normal ())
-      | Naked_float f ->
+      | Tagged_immediate (Poison, i) ->
+        Format.fprintf ppf "@<0>%sPoison %a@<0>%s"
+          (Flambda_colours.tagged_immediate ())
+          Target_imm.print i
+          (Flambda_colours.normal ())
+      | Naked_float (Value, f) ->
         Format.fprintf ppf "@<0>%s#%a@<0>%s"
           (Flambda_colours.naked_number ())
           Numbers.Float_by_bit_pattern.print f
           (Flambda_colours.normal ())
-      | Naked_int32 n ->
+      | Naked_float (Poison, f) ->
+        Format.fprintf ppf "@<0>%s#Poison %a@<0>%s"
+          (Flambda_colours.naked_number ())
+          Numbers.Float_by_bit_pattern.print f
+          (Flambda_colours.normal ())
+      | Naked_int32 (Value, n) ->
         Format.fprintf ppf "@<0>%s#%ldl@<0>%s"
           (Flambda_colours.naked_number ())
           n
           (Flambda_colours.normal ())
-      | Naked_int64 n ->
+      | Naked_int32 (Poison, n) ->
+        Format.fprintf ppf "@<0>%s#Poison %ldl@<0>%s"
+          (Flambda_colours.naked_number ())
+          n
+          (Flambda_colours.normal ())
+      | Naked_int64 (Value, n) ->
         Format.fprintf ppf "@<0>%s#%LdL@<0>%s"
           (Flambda_colours.naked_number ())
           n
           (Flambda_colours.normal ())
-      | Naked_nativeint n ->
+      | Naked_int64 (Poison, n) ->
+        Format.fprintf ppf "@<0>%s#Poison %LdL@<0>%s"
+          (Flambda_colours.naked_number ())
+          n
+          (Flambda_colours.normal ())
+      | Naked_nativeint (Value, n) ->
         Format.fprintf ppf "@<0>%s#%an@<0>%s"
+          (Flambda_colours.naked_number ())
+          Targetint.print n
+          (Flambda_colours.normal ())
+      | Naked_nativeint (Poison, n) ->
+        Format.fprintf ppf "@<0>%s#Poison %an@<0>%s"
           (Flambda_colours.naked_number ())
           Targetint.print n
           (Flambda_colours.normal ())
@@ -76,17 +108,29 @@ module Const_data = struct
 
     let compare t1 t2 =
       match t1, t2 with
-      | Naked_immediate i1, Naked_immediate i2 ->
+      | Naked_immediate (Poison, _), Naked_immediate (Value, _) -> -1
+      | Naked_immediate (Value, _), Naked_immediate (Poison, _) -> 1
+      | Naked_immediate ((Poison | Value), i1), Naked_immediate ((Poison | Value), i2) ->
         Target_imm.compare i1 i2
-      | Tagged_immediate i1, Tagged_immediate i2 ->
+      | Tagged_immediate (Poison, _), Tagged_immediate (Value, _) -> -1
+      | Tagged_immediate (Value, _), Tagged_immediate (Poison, _) -> 1
+      | Tagged_immediate ((Poison | Value), i1), Tagged_immediate ((Poison | Value), i2) ->
         Target_imm.compare i1 i2
-      | Naked_float f1, Naked_float f2 ->
+      | Naked_float (Poison, _), Naked_float (Value, _) -> -1
+      | Naked_float (Value, _), Naked_float (Poison, _) -> 1
+      | Naked_float ((Poison | Value), f1), Naked_float ((Poison | Value), f2) ->
         Numbers.Float_by_bit_pattern.compare f1 f2
-      | Naked_int32 n1, Naked_int32 n2 ->
+      | Naked_int32 (Poison, _), Naked_int32 (Value, _) -> -1
+      | Naked_int32 (Value, _), Naked_int32 (Poison, _) -> 1
+      | Naked_int32 ((Poison | Value), n1), Naked_int32 ((Poison | Value), n2) ->
         Int32.compare n1 n2
-      | Naked_int64 n1, Naked_int64 n2 ->
+      | Naked_int64 (Poison, _), Naked_int64 (Value, _) -> -1
+      | Naked_int64 (Value, _), Naked_int64 (Poison, _) -> 1
+      | Naked_int64 ((Poison | Value), n1), Naked_int64 ((Poison | Value), n2) ->
         Int64.compare n1 n2
-      | Naked_nativeint n1, Naked_nativeint n2 ->
+      | Naked_nativeint (Poison, _), Naked_nativeint (Value, _) -> -1
+      | Naked_nativeint (Value, _), Naked_nativeint (Poison, _) -> 1
+      | Naked_nativeint ((Poison | Value), n1), Naked_nativeint ((Poison | Value), n2) ->
         Targetint.compare n1 n2
       | Naked_immediate _, _ -> -1
       | _, Naked_immediate _ -> 1
@@ -99,33 +143,50 @@ module Const_data = struct
       | Naked_int64 _, _ -> -1
       | _, Naked_int64 _ -> 1
 
+    let equal_poison (p1 : is_poison) (p2 : is_poison) =
+      match p1, p2 with
+      | Poison, Poison -> true
+      | Value, Value -> true
+      | Poison, Value
+      | Value, Poison -> false
+
     let equal t1 t2 =
       if t1 == t2 then true
       else
         match t1, t2 with
-        | Naked_immediate i1, Naked_immediate i2 ->
-          Target_imm.equal i1 i2
-        | Tagged_immediate i1, Tagged_immediate i2 ->
-          Target_imm.equal i1 i2
-        | Naked_float f1, Naked_float f2 ->
-          Numbers.Float_by_bit_pattern.equal f1 f2
-        | Naked_int32 n1, Naked_int32 n2 ->
-          Int32.equal n1 n2
-        | Naked_int64 n1, Naked_int64 n2 ->
-          Int64.equal n1 n2
-        | Naked_nativeint n1, Naked_nativeint n2 ->
-          Targetint.equal n1 n2
+        | Naked_immediate (p1, i1), Naked_immediate (p2, i2) ->
+          equal_poison p1 p2 && Target_imm.equal i1 i2
+        | Tagged_immediate (p1, i1), Tagged_immediate (p2, i2) ->
+          equal_poison p1 p2 && Target_imm.equal i1 i2
+        | Naked_float (p1, f1), Naked_float (p2, f2) ->
+          equal_poison p1 p2 && Numbers.Float_by_bit_pattern.equal f1 f2
+        | Naked_int32 (p1, n1), Naked_int32 (p2, n2) ->
+          equal_poison p1 p2 && Int32.equal n1 n2
+        | Naked_int64 (p1, n1), Naked_int64 (p2, n2) ->
+          equal_poison p1 p2 && Int64.equal n1 n2
+        | Naked_nativeint (p1, n1), Naked_nativeint (p2, n2) ->
+          equal_poison p1 p2 && Targetint.equal n1 n2
         | (Naked_immediate _ | Tagged_immediate _ | Naked_float _
             | Naked_int32 _ | Naked_int64 _ | Naked_nativeint _), _ -> false
 
+    let hash_poison = function
+      | Value -> 0
+      | Poison -> 1
+
     let hash t =
       match t with
-      | Naked_immediate n -> Target_imm.hash n
-      | Tagged_immediate n -> Target_imm.hash n
-      | Naked_float n -> Numbers.Float_by_bit_pattern.hash n
-      | Naked_int32 n -> Hashtbl.hash n
-      | Naked_int64 n -> Hashtbl.hash n
-      | Naked_nativeint n -> Targetint.hash n
+      | Naked_immediate (p, n) ->
+        Misc.hash2 (hash_poison p) (Target_imm.hash n)
+      | Tagged_immediate (p, n) ->
+        Misc.hash2 (hash_poison p) (Target_imm.hash n)
+      | Naked_float (p, n) ->
+        Misc.hash2 (hash_poison p) (Numbers.Float_by_bit_pattern.hash n)
+      | Naked_int32 (p, n) ->
+        Misc.hash2 (hash_poison p) (Hashtbl.hash n)
+      | Naked_int64 (p, n) ->
+        Misc.hash2 (hash_poison p) (Hashtbl.hash n)
+      | Naked_nativeint (p, n) ->
+        Misc.hash2 (hash_poison p) (Targetint.hash n)
   end)
 end
 
@@ -265,12 +326,12 @@ module Const = struct
   let create (data : Const_data.t) =
     Table.add !grand_table_of_constants data
 
-  let naked_immediate imm = create (Naked_immediate imm)
-  let tagged_immediate imm = create (Tagged_immediate imm)
-  let naked_float f = create (Naked_float f)
-  let naked_int32 i = create (Naked_int32 i)
-  let naked_int64 i = create (Naked_int64 i)
-  let naked_nativeint i = create (Naked_nativeint i)
+  let naked_immediate imm = create (Naked_immediate (Value, imm))
+  let tagged_immediate imm = create (Tagged_immediate (Value, imm))
+  let naked_float f = create (Naked_float (Value, f))
+  let naked_int32 i = create (Naked_int32 (Value, i))
+  let naked_int64 i = create (Naked_int64 (Value, i))
+  let naked_nativeint i = create (Naked_nativeint (Value, i))
 
   let const_true = tagged_immediate Target_imm.bool_true
   let const_false = tagged_immediate Target_imm.bool_false
@@ -288,7 +349,29 @@ module Const = struct
   let const_one = tagged_immediate Target_imm.one
   let const_unit = const_zero
 
+  let naked_immediate_poison =
+    create (Naked_immediate (Poison, Target_imm.zero))
+  let tagged_immediate_poison =
+    create (Tagged_immediate (Poison, Target_imm.zero))
+  let naked_float_poison =
+    create (Naked_float (Poison, Numbers.Float_by_bit_pattern.zero))
+  let naked_int32_poison =
+    create (Naked_int32 (Poison, Int32.zero))
+  let naked_int64_poison =
+    create (Naked_int64 (Poison, Int64.zero))
+  let naked_nativeint_poison =
+    create (Naked_nativeint (Poison, Targetint.zero))
+
   let descr t = find_data t
+
+  let is_poison t =
+    match find_data t with
+    | Naked_immediate (p, _) -> p
+    | Tagged_immediate (p, _) -> p
+    | Naked_float (p, _) -> p
+    | Naked_int32 (p, _) -> p
+    | Naked_int64 (p, _) -> p
+    | Naked_nativeint (p, _) -> p
 
   module T0 = struct
     let compare = Id.compare

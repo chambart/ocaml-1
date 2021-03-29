@@ -82,7 +82,7 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
               *)
               let [@inline always] const arg =
                 match Reg_width_const.descr arg with
-                | Tagged_immediate arg ->
+                | Tagged_immediate (_, arg) ->
                   if Target_imm.equal arm arg then
                     let identity_arms =
                       Target_imm.Map.add arm action identity_arms

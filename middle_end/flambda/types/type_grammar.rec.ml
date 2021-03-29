@@ -704,12 +704,12 @@ let array_of_length ~length =
 
 let type_for_const const =
   match Reg_width_const.descr const with
-  | Naked_immediate i -> this_naked_immediate i
-  | Tagged_immediate i -> this_tagged_immediate i
-  | Naked_float f -> this_naked_float f
-  | Naked_int32 n -> this_naked_int32 n
-  | Naked_int64 n -> this_naked_int64 n
-  | Naked_nativeint n -> this_naked_nativeint n
+  | Naked_immediate (_, i) -> this_naked_immediate i
+  | Tagged_immediate (_, i) -> this_tagged_immediate i
+  | Naked_float (_, f) -> this_naked_float f
+  | Naked_int32 (_, n) -> this_naked_int32 n
+  | Naked_int64 (_, n) -> this_naked_int64 n
+  | Naked_nativeint (_, n) -> this_naked_nativeint n
 
 let kind_for_const const = kind (type_for_const const)
 

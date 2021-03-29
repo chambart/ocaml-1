@@ -163,12 +163,12 @@ module Make (Head : Type_head_intf.S
         let [@inline always] const const =
           let typ =
             match Reg_width_const.descr const with
-            | Naked_immediate i -> T.this_naked_immediate_without_alias i
-            | Tagged_immediate i -> T.this_tagged_immediate_without_alias i
-            | Naked_float f -> T.this_naked_float_without_alias f
-            | Naked_int32 i -> T.this_naked_int32_without_alias i
-            | Naked_int64 i -> T.this_naked_int64_without_alias i
-            | Naked_nativeint i -> T.this_naked_nativeint_without_alias i
+            | Naked_immediate (_, i) -> T.this_naked_immediate_without_alias i
+            | Tagged_immediate (_, i) -> T.this_tagged_immediate_without_alias i
+            | Naked_float (_, f) -> T.this_naked_float_without_alias f
+            | Naked_int32 (_, i) -> T.this_naked_int32_without_alias i
+            | Naked_int64 (_, i) -> T.this_naked_int64_without_alias i
+            | Naked_nativeint (_, i) -> T.this_naked_nativeint_without_alias i
           in
           force_to_head ~force_to_kind typ
         in
