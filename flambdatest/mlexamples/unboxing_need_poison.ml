@@ -8,8 +8,8 @@ let[@inline] f b y z g =
       B (g z)
   in
   match v with
-  | A (_, a) -> a
-  | B c -> c
+  | A (_, a) -> a + 2
+  | B c -> c + 2
 
 let[@inline] g x = 12
 
