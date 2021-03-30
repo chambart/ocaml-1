@@ -30,7 +30,7 @@ module Make (Head : Type_head_intf.S
 = struct
   module Descr = struct
     type t =
-      | No_alias of Head.t Or_unknown_or_bottom.t
+      | No_alias of Head.t Or_unknown_or_bottom_or_poison.t
       | Equals of Simple.t
 
     let print_with_cache ~cache ppf t =
@@ -48,6 +48,12 @@ module Make (Head : Type_head_intf.S
             colour (Flambda_colours.normal ())
         else
           Format.fprintf ppf "@<0>%s_|_@<0>%s" colour (Flambda_colours.normal ())
+      | No_alias Poison ->
+        if !Clflags.flambda_unicode then
+          Format.fprintf ppf "@<0>%s@<1>\u{2620}@<0>%s"
+            colour (Flambda_colours.normal ())
+        else
+          Format.fprintf ppf "@<0>%sP@<0>%s" colour (Flambda_colours.normal ())
       | No_alias (Ok head) -> Head.print_with_cache ~cache ppf head
       | Equals simple ->
         Format.fprintf ppf "@[(@<0>%s=@<0>%s %a)@]"
@@ -62,7 +68,9 @@ module Make (Head : Type_head_intf.S
       if Renaming.is_empty renaming then t
       else
         match t with
-        | No_alias Bottom | No_alias Unknown -> t
+        | No_alias Bottom
+        | No_alias Unknown
+        | No_alias Poison -> t
         | No_alias (Ok head) ->
           let head' = Head.apply_renaming head renaming in
           if head == head' then t
@@ -74,7 +82,9 @@ module Make (Head : Type_head_intf.S
 
     let free_names t =
       match t with
-      | No_alias Bottom | No_alias Unknown -> Name_occurrences.empty
+      | No_alias Bottom
+      | No_alias Unknown
+      | No_alias Poison -> Name_occurrences.empty
       | No_alias (Ok head) -> Head.free_names head
       | Equals simple ->
         Name_occurrences.downgrade_occurrences_at_strictly_greater_kind
@@ -88,7 +98,9 @@ module Make (Head : Type_head_intf.S
 
   let all_ids_for_export t =
     match descr t with
-    | No_alias Bottom | No_alias Unknown -> Ids_for_export.empty
+    | No_alias Bottom
+    | No_alias Unknown
+    | No_alias Poison -> Ids_for_export.empty
     | No_alias (Ok head) -> Head.all_ids_for_export head
     | Equals simple -> Ids_for_export.from_simple simple
 
@@ -98,12 +110,16 @@ module Make (Head : Type_head_intf.S
   let print ppf t =
     print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
-  let create_no_alias head = create (No_alias head)
+  let create_no_alias head =
+    let head = Or_unknown_or_bottom_or_poison.of_or_unknown_or_bottom head in
+    create (No_alias head)
   let create_equals simple = create (Equals simple)
 
+  let poison = lazy (create (No_alias Poison))
   let bottom = lazy (create (No_alias Bottom))
   let unknown = lazy (create (No_alias Unknown))
 
+  let poison () = Lazy.force poison
   let bottom () = Lazy.force bottom
   let unknown () = Lazy.force unknown
 
@@ -112,13 +128,13 @@ module Make (Head : Type_head_intf.S
   let is_obviously_bottom t =
     match peek_descr t with
     | No_alias Bottom -> true
-    | No_alias (Ok _ | Unknown)
+    | No_alias (Ok _ | Unknown | Poison)
     | Equals _ -> false
 
   let is_obviously_unknown t =
     match peek_descr t with
     | No_alias Unknown -> true
-    | No_alias (Ok _ | Bottom)
+    | No_alias (Ok _ | Bottom | Poison)
     | Equals _ -> false
 
   let get_alias_exn t =
@@ -137,20 +153,32 @@ module Make (Head : Type_head_intf.S
       | None -> Bottom
       | Some simple -> Ok (create_equals simple)
       end
-    | No_alias Unknown -> Ok t
+    | No_alias (Unknown | Poison) -> Ok t
     | No_alias Bottom -> Bottom
     | No_alias (Ok head) ->
       Or_bottom.map (Head.apply_rec_info head rec_info)
         ~f:(fun head -> create head)
 
-  let force_to_head ~force_to_kind t =
+  let force_to_head ~force_to_kind t : _ Or_unknown_or_bottom.t =
     match descr (force_to_kind t) with
-    | No_alias head -> head
+    | No_alias head -> begin
+        match head with
+        | Ok t -> Ok t
+        | Unknown -> Unknown
+        | Bottom -> Bottom
+        | Poison -> Bottom
+      end
     | Equals _ -> Misc.fatal_errorf "Expected [No_alias]:@ %a" T.print t
 
   let expand_head ~force_to_kind t env kind : _ Or_unknown_or_bottom.t =
     match descr t with
-    | No_alias head -> head
+    | No_alias head -> begin
+        match head with
+        | Ok t -> Ok t
+        | Unknown -> Unknown
+        | Bottom -> Bottom
+        | Poison -> Bottom
+      end
     | Equals simple ->
       let min_name_mode = Name_mode.min_in_types in
       match TE.get_canonical_simple_exn env simple ~min_name_mode with
@@ -160,21 +188,28 @@ module Make (Head : Type_head_intf.S
            so [Unknown] is fine here. *)
         Unknown
       | simple ->
-        let [@inline always] const const =
+        let [@inline always] const const : _ Or_unknown_or_bottom.t =
           let typ =
             match Reg_width_const.descr const with
-            | Naked_immediate (_, i) -> T.this_naked_immediate_without_alias i
-            | Tagged_immediate (_, i) -> T.this_tagged_immediate_without_alias i
-            | Naked_float (_, f) -> T.this_naked_float_without_alias f
-            | Naked_int32 (_, i) -> T.this_naked_int32_without_alias i
-            | Naked_int64 (_, i) -> T.this_naked_int64_without_alias i
-            | Naked_nativeint (_, i) -> T.this_naked_nativeint_without_alias i
+            | Naked_immediate (Poison, _) -> T.poison_naked_immediate ()
+            | Naked_immediate (Value, i) -> T.this_naked_immediate_without_alias i
+            | Tagged_immediate (Poison, _) -> T.poison_value ()
+            | Tagged_immediate (Value, i) -> T.this_tagged_immediate_without_alias i
+            | Naked_float (Poison, _) -> T.poison_naked_float ()
+            | Naked_float (Value, f) -> T.this_naked_float_without_alias f
+            | Naked_int32 (Poison, _) -> T.poison_naked_int32 ()
+            | Naked_int32 (Value, i) -> T.this_naked_int32_without_alias i
+            | Naked_int64 (Poison, _) -> T.poison_naked_int64 ()
+            | Naked_int64 (Value, i) -> T.this_naked_int64_without_alias i
+            | Naked_nativeint (Poison, _) -> T.poison_naked_nativeint ()
+            | Naked_nativeint (Value, i) -> T.this_naked_nativeint_without_alias i
           in
           force_to_head ~force_to_kind typ
         in
         let [@inline always] name name : _ Or_unknown_or_bottom.t =
           let t = force_to_kind (TE.find env name (Some kind)) in
           match descr t with
+          | No_alias Poison -> Bottom
           | No_alias Bottom -> Bottom
           | No_alias Unknown -> Unknown
           | No_alias (Ok head) -> Ok head
@@ -209,7 +244,7 @@ module Make (Head : Type_head_intf.S
 
   let eviscerate ~force_to_kind t env kind =
     match descr t with
-    | No_alias (Bottom | Unknown) -> t
+    | No_alias (Bottom | Unknown | Poison) -> t
     | No_alias (Ok head) ->
       begin match Head.eviscerate head with
       | Known head -> create_no_alias (Ok head)
@@ -220,7 +255,7 @@ module Make (Head : Type_head_intf.S
       else
         let t = expand_head' ~force_to_kind t env kind in
         match descr t with
-        | No_alias (Bottom | Unknown) -> t
+        | No_alias (Bottom | Unknown | Poison) -> t
         | No_alias (Ok head) ->
           begin match Head.eviscerate head with
           | Known head -> create_no_alias (Ok head)

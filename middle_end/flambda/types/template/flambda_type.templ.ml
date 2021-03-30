@@ -293,7 +293,8 @@ let prove_is_int env t : bool proof =
     Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
   in
   match expand_head t env with
-  | Const (Tagged_immediate _) -> Proved true
+  | Const (Tagged_immediate (Value, _)) -> Proved true
+  | Const (Tagged_immediate (Poison, _)) -> Invalid
   | Const _ -> wrong_kind ()
   | Value (Ok (Variant blocks_imms)) ->
     begin match blocks_imms.blocks, blocks_imms.immediates with
@@ -323,7 +324,8 @@ let prove_tags_must_be_a_block env t : Tag.Set.t proof =
     Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
   in
   match expand_head t env with
-  | Const (Tagged_immediate _) -> Unknown
+  | Const (Tagged_immediate (Value, _)) -> Unknown
+  | Const (Tagged_immediate (Poison, _)) -> Invalid
   | Const _ -> wrong_kind ()
   | Value (Ok (Variant blocks_imms)) ->
     begin match blocks_imms.immediates with

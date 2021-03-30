@@ -598,7 +598,7 @@ struct
     | Is_int
     | Tag ->
       (* These arguments are filled in later via [project_field]. *)
-      Some Simple.untagged_const_zero
+      Some (Simple.const Reg_width_const.naked_immediate_poison)
     | Const_ctor ->
       begin match use_info with
       | Const_ctor ->
@@ -609,7 +609,7 @@ struct
       | Block _ ->
         (* There are no constant constructors in the variant at the use site.
            We provide a dummy value. *)
-        Some Simple.untagged_const_zero
+        Some (Simple.const Reg_width_const.tagged_immediate_poison)
       end
     | Field { index; } ->
       begin match use_info with
@@ -622,12 +622,12 @@ struct
           (* If the argument at the use is known to be a block, but it has
              fewer fields than the maximum number of fields for the variant,
              then we provide a dummy value. *)
-          Some Simple.const_zero
+          Some (Simple.const Reg_width_const.tagged_immediate_poison)
         end
       | Const_ctor ->
         (* There are no blocks in the variant at the use site.  We again
            provide a dummy value. *)
-        Some Simple.const_zero
+        Some (Simple.const Reg_width_const.tagged_immediate_poison)
       end
 
   let make_boxed_value variant ~param_being_unboxed ~new_params ~fields =
@@ -735,10 +735,10 @@ struct
       end
     | Field { index; } ->
       match use_info with
-      | Const_ctor -> Simple Simple.const_zero
+      | Const_ctor -> Simple (Simple.const Reg_width_const.tagged_immediate_poison)
       | Block { tag = _; size = size_at_use; } ->
         if Targetint.OCaml.compare index size_at_use >= 0 then
-          Simple Simple.const_zero
+          Simple (Simple.const Reg_width_const.tagged_immediate_poison)
         else
           Default_behaviour No_untagging
 end

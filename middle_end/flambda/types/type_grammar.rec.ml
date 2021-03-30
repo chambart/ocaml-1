@@ -320,6 +320,23 @@ let unknown (kind : K.t) =
 
 let unknown_like t = unknown (kind t)
 
+let poison_value () = Value (T_V.poison ())
+let poison_naked_immediate () = Naked_immediate (T_NI.poison ())
+let poison_naked_float () = Naked_float (T_Nf.poison ())
+let poison_naked_int32 () = Naked_int32 (T_N32.poison ())
+let poison_naked_int64 () = Naked_int64 (T_N64.poison ())
+let poison_naked_nativeint () = Naked_nativeint (T_NN.poison ())
+
+let poison (kind : K.t) =
+  match kind with
+  | Value -> poison_value ()
+  | Naked_number Naked_immediate -> poison_naked_immediate ()
+  | Naked_number Naked_float -> poison_naked_float ()
+  | Naked_number Naked_int32 -> poison_naked_int32 ()
+  | Naked_number Naked_int64 -> poison_naked_int64 ()
+  | Naked_number Naked_nativeint -> poison_naked_nativeint ()
+  | Fabricated -> Misc.fatal_error "Only used in [Flambda_static] now"
+
 let this_naked_immediate i : t =
   Naked_immediate (T_NI.create_equals (Simple.const (
     Reg_width_const.naked_immediate i)))
@@ -704,12 +721,18 @@ let array_of_length ~length =
 
 let type_for_const const =
   match Reg_width_const.descr const with
-  | Naked_immediate (_, i) -> this_naked_immediate i
-  | Tagged_immediate (_, i) -> this_tagged_immediate i
-  | Naked_float (_, f) -> this_naked_float f
-  | Naked_int32 (_, n) -> this_naked_int32 n
-  | Naked_int64 (_, n) -> this_naked_int64 n
-  | Naked_nativeint (_, n) -> this_naked_nativeint n
+  | Naked_immediate (Poison, _) -> poison_naked_immediate ()
+  | Naked_immediate (Value, i) -> this_naked_immediate i
+  | Tagged_immediate (Poison, _) -> poison_value ()
+  | Tagged_immediate (Value, i) -> this_tagged_immediate i
+  | Naked_float (Poison, _) -> poison_naked_float ()
+  | Naked_float (Value, f) -> this_naked_float f
+  | Naked_int32 (Poison, _) -> poison_naked_int32 ()
+  | Naked_int32 (Value, n) -> this_naked_int32 n
+  | Naked_int64 (Poison, _) -> poison_naked_int64 ()
+  | Naked_int64 (Value, n) -> this_naked_int64 n
+  | Naked_nativeint (Poison, _) -> poison_naked_nativeint ()
+  | Naked_nativeint (Value, n) -> this_naked_nativeint n
 
 let kind_for_const const = kind (type_for_const const)
 

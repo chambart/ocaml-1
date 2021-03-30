@@ -27,7 +27,7 @@ module type S = sig
 
   module Descr : sig
     type t = private
-      | No_alias of head Or_unknown_or_bottom.t
+      | No_alias of head Or_unknown_or_bottom_or_poison.t
         (** For each kind there is a lattice of types.
             Unknown = "Any value can flow to this point": the top element.
             Bottom = "No value can flow to this point": the least element.
@@ -48,6 +48,7 @@ module type S = sig
 
   val unknown : unit -> t
   val bottom : unit -> t
+  val poison : unit -> t
 
   val descr : t -> Descr.t
 

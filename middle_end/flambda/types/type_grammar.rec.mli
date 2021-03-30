@@ -54,6 +54,8 @@ val bottom_like : t -> t
 val unknown : Flambda_kind.t -> t
 val unknown_like : t -> t
 
+val poison : Flambda_kind.t -> t
+
 val any_value : unit -> t
 
 val any_tagged_immediate : unit -> t
@@ -69,6 +71,13 @@ val any_naked_float : unit -> t
 val any_naked_int32 : unit -> t
 val any_naked_int64 : unit -> t
 val any_naked_nativeint : unit -> t
+
+val poison_value : unit -> t
+val poison_naked_immediate : unit -> t
+val poison_naked_float : unit -> t
+val poison_naked_int32 : unit -> t
+val poison_naked_int64 : unit -> t
+val poison_naked_nativeint : unit -> t
 
 val this_tagged_immediate : Target_imm.t -> t
 val this_boxed_float : Numbers.Float_by_bit_pattern.t -> t

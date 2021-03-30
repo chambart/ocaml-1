@@ -262,6 +262,7 @@ MIDDLE_END_FLAMBDA_TYPES=\
   middle_end/flambda/types/basic/or_bottom.cmo \
   middle_end/flambda/types/basic/string_info.cmo \
   middle_end/flambda/types/basic/or_unknown_or_bottom.cmo \
+  middle_end/flambda/types/basic/or_unknown_or_bottom_or_poison.cmo \
   middle_end/flambda/types/structures/code_age_relation.cmo \
   middle_end/flambda/types/structures/type_structure_intf.cmo \
   middle_end/flambda/types/structures/product_intf.cmo \
