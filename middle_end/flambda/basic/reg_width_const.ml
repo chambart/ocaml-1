@@ -27,18 +27,27 @@ let kind t =
   | Naked_int32 _ -> K.naked_int32
   | Naked_int64 _ -> K.naked_int64
   | Naked_nativeint _ -> K.naked_nativeint
+  | Poison k -> begin
+      match k with
+      | Naked_immediate -> K.naked_immediate
+      | Value -> K.value
+      | Naked_float -> K.naked_float
+      | Naked_int32 -> K.naked_int32
+      | Naked_int64 -> K.naked_int64
+      | Naked_nativeint -> K.naked_nativeint
+    end
 
 let of_descr (descr : Descr.t) =
   match descr with
-  | Naked_immediate (Value, i) -> naked_immediate i
-  | Tagged_immediate (Value, i) -> tagged_immediate i
-  | Naked_float (Value, f) -> naked_float f
-  | Naked_int32 (Value, i) -> naked_int32 i
-  | Naked_int64 (Value, i) -> naked_int64 i
-  | Naked_nativeint (Value, i) -> naked_nativeint i
-  | Naked_immediate (Poison, _) -> naked_immediate_poison
-  | Tagged_immediate (Poison, _) -> tagged_immediate_poison
-  | Naked_float (Poison, _) -> naked_float_poison
-  | Naked_int32 (Poison, _) -> naked_int32_poison
-  | Naked_int64 (Poison, _) -> naked_int64_poison
-  | Naked_nativeint (Poison, _) -> naked_nativeint_poison
+  | Naked_immediate i -> naked_immediate i
+  | Tagged_immediate i -> tagged_immediate i
+  | Naked_float f -> naked_float f
+  | Naked_int32 i -> naked_int32 i
+  | Naked_int64 i -> naked_int64 i
+  | Naked_nativeint i -> naked_nativeint i
+  | Poison Naked_immediate -> naked_immediate_poison
+  | Poison Value -> value_poison
+  | Poison Naked_float -> naked_float_poison
+  | Poison Naked_int32 -> naked_int32_poison
+  | Poison Naked_int64 -> naked_int64_poison
+  | Poison Naked_nativeint -> naked_nativeint_poison

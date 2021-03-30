@@ -82,7 +82,7 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
               *)
               let [@inline always] const arg =
                 match Reg_width_const.descr arg with
-                | Tagged_immediate (_, arg) ->
+                | Tagged_immediate arg ->
                   if Target_imm.equal arm arg then
                     let identity_arms =
                       Target_imm.Map.add arm action identity_arms
@@ -99,6 +99,7 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
                     normal_case ~identity_arms ~not_arms
                   else
                     normal_case ~identity_arms ~not_arms
+                | Poison _
                 | Naked_immediate _ | Naked_float _ | Naked_int32 _
                 | Naked_int64 _ | Naked_nativeint _ ->
                   normal_case ~identity_arms ~not_arms

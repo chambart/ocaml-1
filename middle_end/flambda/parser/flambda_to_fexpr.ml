@@ -260,24 +260,24 @@ let name env n =
 
 let const c : Fexpr.const =
   match Reg_width_things.Const.descr c with
-  | Naked_immediate (Value, imm) ->
+  | Naked_immediate imm ->
     Naked_immediate (imm |> Target_imm.to_targetint' |> Targetint.to_string)
-  | Tagged_immediate (Value, imm) ->
+  | Tagged_immediate imm ->
     Tagged_immediate (imm |> Target_imm.to_targetint' |> Targetint.to_string)
-  | Naked_float (Value, f) ->
+  | Naked_float f ->
     Naked_float (f |> Numbers.Float_by_bit_pattern.to_float)
-  | Naked_int32 (Value, i) ->
+  | Naked_int32 i ->
     Naked_int32 i
-  | Naked_int64 (Value, i) ->
+  | Naked_int64 i ->
     Naked_int64 i
-  | Naked_nativeint (Value, i) ->
+  | Naked_nativeint i ->
     Naked_nativeint (i |> Targetint.to_int64)
-  | Naked_immediate (Poison, _)
-  | Tagged_immediate (Poison, _)
-  | Naked_float (Poison, _)
-  | Naked_int32 (Poison, _)
-  | Naked_int64 (Poison, _)
-  | Naked_nativeint (Poison, _) ->
+  | Poison Naked_immediate
+  | Poison Value
+  | Poison Naked_float
+  | Poison Naked_int32
+  | Poison Naked_int64
+  | Poison Naked_nativeint ->
     Misc.fatal_errorf "TODO: Poison constants"
 
 let simple env s =

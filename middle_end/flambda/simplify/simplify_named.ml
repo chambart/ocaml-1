@@ -71,7 +71,8 @@ let record_any_symbol_projection dacc (defining_expr : Simplified_named.t)
         Simple.pattern_match index
           ~const:(fun const ->
             match Reg_width_const.descr const with
-            | Tagged_immediate (_, imm) ->
+            | Poison Value -> None
+            | Tagged_immediate imm ->
               Simple.pattern_match' block
                 ~const:(fun _ -> None)
                 ~symbol:(fun symbol_projected_from ->
@@ -80,7 +81,9 @@ let record_any_symbol_projection dacc (defining_expr : Simplified_named.t)
                     (SP.Projection.block_load ~index)))
                 ~var:(fun _ -> None)
             | Naked_immediate _ | Naked_float _
-            | Naked_int32 _ | Naked_int64 _ | Naked_nativeint _ ->
+            | Naked_int32 _ | Naked_int64 _ | Naked_nativeint _
+            | Poison ( Naked_immediate | Naked_float | Naked_int32
+              | Naked_int64 | Naked_nativeint )->
               Misc.fatal_errorf "Kind error for [Block_load] index:@ \
                   %a@ =@ %a"
                 Bindable_let_bound.print bindable_let_bound

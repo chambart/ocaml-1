@@ -132,7 +132,7 @@ let prove_equals_to_var_or_symbol_or_tagged_immediate env t
     Simple.pattern_match simple
       ~const:(fun cst : _ proof ->
         match Reg_width_const.descr cst with
-        | Tagged_immediate (_, imm) -> Proved (Tagged_immediate imm)
+        | Tagged_immediate imm -> Proved (Tagged_immediate imm)
         | _ ->
           Misc.fatal_errorf "[Simple] %a in the [Equals] field has a kind \
               different from that returned by [kind] (%a):@ %a"
@@ -152,7 +152,7 @@ let prove_equals_to_var_or_symbol_or_tagged_immediate env t
           Simple.pattern_match simple
             ~const:(fun cst : _ proof ->
               match Reg_width_const.descr cst with
-              | Tagged_immediate (_, imm) -> Proved (Tagged_immediate imm)
+              | Tagged_immediate imm -> Proved (Tagged_immediate imm)
               | _ ->
                 let kind = kind t in
                 Misc.fatal_errorf "Kind returned by [get_canonical_simple] (%a) \
@@ -213,10 +213,12 @@ let prove_naked_floats env t : _ proof =
     Misc.fatal_errorf "Kind error: expected [Naked_float]:@ %a" print t
   in
   match expand_head t env with
-  | Const (Naked_float (Value, f)) -> Proved (Float.Set.singleton f)
-  | Const (Naked_float (Poison, _)) -> Invalid
+  | Const (Naked_float f) -> Proved (Float.Set.singleton f)
+  | Const (Poison Naked_float) -> Invalid
   | Const (Naked_immediate _ | Tagged_immediate _ | Naked_int32 _
-    | Naked_int64 _ | Naked_nativeint _) -> wrong_kind ()
+    | Naked_int64 _ | Naked_nativeint _
+    | Poison (Value | Naked_immediate | Naked_int32
+      | Naked_int64 | Naked_nativeint)) -> wrong_kind ()
   | Naked_float (Ok fs) ->
     if Float.Set.is_empty fs then Invalid
     else Proved fs
@@ -233,10 +235,12 @@ let prove_naked_int32s env t : _ proof =
     Misc.fatal_errorf "Kind error: expected [Naked_int32]:@ %a" print t
   in
   match expand_head t env with
-  | Const (Naked_int32 (Value, i)) -> Proved (Int32.Set.singleton i)
-  | Const (Naked_int32 (Poison, _)) -> Invalid
+  | Const (Naked_int32 i) -> Proved (Int32.Set.singleton i)
+  | Const (Poison Naked_int32) -> Invalid
   | Const (Naked_immediate _ | Tagged_immediate _ | Naked_float _
-    | Naked_int64 _ | Naked_nativeint _) -> wrong_kind ()
+    | Naked_int64 _ | Naked_nativeint _
+    | Poison (Value | Naked_immediate | Naked_float
+      | Naked_int64 | Naked_nativeint)) -> wrong_kind ()
   | Naked_int32 (Ok is) ->
     if Int32.Set.is_empty is then Invalid
     else Proved is
@@ -253,10 +257,12 @@ let prove_naked_int64s env t : _ proof =
     Misc.fatal_errorf "Kind error: expected [Naked_int64]:@ %a" print t
   in
   match expand_head t env with
-  | Const (Naked_int64 (Value, i)) -> Proved (Int64.Set.singleton i)
-  | Const (Naked_int64 (Poison, _)) -> Invalid
+  | Const (Naked_int64 i) -> Proved (Int64.Set.singleton i)
+  | Const (Poison Naked_int64) -> Invalid
   | Const (Naked_immediate _ | Tagged_immediate _ | Naked_float _
-    | Naked_int32 _ | Naked_nativeint _) -> wrong_kind ()
+    | Naked_int32 _ | Naked_nativeint _
+    | Poison (Value | Naked_immediate | Naked_float
+      | Naked_int32 | Naked_nativeint)) -> wrong_kind ()
   | Naked_int64 (Ok is) ->
     if Int64.Set.is_empty is then Invalid
     else Proved is
@@ -273,10 +279,12 @@ let prove_naked_nativeints env t : _ proof =
     Misc.fatal_errorf "Kind error: expected [Naked_nativeint]:@ %a" print t
   in
   match expand_head t env with
-  | Const (Naked_nativeint (Value, i)) -> Proved (Targetint.Set.singleton i)
-  | Const (Naked_nativeint (Poison, _)) -> Invalid
+  | Const (Naked_nativeint i) -> Proved (Targetint.Set.singleton i)
+  | Const (Poison Naked_nativeint) -> Invalid
   | Const (Naked_immediate _ | Tagged_immediate _ | Naked_float _
-    | Naked_int32 _ | Naked_int64 _) -> wrong_kind ()
+    | Naked_int32 _ | Naked_int64 _
+    | Poison (Value | Naked_immediate | Naked_float
+      | Naked_int32 | Naked_int64)) -> wrong_kind ()
   | Naked_nativeint (Ok is) ->
     if Targetint.Set.is_empty is then Invalid
     else Proved is
@@ -293,8 +301,8 @@ let prove_is_int env t : bool proof =
     Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
   in
   match expand_head t env with
-  | Const (Tagged_immediate (Value, _)) -> Proved true
-  | Const (Tagged_immediate (Poison, _)) -> Invalid
+  | Const (Tagged_immediate _) -> Proved true
+  | Const (Poison Value) -> Invalid
   | Const _ -> wrong_kind ()
   | Value (Ok (Variant blocks_imms)) ->
     begin match blocks_imms.blocks, blocks_imms.immediates with
@@ -324,8 +332,8 @@ let prove_tags_must_be_a_block env t : Tag.Set.t proof =
     Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
   in
   match expand_head t env with
-  | Const (Tagged_immediate (Value, _)) -> Unknown
-  | Const (Tagged_immediate (Poison, _)) -> Invalid
+  | Const (Tagged_immediate _) -> Unknown
+  | Const (Poison Value) -> Invalid
   | Const _ -> wrong_kind ()
   | Value (Ok (Variant blocks_imms)) ->
     begin match blocks_imms.immediates with
@@ -379,10 +387,12 @@ let prove_naked_immediates env t : Target_imm.Set.t proof =
     Misc.fatal_errorf "Kind error: expected [Naked_immediate]:@ %a" print t
   in
   match expand_head t env with
-  | Const (Naked_immediate (Value, i)) -> Proved (Target_imm.Set.singleton i)
-  | Const (Naked_immediate (Poison, _)) -> Invalid
+  | Const (Naked_immediate i) -> Proved (Target_imm.Set.singleton i)
+  | Const (Poison Naked_immediate) -> Invalid
   | Const (Tagged_immediate _ | Naked_float _ | Naked_int32 _
-    | Naked_int64 _ | Naked_nativeint _) -> wrong_kind ()
+    | Naked_int64 _ | Naked_nativeint _
+    | Poison (Value | Naked_float | Naked_int32
+      | Naked_int64 | Naked_nativeint)) -> wrong_kind ()
   | Naked_immediate (Ok (Naked_immediates is)) ->
     (* CR mshinwell: As noted elsewhere, add abstraction to avoid the need
        for these checks *)
@@ -424,10 +434,12 @@ let prove_equals_tagged_immediates env t : Target_imm.Set.t proof =
     Misc.fatal_errorf "Kind error: expected [Value]:@ %a" print t
   in
   match expand_head t env with
-  | Const (Tagged_immediate (Value, imm)) -> Proved (Target_imm.Set.singleton imm)
-  | Const (Tagged_immediate (Poison, _)) -> Invalid
-  | Const (Naked_immediate _ | Naked_float _ | Naked_int32 _ | Naked_int64 _
-    | Naked_nativeint _) -> wrong_kind ()
+  | Const (Tagged_immediate imm) -> Proved (Target_imm.Set.singleton imm)
+  | Const (Poison Value) -> Invalid
+  | Const (Naked_immediate _ | Naked_float _ | Naked_int32 _
+    | Naked_int64 _ | Naked_nativeint _
+    | Poison (Naked_immediate | Naked_float | Naked_int32
+      | Naked_int64 | Naked_nativeint)) -> wrong_kind ()
   | Value (Ok (Variant blocks_imms)) ->
     begin match blocks_imms.blocks, blocks_imms.immediates with
     | Unknown, Unknown | Unknown, Known _ | Known _, Unknown -> Unknown
@@ -571,6 +583,7 @@ let prove_variant env t : variant_proof proof_allowing_kind_mismatch =
 let prove_is_a_tagged_immediate env t : _ proof_allowing_kind_mismatch =
   match expand_head t env with
   | Const (Tagged_immediate _) -> Proved ()
+  | Const (Poison Value) -> Invalid
   | Const _ -> Wrong_kind
   | Value Unknown -> Unknown
   | Value (Ok (Variant { blocks; immediates; is_unique = _; })) ->
@@ -586,6 +599,7 @@ let prove_is_a_tagged_immediate env t : _ proof_allowing_kind_mismatch =
 
 let prove_is_a_boxed_float env t : _ proof_allowing_kind_mismatch =
   match expand_head t env with
+  | Const (Poison Value) -> Invalid
   | Const _ -> Wrong_kind
   | Value Unknown -> Unknown
   | Value (Ok (Boxed_float _)) -> Proved ()
@@ -594,6 +608,7 @@ let prove_is_a_boxed_float env t : _ proof_allowing_kind_mismatch =
 
 let prove_is_a_boxed_int32 env t : _ proof_allowing_kind_mismatch =
   match expand_head t env with
+  | Const (Poison Value) -> Invalid
   | Const _ -> Wrong_kind
   | Value Unknown -> Unknown
   | Value (Ok (Boxed_int32 _)) -> Proved ()
@@ -602,6 +617,7 @@ let prove_is_a_boxed_int32 env t : _ proof_allowing_kind_mismatch =
 
 let prove_is_a_boxed_int64 env t : _ proof_allowing_kind_mismatch =
   match expand_head t env with
+  | Const (Poison Value) -> Invalid
   | Const _ -> Wrong_kind
   | Value Unknown -> Unknown
   | Value (Ok (Boxed_int64 _)) -> Proved ()
@@ -610,6 +626,7 @@ let prove_is_a_boxed_int64 env t : _ proof_allowing_kind_mismatch =
 
 let prove_is_a_boxed_nativeint env t : _ proof_allowing_kind_mismatch =
   match expand_head t env with
+  | Const (Poison Value) -> Invalid
   | Const _ -> Wrong_kind
   | Value Unknown -> Unknown
   | Value (Ok (Boxed_nativeint _)) -> Proved ()

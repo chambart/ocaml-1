@@ -55,19 +55,33 @@ let name_static env name =
 
 let const_static _env cst =
   match Reg_width_const.descr cst with
-  | Naked_immediate (_, i) ->
+  | Naked_immediate i ->
       [C.cint (nativeint_of_targetint (targetint_of_imm i))]
-  | Tagged_immediate (_, i) ->
+  | Poison Naked_immediate ->
+      (* CR pchambart: Should we use something more noticeable than 0 ? *)
+      [C.cint 0n]
+  | Tagged_immediate i ->
       [C.cint (nativeint_of_targetint (tag_targetint (targetint_of_imm i)))]
-  | Naked_float (_, f) ->
+  | Poison Value ->
+      [C.cint 1n]
+  | Naked_float f ->
       [C.cfloat (Numbers.Float_by_bit_pattern.to_float f)]
-  | Naked_int32 (_, i) ->
+  | Poison Naked_float ->
+      [C.cfloat 0.]
+  | Naked_int32 i ->
       [C.cint (Nativeint.of_int32 i)]
-  | Naked_int64 (_, i) ->
+  | Poison Naked_int32 ->
+      [C.cint 0n]
+  | Naked_int64 i ->
       if C.arch32 then todo() (* split int64 on 32-bit archs *)
       else [C.cint (Int64.to_nativeint i)]
-  | Naked_nativeint (_, t) ->
+  | Poison Naked_int64 ->
+      if C.arch32 then todo() (* split int64 on 32-bit archs *)
+      else [C.cint 0n]
+  | Naked_nativeint t ->
       [C.cint (nativeint_of_targetint t)]
+  | Poison Naked_nativeint ->
+      [C.cint 0n]
 
 let simple_static env s =
   Simple.pattern_match s

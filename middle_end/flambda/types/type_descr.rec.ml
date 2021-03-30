@@ -191,18 +191,18 @@ module Make (Head : Type_head_intf.S
         let [@inline always] const const : _ Or_unknown_or_bottom.t =
           let typ =
             match Reg_width_const.descr const with
-            | Naked_immediate (Poison, _) -> T.poison_naked_immediate ()
-            | Naked_immediate (Value, i) -> T.this_naked_immediate_without_alias i
-            | Tagged_immediate (Poison, _) -> T.poison_value ()
-            | Tagged_immediate (Value, i) -> T.this_tagged_immediate_without_alias i
-            | Naked_float (Poison, _) -> T.poison_naked_float ()
-            | Naked_float (Value, f) -> T.this_naked_float_without_alias f
-            | Naked_int32 (Poison, _) -> T.poison_naked_int32 ()
-            | Naked_int32 (Value, i) -> T.this_naked_int32_without_alias i
-            | Naked_int64 (Poison, _) -> T.poison_naked_int64 ()
-            | Naked_int64 (Value, i) -> T.this_naked_int64_without_alias i
-            | Naked_nativeint (Poison, _) -> T.poison_naked_nativeint ()
-            | Naked_nativeint (Value, i) -> T.this_naked_nativeint_without_alias i
+            | Naked_immediate i -> T.this_naked_immediate_without_alias i
+            | Tagged_immediate i -> T.this_tagged_immediate_without_alias i
+            | Naked_float f -> T.this_naked_float_without_alias f
+            | Naked_int32 i -> T.this_naked_int32_without_alias i
+            | Naked_int64 i -> T.this_naked_int64_without_alias i
+            | Naked_nativeint i -> T.this_naked_nativeint_without_alias i
+            | Poison Naked_immediate -> T.poison_naked_immediate ()
+            | Poison Value -> T.poison_value ()
+            | Poison Naked_float -> T.poison_naked_float ()
+            | Poison Naked_int32 -> T.poison_naked_int32 ()
+            | Poison Naked_int64 -> T.poison_naked_int64 ()
+            | Poison Naked_nativeint -> T.poison_naked_nativeint ()
           in
           force_to_head ~force_to_kind typ
         in
