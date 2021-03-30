@@ -380,7 +380,7 @@ module With_subkind = struct
     include Container_types.Make (struct
       type nonrec t = t
 
-      let print ppf t =
+      let rec print ppf t =
         let colour = Flambda_colours.subkind () in
         match t with
         | Anything -> ()
@@ -401,10 +401,12 @@ module With_subkind = struct
         | Boxed_nativeint ->
           Format.fprintf ppf "@<0>%s=boxed_@<1>\u{2115}@<1>\u{2115}@<0>%s"
             colour (Flambda_colours.normal ())
-        | Block { tag; fields = _ } ->
-          (* TODO proper *)
-          Format.fprintf ppf "%s=Block{%a}%s"
-            colour Tag.print tag (Flambda_colours.normal ())
+        | Block { tag; fields } ->
+          Format.fprintf ppf "%s=Block{%a: %a}%s"
+            colour
+            Tag.print tag
+            (Format.pp_print_list ~pp_sep:Format.pp_print_space print) fields
+            (Flambda_colours.normal ())
 
       let compare = Stdlib.compare
 
