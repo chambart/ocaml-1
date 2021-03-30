@@ -173,14 +173,14 @@ let rec value_kind' env ~visited ty : Lambda.value_kind =
       if Numbers.Int.Set.mem ty.id visited then
         Pgenval
       else begin
-        let constructors, _labels = Env.find_type_descrs p env in
-        match constructors with
-        | [] -> Pgenval
-        | [ { cstr_tag = Cstr_block { tag }; cstr_args } ] ->
+        match Env.find_type_descrs p env with
+        | exception Not_found -> Pgenval
+        | [], _ -> Pgenval
+        | [ { cstr_tag = Cstr_block { tag }; cstr_args } ], _ ->
           let visited = Numbers.Int.Set.add ty.id visited in
           let fields = List.map (value_kind' env ~visited) cstr_args in
           Pblock { tag; fields }
-        | _ ->
+        | constructors, _ ->
           let is_constant = function
             | { cstr_tag = Cstr_constant _ } -> true
             | _ -> false
