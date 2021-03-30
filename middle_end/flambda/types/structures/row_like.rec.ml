@@ -40,17 +40,12 @@ module Make
     with type typing_env_extension := Typing_env_extension.t) =
 struct
 
-  (* Note: it wouldn't require much changes to change it to an interval:
-     type index = { at_least : Index.t; at_most : Index.t }
-     representing { x | at_least \subset x /\ x \subset at_most }
-  *)
   type index =
     | Known of Index.t (** Known x represents the singleton set: { x } *)
     | At_least of Index.t (** At_least x represents the set { y | x \subset y } *)
     | Range of { at_least : Index.t; at_most : Index.t; }
-    (** Range { at_least; at_most represents the set
+    (** Range { at_least; at_most } represents the set
         { x | at_least \subset x /\ x \subset at_most }
-        or { x | at_least \subset x } if at_most is None
 
         invariant: at_least is strictly smaller than at_most. If they are
         equal, this is a Known. This invariant is usefull to simplify bottom
@@ -375,8 +370,6 @@ struct
         | Ok other1, Ok other2 ->
           Ok (join_case env other1 other2)
       in
-      Format.printf "Join blocks:@ %a@ %a@ %a@."
-        print t1 print t2 print { known_tags; other_tags };
       { known_tags; other_tags }
 
     let get_singleton { known_tags; other_tags; } =
