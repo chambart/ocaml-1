@@ -962,17 +962,17 @@ type variant_shape = {
 }
 
 let name_variant env v shape =
-  let fatal_error () =
-    Misc.fatal_errorf "Bad shape when naming variant fields"
+  let fatal_error n =
+    Misc.fatal_errorf "Bad shape when naming variant fields (%d)" n
   in
   let v_ty = alias_type_of K.value (Simple.var v) in
   match expand_head v_ty env with
   | Const (Tagged_immediate _) ->
     if not (Tag.Scannable.Map.is_empty shape.non_const_ctors_names) then
-      fatal_error ();
+      fatal_error 0;
     begin match shape.untagged_const_ctor with
     | Not_named -> env
-    | Absent -> fatal_error ()
+    | Absent -> fatal_error 1
     | Named const_ctor_var ->
       let const_ctor_ty =
         tagged_immediate_alias_to ~naked_immediate:const_ctor_var
@@ -980,29 +980,28 @@ let name_variant env v shape =
       begin match meet env v_ty const_ctor_ty with
       | Ok (_, env_extension) ->
         Typing_env.add_env_extension env env_extension
-      | Bottom -> fatal_error ()
+      | Bottom -> fatal_error 2
       end
     end
-  | Const _ -> fatal_error ()
+  | Const _ -> fatal_error 3
   | Value (Ok (Variant block_imms)) ->
     begin match block_imms.blocks with
-    | Unknown -> fatal_error ()
+    | Unknown -> fatal_error 4
     | Known blocks ->
       begin match Row_like.For_blocks.all_tags_and_fields blocks with
-      | Unknown -> fatal_error ()
+      | Unknown -> fatal_error 5
       | Known non_const_ctors_with_fields ->
         begin match block_imms.immediates with
-        | Unknown -> fatal_error ()
+        | Unknown -> fatal_error 6
         | Known imms ->
           let env, const_ctors =
             match prove_naked_immediates env imms,
                   shape.untagged_const_ctor with
-            | Unknown, _ -> fatal_error ()
-            | Invalid, (Named _ | Not_named) -> fatal_error ()
+            | Invalid, (Named _ | Not_named) -> fatal_error 8
             | Invalid, Absent -> env, imms
-            | Proved _, Not_named -> env, imms
-            | Proved _, Absent -> fatal_error ()
-            | Proved _, Named const_ctor_var ->
+            | (Proved _ | Unknown), Not_named -> env, imms
+            | (Proved _ | Unknown), Absent -> fatal_error 9
+            | (Proved _ | Unknown), Named const_ctor_var ->
               let const_ctor_ty =
                 alias_type_of K.naked_immediate (Simple.var const_ctor_var)
               in
@@ -1013,7 +1012,7 @@ let name_variant env v shape =
           in
           let env =
             Misc.Stdlib.Seq.fold2 (fun env (tag, fields) (tag', names) ->
-              if not (Tag.equal tag (Tag.Scannable.to_tag tag')) then fatal_error ();
+              if not (Tag.equal tag (Tag.Scannable.to_tag tag')) then fatal_error 10;
               Misc.Stdlib.Array.fold_left2 (fun env ty var ->
                 Typing_env.add_equation env (Name.var var) ty;
               ) env fields names
@@ -1041,7 +1040,7 @@ let name_variant env v shape =
   | Naked_int32 _
   | Naked_int64 _
   | Naked_nativeint _
-    -> fatal_error ()
+    -> fatal_error 11
 
 type to_lift =
   | Immutable_block of
