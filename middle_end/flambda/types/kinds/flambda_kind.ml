@@ -460,7 +460,7 @@ module With_subkind = struct
   let rec_info = create rec_info Anything
   let block tag fields =
     if List.exists (fun t -> t.kind <> Value) fields then
-      Misc.fatal_error "Block with of kind not value";
+      Misc.fatal_error "Block with fields of kind not value";
     let fields = List.map (fun t -> t.subkind) fields in
     create value (Block { tag; fields })
 
