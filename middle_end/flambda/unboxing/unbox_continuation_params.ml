@@ -245,7 +245,7 @@ module Immediate = struct
 
   let unboxer = {
     var_name = "naked_immediate";
-    invalid_const = Const.naked_immediate Target_imm.zero;
+    invalid_const = Const.naked_immediate (Target_imm.int (Targetint.OCaml.of_int 0xcaca));
     unboxing_prim;
     prove_simple = T.prove_untagged_int_simple;
   }
@@ -285,7 +285,7 @@ module Int32 = struct
 
   let unboxer = {
     var_name = "unboxed_int32";
-    invalid_const = Const.naked_int32 Int32.zero;
+    invalid_const = Const.naked_int32 Int32.(div 0xabcd0l 2l);
     unboxing_prim;
     prove_simple = T.prove_unboxed_int32_simple;
   }
@@ -305,7 +305,7 @@ module Int64 = struct
 
   let unboxer = {
     var_name = "unboxed_int64";
-    invalid_const = Const.naked_int64 Int64.zero;
+    invalid_const = Const.naked_int64 Int64.(div 0xdcba0L 2L);
     unboxing_prim;
     prove_simple = T.prove_unboxed_int64_simple;
   }
@@ -1079,7 +1079,7 @@ and compute_extra_args_for_variant ~pass
   let fields_by_tag =
     Tag.Scannable.Map.mapi (fun tag_decision block_fields ->
       let size = List.length block_fields in
-      let invalid_const = Const.const_zero in
+      let invalid_const = Const.const_int (Targetint.OCaml.of_int 0xbaba) in
       let bak : Flambda_primitive.Block_access_kind.t =
         Values {
           size = Known (Targetint.OCaml.of_int size);
@@ -1102,7 +1102,7 @@ and compute_extra_args_for_variant ~pass
               in
               new_extra_arg, new_arg_being_unboxed
             end else begin
-              EPA.Extra_arg.Already_in_scope Simple.const_zero, Poison
+              EPA.Extra_arg.Already_in_scope (Simple.const invalid_const), Poison
             end
           in
           let epa = update_param_args epa rewrite_id new_extra_arg in
