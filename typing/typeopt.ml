@@ -242,7 +242,11 @@ let classify_lazy_argument : Typedtree.expression ->
     | _ ->
        `Other
 
-let value_kind_union k1 k2 =
-  (* TODO, block union *)
-  if k1 = k2 then k1
-  else Pgenval
+let rec value_kind_union (k1 : Lambda.value_kind) (k2 : Lambda.value_kind) =
+  match k1, k2 with
+  | Pblock { tag = tag1; fields = fields1 }, Pblock { tag = tag2; fields = fields2 }
+    when tag1 = tag2 && List.length fields1 = List.length fields2 ->
+    Pblock { tag = tag1; fields = List.map2 value_kind_union fields1 fields2 }
+  | _, _ ->
+    if k1 = k2 then k1
+    else Pgenval
