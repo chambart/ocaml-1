@@ -385,7 +385,11 @@ let update_param_args epa rewrite_id extra_arg =
 (* ********************************** *)
 
 (* CR: make this a Clflag *)
-let max_unboxing_depth = 3
+let max_unboxing_depth = 1
+let unbox_numbers = false
+let unbox_blocks = false
+let unbox_variants = true
+let unbox_closures = false
 
 let make_optimistic_const_ctor () =
   let is_int = new_param "is_int" in
@@ -414,20 +418,21 @@ let deciders = [
 
 let rec make_optimist_decision ~depth tenv param_type : decision =
   match decide tenv param_type deciders with
-  | Some decision -> decision
+  | Some decision ->
+    if unbox_numbers then decision else Do_not_unbox Incomplete_parameter_type
   | None ->
-    if depth > max_unboxing_depth then Do_not_unbox Max_depth_exceeded
+    if depth >= max_unboxing_depth then Do_not_unbox Max_depth_exceeded
     else match T.prove_unique_tag_and_size tenv param_type with
-      | Proved (tag, size) ->
+      | Proved (tag, size) when unbox_blocks ->
         let fields =
           make_optimistic_fields
             ~add_tag_to_name:false ~depth
             tenv param_type tag size
         in
         Unbox (Unique_tag_and_size { tag; fields; })
-      | Wrong_kind | Invalid | Unknown ->
+      | Proved _ | Wrong_kind | Invalid | Unknown ->
         match T.prove_variant_like tenv param_type with
-        | Proved { const_ctors; non_const_ctors_with_sizes; } ->
+        | Proved { const_ctors; non_const_ctors_with_sizes; } when unbox_variants->
           let tag = new_param "tag" in
           let constant_constructors =
             match const_ctors with
@@ -443,14 +448,14 @@ let rec make_optimist_decision ~depth tenv param_type : decision =
             ) non_const_ctors_with_sizes
           in
           Unbox (Variant { tag; constant_constructors; fields_by_tag; })
-        | Wrong_kind | Invalid | Unknown ->
+        | Proved _ | Wrong_kind | Invalid | Unknown ->
           begin match T.prove_single_closures_entry' tenv param_type with
-          | Proved (closure_id, closures_entry, _fun_decl) ->
+          | Proved (closure_id, closures_entry, _fun_decl) when unbox_closures ->
             let vars_within_closure =
               make_optimistic_vars_within_closure ~depth tenv closures_entry
             in
             Unbox (Closure_single_entry { closure_id; vars_within_closure })
-          | Wrong_kind | Invalid | Unknown -> Do_not_unbox Incomplete_parameter_type
+          | Proved _ | Wrong_kind | Invalid | Unknown -> Do_not_unbox Incomplete_parameter_type
           end
 
 and make_optimistic_fields
