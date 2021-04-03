@@ -604,29 +604,6 @@ struct
         else
           Known by_tag
 
-    let all_tags_and_fields { known_tags; other_tags; }
-      : Type_grammar.t array Tag.Map.t Or_unknown.t =
-      match other_tags with
-      | Ok _ -> Unknown
-      | Bottom ->
-        begin try
-          let map =
-            Tag.Map.map (fun { maps_to; index; } ->
-              match index with
-              | At_least _ -> raise Exit
-              | Known index ->
-                Array.init (Targetint.OCaml.to_int index)
-                  (fun i ->
-                     match Product.Int_indexed.project maps_to i with
-                     | Unknown -> Type_grammar.any_value ()
-                     | Known ty -> ty)
-            ) known_tags
-          in
-          Known map
-        with Exit ->
-          Unknown
-        end
-
     let get_field t field_index : _ Or_unknown_or_bottom.t =
       match get_singleton t with
       | None -> Unknown
