@@ -609,15 +609,17 @@ let rec denv_of_decision denv param_var decision : DE.t =
         let denv = DE.add_cse denv is_int_prim ~bound_to:(Simple.var is_int.param) in
         denv
     in
-    (* create the shape for the variant to name all fields *)
-    let denv, untagged_const_ctor =
+    let denv, const_ctors =
       match constant_constructors with
-      | Zero -> denv, Flambda_type.Absent
-      | At_least_one { ctor = Do_not_unbox _; _ } -> denv, Flambda_type.Not_named
+      | Zero ->
+        denv, T.bottom K.naked_immediate
+      | At_least_one { ctor = Do_not_unbox _; _ } ->
+        denv, T.unknown K.naked_immediate
       | At_least_one { ctor = Unbox Number (Naked_immediate, ctor_epa); _ } ->
         let v = Var_in_binding_pos.create ctor_epa.param Name_mode.normal in
         let denv = DE.define_variable denv v K.naked_immediate in
-        denv, Flambda_type.Named ctor_epa.param
+        let ty = Flambda_type.alias_type_of K.naked_immediate (Simple.var ctor_epa.param) in
+        denv, ty
       | At_least_one { ctor = Unbox _; _ } ->
         Misc.fatal_errorf "Variant constant constructor unboxed with a kind other \
                            than naked_immediate."
@@ -627,23 +629,18 @@ let rec denv_of_decision denv param_var decision : DE.t =
         List.fold_left (fun denv { epa = { param = var; _ }; _ } ->
           let v = Var_in_binding_pos.create var Name_mode.normal in
           DE.define_variable denv v K.value
-        ) denv block_fields
-      ) fields_by_tag denv
+        ) denv block_fields)
+        fields_by_tag denv
     in
-    let non_const_ctors_names : Variable.t array Tag.Scannable.Map.t =
+    let non_const_ctors =
       Tag.Scannable.Map.map (fun block_fields ->
-        Array.of_list (List.map (fun field_decision ->
-          field_decision.epa.param
-        ) block_fields)
+        List.map (fun field ->
+          Flambda_type.alias_type_of K.value (Simple.var field.epa.param)
+        ) block_fields
       ) fields_by_tag
     in
-    let variant_shape : T.variant_shape =
-      { untagged_const_ctor; non_const_ctors_names; }
-    in
-    let denv =
-      DE.map_typing_env denv
-        ~f:(fun tenv -> T.name_variant tenv param_var variant_shape)
-    in
+    let shape = T.variant ~const_ctors ~non_const_ctors in
+    let denv = add_equation_on_var denv param_var shape in
     (* recursion *)
     Tag.Scannable.Map.fold (fun _ block_fields denv ->
       List.fold_left (fun denv field ->
