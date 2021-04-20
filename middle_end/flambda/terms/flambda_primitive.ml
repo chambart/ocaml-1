@@ -944,6 +944,18 @@ let unary_classify_for_printing p =
   | Select_closure _
   | Project_var _ -> Destructive
 
+let is_an_involution (p : unary_primitive) =
+  match p with
+  | Boolean_not -> true
+  | Int_arith (_, Neg) -> true
+  | Float_arith Neg -> true
+    (* Checked through using the following SMT formula with Z3
+       {[ (set-logic QF_FP)
+          (declare-fun x () (_ FloatingPoint 11 53))
+          (assert (not (= x (fp.neg (fp.neg x)))))
+          (check-sat) ]} *)
+  | _ -> false
+
 type binary_int_arith_op =
   | Add | Sub | Mul | Div | Mod | And | Or | Xor
 
