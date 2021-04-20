@@ -29,13 +29,14 @@ let apply_cse dacc ~original_prim =
     match DE.find_cse (DA.denv dacc) with_fixed_value with
     | None -> None
     | Some simple ->
-      let canonical =
+      match
         TE.get_canonical_simple_exn (DA.typing_env dacc) simple
           ~min_name_mode:NM.normal
           ~name_mode_of_existing_simple:NM.normal
-      in
-      match canonical with
-      | exception Not_found -> None
+      with
+      | exception Not_found ->
+        (* CR pchambart: is this really reachable ? Should this be a fatal_error ? *)
+        None
       | simple -> Some simple
 
 let try_cse dacc ~original_prim ~simplified_args_with_tys ~min_name_mode
