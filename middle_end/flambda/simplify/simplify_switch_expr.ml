@@ -18,8 +18,8 @@
 
 open! Simplify_import
 
-let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
-      ~after_rebuild =
+let rebuild_switch ~simplify_let:_ _dacc ~arms ~scrutinee ~scrutinee_ty
+      ~tagged_scrutinee ~not_scrutinee uacc ~after_rebuild =
   let new_let_conts, arms, identity_arms, not_arms =
     Target_imm.Map.fold
       (fun arm (action, use_id, arity)
@@ -141,38 +141,6 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
       |> Continuation.Set.of_list
       |> Continuation.Set.get_singleton
   in
-  let create_tagged_scrutinee uacc dest ~make_body =
-    (* A problem with using [simplify_let] below is that the continuation
-       [dest] might have [Apply_cont_rewrite]s in the environment, left over
-       from the simplification of the existing uses.  We must clear these to
-       avoid a lookup failure for our new [Apply_cont] when
-       [Simplify_apply_cont] tries to rewrite the use.  There is no need for
-       the rewrites anyway; they have already been applied.
-       Likewise, we need to clear the continuation uses environment for
-       [dest] in [dacc], since our new [Apply_cont] might not match the
-       original uses (e.g. if a parameter has been removed). *)
-    let uacc =
-      UA.map_uenv uacc ~f:(fun uenv ->
-        UE.delete_apply_cont_rewrite uenv dest)
-    in
-    let dacc = DA.delete_continuation_uses dacc dest in
-    let bound_to = Variable.create "tagged_scrutinee" in
-    let body = make_body ~tagged_scrutinee:(Simple.var bound_to) in
-    let bound_to = Var_in_binding_pos.create bound_to NM.normal in
-    let defining_expr =
-      Named.create_prim (Unary (Box_number Untagged_immediate, scrutinee))
-        Debuginfo.none
-    in
-    let let_expr =
-      Let.create (Bindable_let_bound.singleton bound_to)
-        defining_expr
-        ~body
-        ~free_names_of_body:Unknown
-    in
-    simplify_let dacc let_expr
-      ~down_to_up:(fun _dacc ~rebuild ->
-        rebuild uacc ~after_rebuild:(fun expr uacc -> expr, uacc))
-  in
   (* CR mshinwell: Here and elsewhere [UA.name_occurrences] should be empty
      (maybe except for closure vars? -- check).  We should add asserts. *)
   let body, uacc =
@@ -185,37 +153,29 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
       let dbg = Debuginfo.none in
       match switch_is_identity with
       | Some dest ->
+        let apply_cont = Apply_cont.create dest ~args:[tagged_scrutinee] ~dbg in
         let uacc =
-          UA.notify_removed ~operation:Removed_operations.branch uacc
+          UA.map_uenv uacc ~f:(fun uenv ->
+            UE.delete_apply_cont_rewrite uenv dest)
         in
-        create_tagged_scrutinee uacc dest ~make_body:(fun ~tagged_scrutinee ->
-          (* No need to increment the cost_metrics inside [create_tagged_scrutinee] as it
-             will call simplify over the result of [make_body]. *)
-          Apply_cont.create dest ~args:[tagged_scrutinee] ~dbg
-          |> Expr.create_apply_cont)
+        let uacc =
+          UA.add_free_names uacc (Apply_cont.free_names apply_cont) |>
+          UA.notify_removed ~operation:Removed_operations.branch
+        in
+        Rebuilt_expr.create_apply_cont apply_cont, uacc
       | None ->
         match switch_is_boolean_not with
         | Some dest ->
+          let apply_cont = Apply_cont.create dest ~args:[not_scrutinee] ~dbg in
           let uacc =
-            UA.notify_removed ~operation:Removed_operations.branch uacc
+            UA.map_uenv uacc ~f:(fun uenv ->
+              UE.delete_apply_cont_rewrite uenv dest)
           in
-          create_tagged_scrutinee uacc dest ~make_body:(fun ~tagged_scrutinee ->
-            let not_scrutinee = Variable.create "not_scrutinee" in
-            let not_scrutinee' = Simple.var not_scrutinee in
-            let do_tagging =
-              Named.create_prim (P.Unary (Boolean_not, tagged_scrutinee))
-                Debuginfo.none
-            in
-            let bound =
-              VB.create not_scrutinee NM.normal
-              |> Bindable_let_bound.singleton
-            in
-            let body =
-              Apply_cont.create dest ~args:[not_scrutinee'] ~dbg
-              |> Expr.create_apply_cont
-            in
-            Let.create bound do_tagging ~body ~free_names_of_body:Unknown
-            |> Expr.create_let)
+          let uacc =
+            UA.add_free_names uacc (Apply_cont.free_names apply_cont) |>
+            UA.notify_removed ~operation:Removed_operations.branch
+          in
+          Rebuilt_expr.create_apply_cont apply_cont, uacc
         | None ->
           (* In that case, even though some branches were removed by simplify we
              should not count them in the number of removed operations: these
@@ -260,7 +220,7 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
 
 let simplify_switch_aux ~simplify_let
       ~scrutinee ~scrutinee_ty
-      ~tagged_scrutinee:_ ~not_scrutinee:_
+      ~tagged_scrutinee ~not_scrutinee
       dacc switch
       ~(down_to_up:
           (Rebuilt_expr.t * Upwards_acc.t,
@@ -308,7 +268,7 @@ let simplify_switch_aux ~simplify_let
     in
     down_to_up dacc
       ~rebuild:(rebuild_switch ~simplify_let dacc ~arms ~scrutinee
-        ~scrutinee_ty)
+        ~scrutinee_ty ~tagged_scrutinee ~not_scrutinee)
 
 let simplify_switch
       ~(simplify_let:Flambda.Let.t Simplify_common.expr_simplifier)
