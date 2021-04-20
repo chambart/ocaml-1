@@ -258,13 +258,14 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
   in
   after_rebuild expr uacc
 
-let simplify_switch ~simplify_let dacc switch ~down_to_up =
+let simplify_switch_aux ~simplify_let
+      ~scrutinee ~scrutinee_ty
+      ~tagged_scrutinee:_ ~not_scrutinee:_
+      dacc switch
+      ~(down_to_up:
+          (Rebuilt_expr.t * Upwards_acc.t,
+           Rebuilt_expr.t * Upwards_acc.t) Simplify_common.down_to_up) =
   let module AC = Apply_cont in
-  let scrutinee = Switch.scrutinee switch in
-  let scrutinee_ty =
-    S.simplify_simple dacc scrutinee ~min_name_mode:NM.normal
-  in
-  let scrutinee = T.get_alias_exn scrutinee_ty in
   let arms, dacc =
     let typing_env_at_use = DA.typing_env dacc in
     Target_imm.Map.fold (fun arm action (arms, dacc) ->
@@ -308,3 +309,82 @@ let simplify_switch ~simplify_let dacc switch ~down_to_up =
     down_to_up dacc
       ~rebuild:(rebuild_switch ~simplify_let dacc ~arms ~scrutinee
         ~scrutinee_ty)
+
+let simplify_switch
+      ~(simplify_let:Flambda.Let.t Simplify_common.expr_simplifier)
+      ~original_expr
+      dacc switch
+      ~(down_to_up:
+          (Rebuilt_expr.t * Upwards_acc.t,
+           Rebuilt_expr.t * Upwards_acc.t) Simplify_common.down_to_up) =
+  let scrutinee = Switch.scrutinee switch in
+  let scrutinee_ty =
+    S.simplify_simple dacc scrutinee ~min_name_mode:NM.normal
+  in
+  let scrutinee = T.get_alias_exn scrutinee_ty in
+  let find_cse_simple prim =
+    let with_fixed_value = P.Eligible_for_cse.create_exn prim in
+    match DE.find_cse (DA.denv dacc) with_fixed_value with
+    | None -> None
+    | Some simple ->
+      match
+        TE.get_canonical_simple_exn (DA.typing_env dacc) simple
+          ~min_name_mode:NM.normal
+          ~name_mode_of_existing_simple:NM.normal
+      with
+      | exception Not_found -> None
+      | simple -> Some simple
+  in
+  let create_def name prim =
+    let bound_to = Variable.create name in
+    let bound_to = Var_in_binding_pos.create bound_to NM.normal in
+    let defining_expr = Named.create_prim prim Debuginfo.none in
+    let let_expr =
+      Let.create (Bindable_let_bound.singleton bound_to)
+        defining_expr
+        ~body:original_expr
+        ~free_names_of_body:Unknown
+    in
+    simplify_let dacc let_expr ~down_to_up
+  in
+  let tag_prim = P.Unary (Box_number Untagged_immediate, scrutinee) in
+  Simple.pattern_match scrutinee
+    ~const:(fun const ->
+      match Reg_width_things.Const.descr const with
+      | Naked_immediate imm ->
+        let tagged_scrutinee =
+          Simple.const (Reg_width_things.Const.tagged_immediate imm)
+        in
+        let not_scrutinee =
+          let not_imm =
+            if Target_imm.equal imm Target_imm.zero then
+              Target_imm.one
+            else
+              (* If the scrutinee is neither zero nor one, this value
+                 won't be used *)
+              Target_imm.zero
+          in
+          Simple.const (Reg_width_things.Const.tagged_immediate not_imm)
+        in
+        simplify_switch_aux dacc switch ~down_to_up
+          ~tagged_scrutinee ~not_scrutinee
+          ~scrutinee ~scrutinee_ty
+          ~simplify_let
+      | Tagged_immediate _ | Naked_float _ | Naked_int32 _
+      | Naked_int64 _ | Naked_nativeint _ ->
+        Misc.fatal_errorf "Switch scrutinee is not a naked immediate: %a"
+          Simple.print scrutinee)
+    ~name:(fun _ ->
+      match find_cse_simple tag_prim with
+      | None ->
+        create_def "tagged_scrutinee" tag_prim
+      | Some tagged_scrutinee ->
+        let not_prim = P.Unary (Boolean_not, tagged_scrutinee) in
+        match find_cse_simple not_prim with
+        | None ->
+          create_def "not_scrutinee" not_prim
+        | Some not_scrutinee ->
+          simplify_switch_aux dacc switch ~down_to_up
+            ~tagged_scrutinee ~not_scrutinee
+            ~simplify_let
+            ~scrutinee ~scrutinee_ty)

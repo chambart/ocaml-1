@@ -18,4 +18,5 @@
 
 val simplify_switch
    : simplify_let:Flambda.Let.t Simplify_common.expr_simplifier
+  -> original_expr:Flambda.Expr.t
   -> Flambda.Switch.t Simplify_common.expr_simplifier
