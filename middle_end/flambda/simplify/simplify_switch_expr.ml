@@ -18,7 +18,7 @@
 
 open! Simplify_import
 
-let rebuild_switch ~simplify_let:_ _dacc ~arms ~scrutinee ~scrutinee_ty
+let rebuild_switch ~arms ~scrutinee ~scrutinee_ty
       ~tagged_scrutinee ~not_scrutinee uacc ~after_rebuild =
   let new_let_conts, arms, identity_arms, not_arms =
     Target_imm.Map.fold
@@ -218,13 +218,9 @@ let rebuild_switch ~simplify_let:_ _dacc ~arms ~scrutinee ~scrutinee_ty
   in
   after_rebuild expr uacc
 
-let simplify_switch_aux ~simplify_let
-      ~scrutinee ~scrutinee_ty
+let simplify_switch_aux ~scrutinee ~scrutinee_ty
       ~tagged_scrutinee ~not_scrutinee
-      dacc switch
-      ~(down_to_up:
-          (Rebuilt_expr.t * Upwards_acc.t,
-           Rebuilt_expr.t * Upwards_acc.t) Simplify_common.down_to_up) =
+      dacc switch ~down_to_up =
   let module AC = Apply_cont in
   let arms, dacc =
     let typing_env_at_use = DA.typing_env dacc in
@@ -267,22 +263,17 @@ let simplify_switch_aux ~simplify_let
       (Target_imm.Map.empty, dacc)
     in
     down_to_up dacc
-      ~rebuild:(rebuild_switch ~simplify_let dacc ~arms ~scrutinee
+      ~rebuild:(rebuild_switch ~arms ~scrutinee
         ~scrutinee_ty ~tagged_scrutinee ~not_scrutinee)
 
-let simplify_switch
-      ~(simplify_let:Flambda.Let.t Simplify_common.expr_simplifier)
-      ~original_expr
-      dacc switch
-      ~(down_to_up:
-          (Rebuilt_expr.t * Upwards_acc.t,
-           Rebuilt_expr.t * Upwards_acc.t) Simplify_common.down_to_up) =
+let simplify_switch ~simplify_let ~original_expr dacc switch ~down_to_up =
   let scrutinee = Switch.scrutinee switch in
   let scrutinee_ty =
     S.simplify_simple dacc scrutinee ~min_name_mode:NM.normal
   in
   let scrutinee = T.get_alias_exn scrutinee_ty in
   let find_cse_simple prim =
+    (* prim is either boolean not or tagging of non constant values *)
     let with_fixed_value = P.Eligible_for_cse.create_exn prim in
     match DE.find_cse (DA.denv dacc) with_fixed_value with
     | None -> None
@@ -329,7 +320,6 @@ let simplify_switch
         simplify_switch_aux dacc switch ~down_to_up
           ~tagged_scrutinee ~not_scrutinee
           ~scrutinee ~scrutinee_ty
-          ~simplify_let
       | Tagged_immediate _ | Naked_float _ | Naked_int32 _
       | Naked_int64 _ | Naked_nativeint _ ->
         Misc.fatal_errorf "Switch scrutinee is not a naked immediate: %a"
@@ -346,5 +336,4 @@ let simplify_switch
         | Some not_scrutinee ->
           simplify_switch_aux dacc switch ~down_to_up
             ~tagged_scrutinee ~not_scrutinee
-            ~simplify_let
             ~scrutinee ~scrutinee_ty)
