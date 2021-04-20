@@ -507,4 +507,14 @@ let simplify_unary_primitive dacc (prim : P.unary_primitive)
   let reachable, env_extension, dacc =
     simplifier dacc ~original_term ~arg ~arg_ty ~result_var
   in
+  let dacc =
+    if P.is_an_involution prim then
+      DA.map_denv dacc ~f:(fun denv ->
+        let prim : P.t =
+          Unary (prim, Simple.var (Var_in_binding_pos.var result_var))
+        in
+        DE.add_cse denv (P.Eligible_for_cse.create_exn prim) ~bound_to:arg)
+    else
+      dacc
+  in
   reachable, env_extension, [arg], dacc
