@@ -248,5 +248,5 @@ let rec value_kind_union (k1 : Lambda.value_kind) (k2 : Lambda.value_kind) =
     when tag1 = tag2 && List.length fields1 = List.length fields2 ->
     Pblock { tag = tag1; fields = List.map2 value_kind_union fields1 fields2 }
   | _, _ ->
-    if k1 = k2 then k1
+    if Lambda.equal_value_kind k1 k2 then k1
     else Pgenval
