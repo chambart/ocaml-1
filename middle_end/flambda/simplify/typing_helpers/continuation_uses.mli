@@ -43,6 +43,11 @@ val add_use
 
 val get_uses : t -> One_continuation_use.t list
 
+val get_arg_types_by_use_id
+  : t
+ -> Continuation_env_and_param_types.arg_at_use
+      Apply_cont_rewrite_id.Map.t list
+
 val compute_handler_env
    : t
   -> env_at_fork_plus_params_and_consts:Downwards_env.t

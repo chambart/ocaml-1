@@ -28,7 +28,7 @@ let is_unboxing_beneficial_for_epa (epa : Extra_param_and_args.t) =
     | New_let_binding _ | New_let_binding_with_named_args _ -> false
   ) epa.args
 
-let rec filter_non_beneficial_decisions decision : U.decision =
+let rec filter_non_beneficial_decisions_aux decision : U.decision =
   match (decision : U.decision) with
   | Do_not_unbox _ -> decision
 
@@ -41,7 +41,7 @@ let rec filter_non_beneficial_decisions decision : U.decision =
           let is_unboxing_beneficial =
             is_unboxing_beneficial || is_unboxing_beneficial_for_epa epa
           in
-          let decision = filter_non_beneficial_decisions decision in
+          let decision = filter_non_beneficial_decisions_aux decision in
           is_unboxing_beneficial, { epa; decision; }
         ) false fields
     in
@@ -58,7 +58,7 @@ let rec filter_non_beneficial_decisions decision : U.decision =
              : U.field_decision ->
           is_unboxing_beneficial :=
             !is_unboxing_beneficial || is_unboxing_beneficial_for_epa epa;
-          let decision = filter_non_beneficial_decisions decision in
+          let decision = filter_non_beneficial_decisions_aux decision in
           { epa; decision; }
         ) vars_within_closure
     in
@@ -75,7 +75,7 @@ let rec filter_non_beneficial_decisions decision : U.decision =
               : U.field_decision ->
           is_unboxing_beneficial :=
             !is_unboxing_beneficial || is_unboxing_beneficial_for_epa epa;
-          let decision = filter_non_beneficial_decisions decision in
+          let decision = filter_non_beneficial_decisions_aux decision in
           { epa; decision; }
         )) fields_by_tag
     in
@@ -93,3 +93,9 @@ let rec filter_non_beneficial_decisions decision : U.decision =
     as decision ->
     if is_unboxing_beneficial_for_epa epa then decision
     else Do_not_unbox Not_beneficial
+
+let filter_non_beneficial_decisions ~continuation_is_recursive decision =
+  if continuation_is_recursive then decision
+  else filter_non_beneficial_decisions_aux decision
+
+

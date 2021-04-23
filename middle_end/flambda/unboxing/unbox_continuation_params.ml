@@ -65,6 +65,7 @@ let make_decisions ~continuation_is_recursive ~arg_types_by_use_id
                 ~rewrite_ids_seen:empty nth arg_type_by_use_id
                 ~pass:(Filter { recursive = continuation_is_recursive; })
            |> Is_unboxing_beneficial.filter_non_beneficial_decisions
+                ~continuation_is_recursive
          in
          let denv =
            Build_unboxing_denv.denv_of_decision denv ~param_var:(KP.var param)

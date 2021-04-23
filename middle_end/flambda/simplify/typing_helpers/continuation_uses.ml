@@ -85,6 +85,20 @@ let arity t = t.arity
 
 let get_uses t = t.uses
 
+let get_arg_types_by_use_id t =
+  List.fold_left (fun args use ->
+    List.map2 (fun arg_map arg_type ->
+      let env_at_use = U.env_at_use use in
+      let typing_env = DE.typing_env env_at_use in
+      let arg_at_use : Continuation_env_and_param_types.arg_at_use =
+        { arg_type; typing_env; }
+      in
+      Apply_cont_rewrite_id.Map.add (U.id use) arg_at_use arg_map)
+      args
+      (U.arg_types use))
+    (List.map (fun _ -> Apply_cont_rewrite_id.Map.empty) t.arity)
+    t.uses
+
 let simple_join typing_env uses ~params =
   (* This join is intended to be sufficient to match Closure + Cmmgen
      on unboxing, but not really anything more. *)
@@ -279,20 +293,7 @@ Format.eprintf "The extra params and args are:@ %a\n%!"
         | (_, _, (Inlinable | Non_inlinable)) :: _ ->
           denv, extra_params_and_args, false
     in
-    let arg_types_by_use_id =
-      List.fold_left (fun args use ->
-        List.map2 (fun arg_map arg_type ->
-          let env_at_use = U.env_at_use use in
-          let typing_env = DE.typing_env env_at_use in
-          let arg_at_use : Continuation_env_and_param_types.arg_at_use =
-            { arg_type; typing_env; }
-          in
-          Apply_cont_rewrite_id.Map.add (U.id use) arg_at_use arg_map)
-          args
-          (U.arg_types use))
-        (List.map (fun _ -> Apply_cont_rewrite_id.Map.empty) t.arity)
-        uses
-    in
+    let arg_types_by_use_id = get_arg_types_by_use_id t in
     Uses {
       handler_env;
       arg_types_by_use_id;

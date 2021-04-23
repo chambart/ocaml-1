@@ -20,6 +20,7 @@ open! Simplify_import
 
 module Decisions : sig
   type t
+  val print : Format.formatter -> t -> unit
 end
 
 val make_decisions
