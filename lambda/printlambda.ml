@@ -59,7 +59,7 @@ let rec value_kind ppf = function
   | Pfloatval -> fprintf ppf "[float]"
   | Pboxedintval bi -> fprintf ppf "[%s]" (boxed_integer_name bi)
   | Pblock { tag; fields } ->
-    fprintf ppf "[%i: %a]" tag
+    fprintf ppf "[%a: %a]" Tag.print tag
       (Format.pp_print_list ~pp_sep:(fun ppf () -> fprintf ppf ",@ ")
          value_kind) fields
 
@@ -69,7 +69,7 @@ let rec value_kind' ppf = function
   | Pfloatval -> fprintf ppf "[float]"
   | Pboxedintval bi -> fprintf ppf "[%s]" (boxed_integer_name bi)
   | Pblock { tag; fields } ->
-    fprintf ppf "[%i: %a]" tag
+    fprintf ppf "[%a: %a]" Tag.print tag
       (Format.pp_print_list ~pp_sep:(fun ppf () -> fprintf ppf ",@ ")
          value_kind') fields
 
@@ -79,7 +79,7 @@ let return_kind ppf = function
   | Pfloatval -> fprintf ppf ": float@ "
   | Pboxedintval bi -> fprintf ppf ": %s@ " (boxed_integer_name bi)
   | Pblock { tag; fields } ->
-    fprintf ppf ": [%i: %a]@ " tag
+    fprintf ppf ": [%a: %a]@ " Tag.print tag
       (Format.pp_print_list ~pp_sep:(fun ppf () -> fprintf ppf ",@ ")
          value_kind') fields
 
@@ -89,7 +89,7 @@ let field_kind ppf = function
   | Pfloatval -> pp_print_string ppf "float"
   | Pboxedintval bi -> pp_print_string ppf (boxed_integer_name bi)
   | Pblock { tag; fields } ->
-    fprintf ppf "[%i: %a]" tag
+    fprintf ppf "[%a: %a]" Tag.print tag
       (Format.pp_print_list ~pp_sep:(fun ppf () -> fprintf ppf ",@ ")
          value_kind') fields
 
