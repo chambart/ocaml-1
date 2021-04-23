@@ -85,7 +85,7 @@ let return_kind ppf = function
   | Pfloatval -> fprintf ppf ": float@ "
   | Pboxedintval bi -> fprintf ppf ": %s@ " (boxed_integer_name bi)
   | Pblock { tag; fields } ->
-    fprintf ppf ": [%i: %a]" tag
+    fprintf ppf ": [%i: %a]@ " tag
       (Format.pp_print_list ~pp_sep:(fun ppf () -> fprintf ppf ",@ ")
          value_kind') fields
 
