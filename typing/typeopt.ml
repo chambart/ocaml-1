@@ -202,7 +202,6 @@ let rec value_kind' env ~visited ty : Lambda.value_kind =
 
 let value_kind env ty = value_kind' env ~visited:Numbers.Int.Set.empty ty
 
-
 let function_return_value_kind env ty =
   match is_function_type env ty with
   | Some (_lhs, rhs) -> value_kind env rhs

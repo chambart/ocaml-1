@@ -459,7 +459,7 @@ module With_subkind = struct
   let tagged_immediate = create value Tagged_immediate
   let rec_info = create rec_info Anything
   let block tag fields =
-    if List.exists (fun t -> t.kind <> Value) fields then
+    if List.exists (fun t -> not (equal t.kind Value)) fields then
       Misc.fatal_error "Block with fields of kind not value";
     let fields = List.map (fun t -> t.subkind) fields in
     create value (Block { tag; fields })
@@ -531,8 +531,8 @@ module With_subkind = struct
     | Rec_info -> Rec_info
     | Fabricated -> Misc.fatal_error "Not implemented"
 
-  let rec compatible_descr t ~when_used_at =
-    match t, when_used_at with
+  let rec compatible_descr descr ~when_used_at =
+    match descr, when_used_at with
     (* Simple equality cases: *)
     | Naked_number nn1, Naked_number nn2 -> Naked_number_kind.equal nn1 nn2
     | Any_value, Any_value
