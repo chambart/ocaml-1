@@ -36,7 +36,6 @@ let rec value_kind (vk : L.value_kind) =
   | Pboxedintval Pnativeint -> KS.boxed_nativeint
   | Pintval -> KS.tagged_immediate
   | Pblock { tag; fields } ->
-    let tag = Tag.create_exn tag in
     KS.block tag (List.map value_kind fields)
 
 let inline_attribute (attr : L.inline_attribute) : Inline_attribute.t =

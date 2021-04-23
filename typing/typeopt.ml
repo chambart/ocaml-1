@@ -172,22 +172,70 @@ let rec value_kind' env ~visited ty : Lambda.value_kind =
       if Numbers.Int.Set.mem ty.id visited then
         Pgenval
       else begin
-        match Env.find_type_descrs p env with
-        | exception Not_found -> Pgenval
-        | [], _ -> Pgenval
-        | [ { cstr_tag = Cstr_block { tag }; cstr_args } ], _ ->
-          let visited = Numbers.Int.Set.add ty.id visited in
-          let fields = List.map (value_kind' env ~visited) cstr_args in
-          Pblock { tag; fields }
-        | constructors, _ ->
-          let is_constant = function
-            | { cstr_tag = Cstr_constant _ } -> true
+        let visited = Numbers.Int.Set.add ty.id visited in
+        match (Env.find_type p env).type_kind with
+        | exception Not_found ->
+          Pgenval
+        | Type_variant constructors ->
+          let is_constant (constructor : Types.constructor_declaration) =
+            match constructor.cd_args with
+            | Cstr_tuple [] -> true
             | _ -> false
           in
           if List.for_all is_constant constructors then
             Pintval
-          else
+          else begin match constructors with
+            | [ constructor ] ->
+              let is_mutable, fields =
+                match constructor.cd_args with
+                | Cstr_tuple fields ->
+                  false, List.map (value_kind' env ~visited) fields
+                | Cstr_record labels ->
+                  List.fold_left_map
+                    (fun is_mutable (label:Types.label_declaration) ->
+                       let is_mutable =
+                         match label.ld_mutable with
+                         | Mutable -> true
+                         | Immutable -> is_mutable
+                       in
+                       is_mutable, value_kind' env ~visited label.ld_type)
+                    false labels
+              in
+              if is_mutable then
+                Pgenval
+              else
+                Pblock { tag = Tag.zero; fields }
+            | _ ->
+              Pgenval
+          end
+        | Type_record (labels, record_representation) ->
+          let is_mutable, fields =
+            List.fold_left_map
+              (fun is_mutable (label:Types.label_declaration) ->
+                 let is_mutable =
+                   match label.ld_mutable with
+                   | Mutable -> true
+                   | Immutable -> is_mutable
+                 in
+                 is_mutable, value_kind' env ~visited label.ld_type)
+              false labels
+          in
+          if is_mutable then
             Pgenval
+          else begin match record_representation with
+            | Record_regular ->
+              Pblock { tag = Tag.zero; fields }
+            | Record_float ->
+              Pblock { tag = Tag.double_array_tag;
+                       fields = List.map (fun _ -> Pfloatval) fields }
+            | Record_inlined tag ->
+              Pblock { tag = Tag.create_exn tag; fields }
+            | Record_unboxed _ ->
+              assert false
+            | Record_extension _ ->
+              Pgenval
+          end
+        | Type_abstract | Type_open -> Pgenval
       end
   | Ttuple fields ->
       if Numbers.Int.Set.mem ty.id visited then
@@ -195,7 +243,7 @@ let rec value_kind' env ~visited ty : Lambda.value_kind =
       else begin
         let visited = Numbers.Int.Set.add ty.id visited in
         let fields = List.map (value_kind' env ~visited) fields in
-        Pblock { tag = 0; fields }
+        Pblock { tag = Tag.zero; fields }
       end
   | _ ->
       Pgenval
