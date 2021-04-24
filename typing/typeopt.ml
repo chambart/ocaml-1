@@ -155,7 +155,7 @@ let bigarray_type_kind_and_layout env typ =
       (Pbigarray_unknown, Pbigarray_unknown_layout)
 
 let value_kind env ty =
-  let rec loop env ~visited ty : Lambda.value_kind =
+  let rec loop env ~visited ~fuel ty : Lambda.value_kind =
     match scrape env ty with
     | Tconstr(p, _, _) when Path.same p Predef.path_int ->
       Pintval
@@ -170,10 +170,11 @@ let value_kind env ty =
     | Tconstr(p, _, _) when Path.same p Predef.path_nativeint ->
       Pboxedintval Pnativeint
     | Tconstr(p, _, _) ->
-      if Numbers.Int.Set.mem ty.id visited then
+      if Numbers.Int.Set.mem ty.id visited || fuel <= 0 then
         Pgenval
       else begin
         let visited = Numbers.Int.Set.add ty.id visited in
+        let fuel = fuel - 1 in
         match (Env.find_type p env).type_kind with
         | exception Not_found ->
           Pgenval
@@ -190,7 +191,7 @@ let value_kind env ty =
               let is_mutable, fields =
                 match constructor.cd_args with
                 | Cstr_tuple fields ->
-                  false, List.map (loop env ~visited) fields
+                  false, List.map (loop env ~visited ~fuel) fields
                 | Cstr_record labels ->
                   List.fold_left_map
                     (fun is_mutable (label:Types.label_declaration) ->
@@ -199,7 +200,7 @@ let value_kind env ty =
                          | Mutable -> true
                          | Immutable -> is_mutable
                        in
-                       is_mutable, loop env ~visited label.ld_type)
+                       is_mutable, loop env ~visited ~fuel label.ld_type)
                     false labels
               in
               if is_mutable then
@@ -218,7 +219,7 @@ let value_kind env ty =
                    | Mutable -> true
                    | Immutable -> is_mutable
                  in
-                 is_mutable, loop env ~visited label.ld_type)
+                 is_mutable, loop env ~visited ~fuel label.ld_type)
               false labels
           in
           if is_mutable then
@@ -239,17 +240,19 @@ let value_kind env ty =
         | Type_abstract | Type_open -> Pgenval
       end
     | Ttuple fields ->
-      if Numbers.Int.Set.mem ty.id visited then
+      if Numbers.Int.Set.mem ty.id visited || fuel <= 0 then
         Pgenval
       else begin
         let visited = Numbers.Int.Set.add ty.id visited in
-        let fields = List.map (loop env ~visited) fields in
+        let fuel = fuel - 1 in
+        let fields = List.map (loop env ~visited ~fuel) fields in
         Pblock { tag = Tag.zero; fields }
       end
     | _ ->
       Pgenval
   in
-  loop env ~visited:Numbers.Int.Set.empty ty
+  let max_depth = 2 in
+  loop env ~visited:Numbers.Int.Set.empty ~fuel:max_depth ty
 
 let function_return_value_kind env ty =
   match is_function_type env ty with
