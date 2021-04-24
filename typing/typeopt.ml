@@ -155,21 +155,22 @@ let bigarray_type_kind_and_layout env typ =
   | _ ->
       (Pbigarray_unknown, Pbigarray_unknown_layout)
 
-let rec value_kind' env ~visited ty : Lambda.value_kind =
-  match scrape env ty with
-  | Tconstr(p, _, _) when Path.same p Predef.path_int ->
+let value_kind env ty =
+  let rec loop env ~visited ty : Lambda.value_kind =
+    match scrape env ty with
+    | Tconstr(p, _, _) when Path.same p Predef.path_int ->
       Pintval
-  | Tconstr(p, _, _) when Path.same p Predef.path_char ->
+    | Tconstr(p, _, _) when Path.same p Predef.path_char ->
       Pintval
-  | Tconstr(p, _, _) when Path.same p Predef.path_float ->
+    | Tconstr(p, _, _) when Path.same p Predef.path_float ->
       Pfloatval
-  | Tconstr(p, _, _) when Path.same p Predef.path_int32 ->
+    | Tconstr(p, _, _) when Path.same p Predef.path_int32 ->
       Pboxedintval Pint32
-  | Tconstr(p, _, _) when Path.same p Predef.path_int64 ->
+    | Tconstr(p, _, _) when Path.same p Predef.path_int64 ->
       Pboxedintval Pint64
-  | Tconstr(p, _, _) when Path.same p Predef.path_nativeint ->
+    | Tconstr(p, _, _) when Path.same p Predef.path_nativeint ->
       Pboxedintval Pnativeint
-  | Tconstr(p, _, _) ->
+    | Tconstr(p, _, _) ->
       if Numbers.Int.Set.mem ty.id visited then
         Pgenval
       else begin
@@ -190,7 +191,7 @@ let rec value_kind' env ~visited ty : Lambda.value_kind =
               let is_mutable, fields =
                 match constructor.cd_args with
                 | Cstr_tuple fields ->
-                  false, List.map (value_kind' env ~visited) fields
+                  false, List.map (loop env ~visited) fields
                 | Cstr_record labels ->
                   List.fold_left_map
                     (fun is_mutable (label:Types.label_declaration) ->
@@ -199,7 +200,7 @@ let rec value_kind' env ~visited ty : Lambda.value_kind =
                          | Mutable -> true
                          | Immutable -> is_mutable
                        in
-                       is_mutable, value_kind' env ~visited label.ld_type)
+                       is_mutable, loop env ~visited label.ld_type)
                     false labels
               in
               if is_mutable then
@@ -218,7 +219,7 @@ let rec value_kind' env ~visited ty : Lambda.value_kind =
                    | Mutable -> true
                    | Immutable -> is_mutable
                  in
-                 is_mutable, value_kind' env ~visited label.ld_type)
+                 is_mutable, loop env ~visited label.ld_type)
               false labels
           in
           if is_mutable then
@@ -238,18 +239,18 @@ let rec value_kind' env ~visited ty : Lambda.value_kind =
           end
         | Type_abstract | Type_open -> Pgenval
       end
-  | Ttuple fields ->
+    | Ttuple fields ->
       if Numbers.Int.Set.mem ty.id visited then
         Pgenval
       else begin
         let visited = Numbers.Int.Set.add ty.id visited in
-        let fields = List.map (value_kind' env ~visited) fields in
+        let fields = List.map (loop env ~visited) fields in
         Pblock { tag = Tag.zero; fields }
       end
-  | _ ->
+    | _ ->
       Pgenval
-
-let value_kind env ty = value_kind' env ~visited:Numbers.Int.Set.empty ty
+  in
+  loop env ~visited:Numbers.Int.Set.empty ty
 
 let function_return_value_kind env ty =
   match is_function_type env ty with
