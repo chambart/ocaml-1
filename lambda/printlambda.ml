@@ -67,10 +67,10 @@ let rec value_kind ppf = function
   | Pblock { tag; fields } ->
     fprintf ppf "[%a: %a]" Tag.print tag
       (Format.pp_print_list ~pp_sep:(fun ppf () -> fprintf ppf ",@ ")
-         value_kind) fields
+         value_kind') fields
 
-let rec value_kind' ppf = function
-  | Pgenval -> fprintf ppf "[val]"
+and value_kind' ppf = function
+  | Pgenval -> fprintf ppf "*"
   | Pintval -> fprintf ppf "[int]"
   | Pfloatval -> fprintf ppf "[float]"
   | Pboxedintval bi -> fprintf ppf "[%s]" (boxed_integer_name bi)
