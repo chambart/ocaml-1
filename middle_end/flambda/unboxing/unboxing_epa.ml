@@ -46,41 +46,43 @@ let type_of_arg_being_unboxed unboxed_arg =
   | Generated var -> Some (aux (Simple.var var))
   | Added_by_wrapper_at_rewrite_use _ -> prevent_current_unboxing ()
 
-let arg_being_unboxed_of_extra_arg extra_arg =
-  match (extra_arg : EPA.Extra_arg.t) with
-  | Already_in_scope simple -> Available simple
-  | New_let_binding (var, _)
-  | New_let_binding_with_named_args (var, _) -> Generated var
-
-let extra_arg_of_arg_being_unboxed (unboxer : Unboxers.unboxer)
+let unbox_arg (unboxer : Unboxers.unboxer)
       ~typing_env_at_use arg_being_unboxed =
   match arg_being_unboxed with
   | Poison ->
-    EPA.Extra_arg.Already_in_scope (Simple.const unboxer.invalid_const)
+    let extra_arg =
+      EPA.Extra_arg.Already_in_scope (Simple.const unboxer.invalid_const)
+    in
+    extra_arg, Poison
   | Available arg_at_use ->
     let arg_type = T.alias_type_of K.value arg_at_use in
     begin match unboxer.prove_simple typing_env_at_use arg_type
-                  ~min_name_mode:Name_mode.normal with
+            ~min_name_mode:Name_mode.normal with
     | Proved simple ->
-      EPA.Extra_arg.Already_in_scope simple
+      EPA.Extra_arg.Already_in_scope simple, Available simple
     | Invalid ->
-      EPA.Extra_arg.Already_in_scope (Simple.const unboxer.invalid_const)
+      let extra_arg =
+        EPA.Extra_arg.Already_in_scope (Simple.const unboxer.invalid_const)
+      in
+      extra_arg, Poison
     | Unknown ->
       let var = Variable.create unboxer.var_name in
       let prim = unboxer.unboxing_prim arg_at_use in
-      EPA.Extra_arg.New_let_binding (var, prim)
+      let extra_arg = EPA.Extra_arg.New_let_binding (var, prim) in
+      extra_arg, Generated var
     end
   | Generated var ->
     let arg_at_use = Simple.var var in
     let var = Variable.create unboxer.var_name in
     let prim = unboxer.unboxing_prim arg_at_use in
-    EPA.Extra_arg.New_let_binding (var, prim)
+    let extra_arg = EPA.Extra_arg.New_let_binding (var, prim) in
+    extra_arg, Generated var
   | Added_by_wrapper_at_rewrite_use { nth_arg; } ->
     let var = Variable.create "unboxed_field" in
     EPA.Extra_arg.New_let_binding_with_named_args (var, (fun args ->
       let arg_simple = List.nth args nth_arg in
       unboxer.unboxing_prim arg_simple
-    ))
+    )), Generated var
 
 (* Helpers for the variant case *)
 (* **************************** *)
@@ -166,17 +168,18 @@ let extra_args_for_const_ctor_of_variant
     Misc.fatal_errorf "Bad kind for unboxing the constant constructor \
                        of a variant"
 
+
 (* Helpers for the number case *)
 (* *************************** *)
 
 let compute_extra_arg_for_number kind unboxer epa
       rewrite_id ~typing_env_at_use arg_being_unboxed : U.decision =
-  let extra_arg =
-    extra_arg_of_arg_being_unboxed unboxer
-      ~typing_env_at_use arg_being_unboxed
+  let extra_arg, _new_arg_being_unboxed =
+    unbox_arg unboxer ~typing_env_at_use arg_being_unboxed
   in
   let epa = Extra_param_and_args.update_param_args epa rewrite_id extra_arg in
   Unbox (Number (kind, epa))
+
 
 (* Recursive descent on decisions *)
 (* ****************************** *)
@@ -288,9 +291,8 @@ and compute_extra_args_for_block ~pass
          let unboxer =
            Unboxers.Field.unboxer ~invalid_const bak ~index:field_nth
          in
-         let new_extra_arg =
-           extra_arg_of_arg_being_unboxed unboxer
-             ~typing_env_at_use arg_being_unboxed
+         let new_extra_arg, new_arg_being_unboxed =
+           unbox_arg unboxer ~typing_env_at_use arg_being_unboxed
          in
          let epa =
            Extra_param_and_args.update_param_args epa rewrite_id new_extra_arg
@@ -298,7 +300,7 @@ and compute_extra_args_for_block ~pass
          let decision =
            compute_extra_args_for_one_decision_and_use ~pass
              rewrite_id ~typing_env_at_use
-             (arg_being_unboxed_of_extra_arg new_extra_arg) decision
+             new_arg_being_unboxed decision
          in
          Target_imm.(add one field_nth), { epa; decision; }
       ) Target_imm.zero fields
@@ -312,9 +314,8 @@ and compute_extra_args_for_closure ~pass
     Var_within_closure.Map.mapi
       (fun var ({ epa; decision; } : U.field_decision) : U.field_decision ->
         let unboxer = Unboxers.Closure_field.unboxer closure_id var in
-        let new_extra_arg =
-          extra_arg_of_arg_being_unboxed unboxer
-            ~typing_env_at_use arg_being_unboxed
+        let new_extra_arg, new_arg_being_unboxed =
+          unbox_arg unboxer ~typing_env_at_use arg_being_unboxed
         in
         let epa =
           Extra_param_and_args.update_param_args epa rewrite_id new_extra_arg
@@ -322,7 +323,7 @@ and compute_extra_args_for_closure ~pass
         let decision =
           compute_extra_args_for_one_decision_and_use ~pass
             rewrite_id ~typing_env_at_use
-            (arg_being_unboxed_of_extra_arg new_extra_arg) decision
+            new_arg_being_unboxed decision
         in
         { epa; decision; }
       ) vars_within_closure
@@ -404,14 +405,7 @@ and compute_extra_args_for_variant ~pass
               let unboxer =
                 Unboxers.Field.unboxer ~invalid_const bak ~index:field_nth
               in
-              let new_extra_arg =
-                extra_arg_of_arg_being_unboxed unboxer
-                  ~typing_env_at_use arg_being_unboxed
-              in
-              let new_arg_being_unboxed =
-                arg_being_unboxed_of_extra_arg new_extra_arg
-              in
-              new_extra_arg, new_arg_being_unboxed
+              unbox_arg unboxer ~typing_env_at_use arg_being_unboxed
             end else begin
               EPA.Extra_arg.Already_in_scope (Simple.const invalid_const),
               Poison
