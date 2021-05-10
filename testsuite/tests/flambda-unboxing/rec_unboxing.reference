@@ -1,24 +1,24 @@
-No allocs at line 87
-No allocs at line 88
-No allocs at line 97
-No allocs at line 98
-No allocs at line 107
-No allocs at line 108
-No allocs at line 117
-No allocs at line 118
-Too many allocs at line 135
-Too many allocs at line 136
-Some allocs at line 147
-Some allocs at line 148
-Some allocs at line 159
-Some allocs at line 160
-Some allocs at line 171
-Some allocs at line 172
-Some allocs at line 186
-Some allocs at line 187
-Some allocs at line 203
-Some allocs at line 204
-No allocs at line 224
-Some allocs at line 225
-Some allocs at line 226
-Some allocs at line 227
+No allocs for test 'int32-loop-1'
+No allocs for test 'int32-loop-2'
+No allocs for test 'int64-loop-1'
+No allocs for test 'int64-loop-2'
+No allocs for test 'nativeint-loop-1'
+No allocs for test 'nativeint-loop-2'
+No allocs for test 'float-loop-1'
+No allocs for test 'float-loop-2'
+Too many allocs for test 'float-hard-1'
+Too many allocs for test 'float-hard-2'
+Some allocs for test 'tuple-loop-1'
+Some allocs for test 'tuple-loop-2'
+Some allocs for test 'tuple-loop-3'
+Some allocs for test 'tuple-loop-4'
+Some allocs for test 'tuple-float-1'
+Some allocs for test 'tuple-float-2'
+Some allocs for test 'complex-loop-1'
+Some allocs for test 'complex-loop-2'
+Some allocs for test 'variant-loop-1'
+Some allocs for test 'variant-loop-2'
+No allocs for test 'variant-loop-3'
+Some allocs for test 'variant-loop-4'
+Some allocs for test 'variant-loop-5'
+Some allocs for test 'variant-loop-6'
