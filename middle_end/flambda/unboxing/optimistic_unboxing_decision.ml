@@ -24,8 +24,7 @@ module Extra_param_and_args = U.Extra_param_and_args
 let pp_tag print_tag ppf tag =
   if print_tag then Format.fprintf ppf "_%d" (Tag.to_int tag)
 
-(* CR gbury: make this a Clflag *)
-let max_unboxing_depth = 1
+(* Internal control knobs *)
 let unbox_numbers = true
 let unbox_blocks = true
 let unbox_variants = true
@@ -66,7 +65,8 @@ let rec make_optimistic_decision ~depth tenv ~param_type : U.decision =
   | Some decision ->
     if unbox_numbers then decision else Do_not_unbox Incomplete_parameter_type
   | None ->
-    if depth >= max_unboxing_depth then Do_not_unbox Max_depth_exceeded
+    if depth >= !Clflags.Flambda.Expert.max_unboxing_depth then
+      Do_not_unbox Max_depth_exceeded
     else match T.prove_unique_tag_and_size tenv param_type with
       | Proved (tag, size) when unbox_blocks ->
         let fields =
