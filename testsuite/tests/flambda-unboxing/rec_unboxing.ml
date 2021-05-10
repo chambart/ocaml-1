@@ -76,7 +76,11 @@ end
 
 let () =
 
-  (* Check int32s *)
+  (* Not all these tests currently work. More precisely, in some of the cases
+     below, the contents of the reference in the loop are not unboxed. To check
+     which case works, and which does not work, check the reference file *)
+
+  (* Check int32s (working) *)
   let aux n y res =
     let r = ref y in
     for i = 0 to n do
@@ -86,7 +90,7 @@ let () =
   in
   check_no_alloc __LINE__ aux 0 1l 2l;
   check_no_alloc __LINE__ aux 5 1l 7l;
-  (* Check int64s *)
+  (* Check int64s (working) *)
   let aux n y res =
     let r = ref y in
     for i = 0 to n do
@@ -96,7 +100,7 @@ let () =
   in
   check_no_alloc __LINE__ aux 0 1L 2L;
   check_no_alloc __LINE__ aux 5 1L 7L;
-  (* Check nativeints *)
+  (* Check nativeints (working) *)
   let aux n y res =
     let r = ref y in
     for i = 0 to n do
@@ -124,7 +128,7 @@ let () =
      value of [aux] should be allocated, and not any of the floats inside of
      the loop; thus by having a high loop count, we can check whether the float
      in the loop was unboxed by verifying that the number of words allocated is
-  less than a small constant. *)
+     less than a small constant. *)
   let[@inline] aux n y =
     let r = ref y in
     for i = 0 to n - 1 do
@@ -134,7 +138,8 @@ let () =
   in
   check_not_many_allocs 5. __LINE__ aux 1_000 0. 1_000.;
   check_not_many_allocs 5. __LINE__ aux 10_000 0. 10_000.;
-  (* Check tuple *)
+  (* Check tuple.
+     Not currently unboxed. *)
   let aux n ((_x, _y) as t) res =
     let r = ref t in
     for i = 0 to n do
@@ -146,7 +151,8 @@ let () =
   in
   check_no_alloc __LINE__ aux 0 (1,2) 1;
   check_no_alloc __LINE__ aux 1 (1,2) ~-1;
-  (* Check nested tuples *)
+  (* Check nested tuples.
+     Not currently unboxed. *)
   let aux n (((_x, _y), _z) as t) res =
     let r = ref t in
     for i = 0 to n do
@@ -158,7 +164,8 @@ let () =
   in
   check_no_alloc __LINE__ aux 0 ((1,2),3) 4;
   check_no_alloc __LINE__ aux 1 ((1,2),3) 2;
-  (* Check tuple+floats *)
+  (* Check tuple+floats.
+     Not unboxed yet. *)
   let aux n ((_x, _y) as t) res =
     let r = ref t in
     for i = 0 to n do
@@ -170,7 +177,8 @@ let () =
   in
   check_no_alloc __LINE__ aux 0 (1.,2.) 2.;
   check_no_alloc __LINE__ aux 1 (1.,2.) 6.;
-  (* Check blocks and floats *)
+  (* Check blocks and floats.
+     Not unboxed yet. *)
   let aux n (c1, c2) res =
     let r = ref c1 in
     for i = 0 to n do
@@ -185,7 +193,8 @@ let () =
   in
   check_no_alloc __LINE__ aux 0 (Complex.zero, Complex.one) 0.;
   check_no_alloc __LINE__ aux 1 (Complex.zero, Complex.one) 2.;
-  (* Check variants *)
+  (* Check variants.
+     Not unboxed yet. *)
   let aux n x res =
     let r = ref None in
     for i = 0 to n do
@@ -202,7 +211,8 @@ let () =
   in
   check_no_alloc __LINE__ aux 0 0 0;
   check_no_alloc __LINE__ aux 1 0 13;
-  (* Check more complicated variant *)
+  (* Check more complicated variant.
+     Not unboxed yet. *)
   let aux n (a, b) res =
     let r = ref T.A in
     for i = 0 to n do
