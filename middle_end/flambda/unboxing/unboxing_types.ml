@@ -44,7 +44,7 @@ module Extra_param_and_args = struct
     Format.fprintf fmt "@[<hv 1>(\
       @[<hov>(param %a)@]@ \
       @[<v 2>(args@ <...>)@]\
-      )"
+      )@]"
       Variable.print param
       (* (Apply_cont_rewrite_id.Map.print EPA.Extra_arg.print) args *)
 end

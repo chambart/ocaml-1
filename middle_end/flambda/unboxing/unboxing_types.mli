@@ -72,6 +72,10 @@ and decision =
   | Unbox of unboxing_decision
   | Do_not_unbox of do_not_unbox_reason
 
+val print_decision : Format.formatter -> decision -> unit
+(** Printing function for individual decisions. *)
+
+
 module Decisions : sig
   type t = {
     decisions : (KP.t * decision) list;
