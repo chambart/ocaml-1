@@ -140,6 +140,12 @@ and make_optimistic_fields
     | Ok (_, env_extension) -> env_extension
     | Bottom ->
       Misc.fatal_errorf "Meet failed whereas prove previously succeeded"
+    | exception (Misc.Fatal_error as exn) ->
+      Format.eprintf "Context is meet of type: %a@\nwith shape: %a@\nin env: @\n%a@."
+        T.print param_type
+        T.print shape
+        TE.print tenv;
+      raise exn
   in
   let tenv = TE.add_env_extension tenv env_extension in
   let fields =

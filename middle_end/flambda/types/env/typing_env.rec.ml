@@ -866,7 +866,30 @@ let add_definition t (name : Name_in_binding_pos.t) kind =
       end;
       add_symbol_definition t sym)
 
-let invariant_for_new_equation t name ty =
+let invariant_for_alias aliases name ty =
+  (* Check that no canonical element gets an [Equals] type *)
+  if !Clflags.flambda_invariant_checks || true then begin
+    match Type_grammar.get_alias_exn ty with
+    | exception Not_found -> ()
+    | alias ->
+      assert (not (Simple.equal alias (Simple.name name)));
+      let canonical =
+        Aliases.get_canonical_ignoring_name_mode aliases name
+      in
+      if Simple.equal canonical (Simple.name name) then
+        Misc.fatal_errorf
+          "There is about to be an [Equals] equation on canonical name %a@\nequation: %a@\n@."
+          Name.print name Type_grammar.print ty
+     end
+
+let invariant_for_aliases t =
+  let aliases = aliases t in
+  Name.Map.iter (fun name (ty, _, _) ->
+      invariant_for_alias aliases name ty
+    ) (names_to_types t)
+
+let invariant_for_new_equation t aliases name ty =
+  invariant_for_alias aliases name ty;
   if !Clflags.flambda_invariant_checks then begin
     (* CR mshinwell: This should check that precision is not decreasing. *)
     let defined_names =
@@ -906,7 +929,7 @@ let rec add_equation0 t aliases name ty =
       end
     end
   end;
-  invariant_for_new_equation t name ty;
+  invariant_for_new_equation t aliases name ty;
   let level =
     Typing_env_level.add_or_replace_equation
       (One_level.level t.current_level) name ty
@@ -940,7 +963,9 @@ let rec add_equation0 t aliases name ty =
   let current_level =
     One_level.create (current_scope t) level ~just_after_level
   in
-  with_current_level t ~current_level
+  let res = with_current_level t ~current_level in
+  invariant_for_aliases res;
+  res
 
 and add_equation t name ty =
   if !Clflags.flambda_invariant_checks then begin
