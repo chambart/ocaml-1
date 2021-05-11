@@ -143,15 +143,69 @@ let meet_variants_don't_lose_aliases () =
         T.print tag_meet_ty
         TEE.print tag_meet_env_extension
 
+let test_meet_two_blocks () =
+  let define env v =
+    let v' = Var_in_binding_pos.create v Name_mode.normal in
+    TE.add_definition env (Name_in_binding_pos.var v') K.value
+  in
+  let defines env l = List.fold_left define env l in
+  let env = TE.create ~resolver ~get_imported_names in
+  let block1 = Variable.create "block1" in
+  let field1 = Variable.create "field1" in
+  let block2 = Variable.create "block2" in
+  let field2 = Variable.create "field2" in
+  let env = defines env [block1; block2; field1; field2] in
+
+  let env =
+    TE.add_equation env (Name.var block1)
+      (T.immutable_block ~is_unique:false Tag.zero ~field_kind:K.value
+        ~fields:[T.alias_type_of K.value (Simple.var field1)])
+  in
+  let env =
+    TE.add_equation env (Name.var block2)
+      (T.immutable_block ~is_unique:false Tag.zero ~field_kind:K.value
+        ~fields:[T.alias_type_of K.value (Simple.var field2)])
+  in
+  (* let test b1 b2 env =
+   *   let eq_block2 = T.alias_type_of K.value (Simple.var b2) in
+   *   let env =
+   *     TE.add_equation env (Name.var b1) eq_block2
+   *   in
+   *   Format.eprintf "Res:@ %a@.@."
+   *     TE.print env
+   * in
+   * test block1 block2 env;
+   * test block2 block1 env; *)
+
+  let f b1 b2 =
+    match
+    T.meet env
+      (T.alias_type_of K.value (Simple.var b1))
+      (T.alias_type_of K.value (Simple.var b2))
+    with
+    | Bottom -> assert false
+    | Ok (t, tee) ->
+        Format.eprintf "Res:@ %a@.%a@."
+          T.print t
+          TEE.print tee;
+        let env = TE.add_env_extension env tee in
+        Format.eprintf "Env:@.%a@.@."
+          TE.print env
+  in
+  f block1 block2;
+  f block2 block1
+
 let () =
   let comp_unit =
     Compilation_unit.create (Ident.create_persistent "Meet_test")
       (Linkage_name.create "meet_test")
   in
   Compilation_unit.set_current comp_unit;
-  Format.eprintf "MEET CHAINS WITH TWO VARS\n\n%!";
-  test_meet_chains_two_vars ();
-  Format.eprintf "\nMEET CHAINS WITH THREE VARS\n\n%!";
-  test_meet_chains_three_vars ();
-  Format.eprintf "@.MEET VARIANT@.@.";
-  meet_variants_don't_lose_aliases ()
+  (* Format.eprintf "MEET CHAINS WITH TWO VARS\n\n%!";
+   * test_meet_chains_two_vars ();
+   * Format.eprintf "\nMEET CHAINS WITH THREE VARS\n\n%!";
+   * test_meet_chains_three_vars ();
+   * Format.eprintf "@.MEET VARIANT@.@.";
+   * meet_variants_don't_lose_aliases (); *)
+  Format.eprintf "@.Test bug ?@.";
+  test_meet_two_blocks ()
