@@ -880,7 +880,7 @@ let add_definition t (name : Name_in_binding_pos.t) kind =
       end;
       add_symbol_definition t sym)
 
-let invariant_for_alias aliases name ty =
+let invariant_for_alias (t:t) name ty =
   (* Check that no canonical element gets an [Equals] type *)
   if !Clflags.flambda_invariant_checks || true then begin
     match Type_grammar.get_alias_exn ty with
@@ -888,7 +888,7 @@ let invariant_for_alias aliases name ty =
     | alias ->
       assert (not (Simple.equal alias (Simple.name name)));
       let canonical =
-        Aliases.get_canonical_ignoring_name_mode aliases name
+        Aliases.get_canonical_ignoring_name_mode (aliases t) name
       in
       if Simple.equal canonical (Simple.name name) then
         Misc.fatal_errorf
@@ -896,14 +896,13 @@ let invariant_for_alias aliases name ty =
           Name.print name Type_grammar.print ty
      end
 
-let invariant_for_aliases t =
-  let aliases = aliases t in
+let invariant_for_aliases (t:t) =
   Name.Map.iter (fun name (ty, _, _) ->
-      invariant_for_alias aliases name ty
+      invariant_for_alias t name ty
     ) (names_to_types t)
 
-let invariant_for_new_equation t aliases name ty =
-  invariant_for_alias aliases name ty;
+let invariant_for_new_equation (t:t) name ty =
+  invariant_for_alias t name ty;
   if !Clflags.flambda_invariant_checks then begin
     (* CR mshinwell: This should check that precision is not decreasing. *)
     let defined_names =
@@ -925,7 +924,7 @@ let invariant_for_new_equation t aliases name ty =
     end
   end
 
-let rec add_equation0 t name ty =
+let rec add_equation0 (t:t) name ty =
   if !Clflags.Flambda.Debug.concrete_types_only_on_canonicals then begin
     let is_concrete =
       match Type_grammar.get_alias_exn ty with
@@ -933,7 +932,7 @@ let rec add_equation0 t name ty =
       | _ -> false
     in
     if is_concrete then begin
-      let canonical = Aliases.get_canonical_ignoring_name_mode aliases name in
+      let canonical = Aliases.get_canonical_ignoring_name_mode (aliases t) name in
       if not (Simple.equal canonical (Simple.name name)) then begin
         Misc.fatal_errorf "Trying to add equation giving concrete type on %a \
             which is not canonical (its canonical is %a): %a"
@@ -943,7 +942,7 @@ let rec add_equation0 t name ty =
       end
     end
   end;
-  invariant_for_new_equation t aliases name ty;
+  invariant_for_new_equation t name ty;
   let level =
     Typing_env_level.add_or_replace_equation
       (One_level.level t.current_level) name ty
@@ -1049,7 +1048,7 @@ and add_equation t name ty =
       let ty =
         Type_grammar.alias_type_of kind canonical_element
       in
-      alias_of, t, ty
+      alias_of_demoted_element, t, ty
   in
   (* Beware: if we're about to add the equation on a name which is different
      from the one that the caller passed in, then we need to make sure that the
@@ -1076,14 +1075,6 @@ and add_equation t name ty =
           meet_ty, add_env_extension t env_extension
     in
     Simple.pattern_match simple ~name ~const:(fun _ -> ty, t)
-  in
-  let ty =
-    match rec_info with
-    | None -> ty
-    | Some rec_info ->
-      match Type_grammar.apply_rec_info ty rec_info with
-      | Bottom -> Type_grammar.bottom (Type_grammar.kind ty)
-      | Ok ty -> ty
   in
   let [@inline always] name name = add_equation0 t name ty in
   Simple.pattern_match simple ~name ~const:(fun _ -> t)
