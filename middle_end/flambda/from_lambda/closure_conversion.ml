@@ -547,17 +547,33 @@ let rec close acc env (ilam : Ilambda.t) : Acc.t * Expr_with_acc.t =
     in
     let callee = find_simple_from_id env func in
     let acc, args = find_simples acc env args in
-    let apply =
-      Apply.create ~callee
-        ~continuation:(Return continuation)
-        exn_continuation
-        ~args
-        ~call_kind
-        (Debuginfo.from_location loc)
-        ~inline:(LC.inline_attribute inlined)
-        ~inlining_state:(Inlining_state.default)
+    let call_is_tail =
+      (* No need to check for the exception continuation. If the exception
+         continuation is not the tail one, the return continuation cannot
+         be the tail one either: there must be a pop continuation. *)
+      Continuation.equal continuation (Env.return_continuation env)
     in
-    Expr_with_acc.create_apply acc apply
+    begin match Env.current_function env with
+    | Some { let_rec_ident; arity; self_tail_call_continuation } when
+        call_is_tail &&
+        Ident.same func let_rec_ident &&
+        List.length args = arity ->
+      Apply_cont.create self_tail_call_continuation ~args
+        ~dbg:(Debuginfo.from_location loc)
+      |> Expr_with_acc.create_apply_cont acc
+    | _ ->
+      let apply =
+        Apply.create ~callee
+          ~continuation:(Return continuation)
+          exn_continuation
+          ~args
+          ~call_kind
+          (Debuginfo.from_location loc)
+          ~inline:(LC.inline_attribute inlined)
+          ~inlining_state:(Inlining_state.default)
+      in
+      Expr_with_acc.create_apply acc apply
+    end
   | Apply_cont (cont, trap_action, args) ->
     let acc, args = find_simples acc env args in
     let trap_action = close_trap_action_opt trap_action in
@@ -881,8 +897,26 @@ and close_one_function acc ~external_env ~by_closure_id decl
       (Variable.Map.empty, Ident.Map.empty)
       (Function_decls.to_list function_declarations)
   in
+  let self_tail_call_continuation =
+    Continuation.create ~name:"self_tail_call" ()
+  in
   let closure_env_without_parameters =
-    let empty_env = Env.clear_local_bindings external_env in
+    let arity =
+      match Function_decl.kind decl with
+      | Curried -> List.length params
+      | Tupled -> 1
+    in
+    let current_function_info : Env.function_being_defined =
+      { let_rec_ident = our_let_rec_ident;
+        arity;
+        self_tail_call_continuation;
+      }
+    in
+    let empty_env =
+      Env.clear_local_bindings external_env
+        ~return_continuation:(Function_decl.return_continuation decl)
+        current_function_info
+    in
     Env.add_var_map (Env.add_var_map empty_env var_within_closures_for_idents)
       vars_for_project_closure
   in
@@ -977,6 +1011,122 @@ and close_one_function acc ~external_env ~by_closure_id decl
     close_exn_continuation acc external_env
       (Function_decl.exn_continuation decl)
   in
+  let acc, body =
+    let self_tail_call_is_used =
+      (* CR pchambart: can we avoid computing free names here ? *)
+      Name_occurrences.mem_continuation (Flambda.Expr.free_names body)
+        self_tail_call_continuation
+    in
+    if not self_tail_call_is_used then
+      acc, body
+    else
+      let acc, rec_cont_handler, bound_continuation =
+        match Function_decl.kind decl with
+        | Curried ->
+          acc, body, self_tail_call_continuation
+        | Tupled ->
+          (* If the function is tupled a recursive call must first unbox the
+             argument. The function body is replaced by:
+
+             let rec cont self_tail_cal_tupled a b =
+               let cont self_tail_call tupled_param =
+                   let a = block_load 0 tupled_param in
+                   let b = block_load 1 tupled_param in
+                   apply_cont self_tail_cal_tupled a b
+               in
+               function body using 'self_tail_call'
+             in
+             apply_cont self_tail_cal_tupled a b
+
+             The tuple is expected to be unboxed and the intermediate continuation
+             to be eliminated by simplification
+          *)
+          let self_tail_call_tupled_continuation =
+            Continuation.create ~name:"self_tail_call_tupled" ()
+          in
+          let tupled_var = Variable.create "tupled_param" in
+          let tupled_param =
+            Kinded_parameter.create tupled_var Flambda_kind.With_subkind.any_value
+          in
+          let block_access : P.Block_access_kind.t =
+            Values {
+              tag = Tag.Scannable.zero;
+              size = Known (Targetint.OCaml.of_int (List.length params));
+              field_kind = Any_value;
+            }
+          in
+          let unbox_arg ~pos ~param ~body ~acc =
+            let var = VB.create param Name_mode.normal in
+            let pos = Target_imm.int (Targetint.OCaml.of_int pos) in
+            let named =
+              Named.create_prim
+                (Binary (
+                    Block_load (block_access, Immutable),
+                    Simple.var tupled_var,
+                    Simple.const (Reg_width_const.tagged_immediate pos)))
+                Debuginfo.none
+            in
+            Let_with_acc.create acc
+              (Bindable_let_bound.singleton var) named
+              ~body ~free_names_of_body:Unknown
+            |> Expr_with_acc.create_let
+          in
+          let args = List.map Simple.var (Kinded_parameter.List.vars params) in
+          let cost_metrics_of_handler, acc, tupled_handler =
+            Acc.measure_cost_metrics acc ~f:(fun acc ->
+                let acc, tupled_call =
+                  Apply_cont.create self_tail_call_tupled_continuation
+                    ~args
+                    ~dbg:Debuginfo.none
+                  |> Expr_with_acc.create_apply_cont acc
+                in
+                let acc, tupled_handler =
+                  List.fold_right (fun (pos, param) (acc, body) ->
+                      unbox_arg ~pos ~param ~body ~acc)
+                    (List.mapi (fun i p -> i, p)
+                       (Kinded_parameter.List.vars params))
+                    (acc, tupled_call)
+                in
+                let acc, tupled_handler =
+                  Continuation_handler_with_acc.create acc
+                    [tupled_param]
+                    ~handler:tupled_handler
+                    ~free_names_of_handler:Unknown
+                    ~is_exn_handler:false
+                in
+                acc, tupled_handler)
+          in
+          let acc, body' =
+            Let_cont_with_acc.create_non_recursive acc
+              self_tail_call_continuation
+              tupled_handler
+              ~body
+              ~free_names_of_body:Unknown
+              ~cost_metrics_of_handler
+          in
+          acc, body', self_tail_call_tupled_continuation
+      in
+      let args =
+        List.map Simple.var (Kinded_parameter.List.vars params)
+      in
+      let acc, handler =
+        Continuation_handler_with_acc.create acc params
+          ~handler:rec_cont_handler
+          ~free_names_of_handler:Unknown
+          ~is_exn_handler:false
+      in
+      let handlers =
+        Continuation.Map.singleton bound_continuation handler
+      in
+      let cost_metrics_of_handlers, acc, continuation_body =
+        Acc.measure_cost_metrics acc ~f:(fun acc ->
+            Apply_cont.create bound_continuation
+              ~args ~dbg:Debuginfo.none
+            |> Expr_with_acc.create_apply_cont acc)
+      in
+      Let_cont_with_acc.create_recursive acc handlers ~body:continuation_body
+        ~cost_metrics_of_handlers
+  in
   let inline : Inline_attribute.t =
     (* We make a decision based on [fallback_inlining_heuristic] here to try
        to mimic Closure's behaviour as closely as possible, particularly
@@ -1027,7 +1177,7 @@ and close_one_function acc ~external_env ~by_closure_id decl
 let ilambda_to_flambda ~backend ~module_ident ~module_block_size_in_words
       (ilam : Ilambda.program) =
   let module Backend = (val backend : Flambda_backend_intf.S) in
-  let env = Env.empty ~backend in
+  let env = Env.empty ~backend ~return_continuation:ilam.return_continuation in
   let module_symbol =
     Backend.symbol_for_global' (
       Ident.create_persistent (Ident.name module_ident))

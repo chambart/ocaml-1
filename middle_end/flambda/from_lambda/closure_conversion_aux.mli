@@ -24,9 +24,22 @@
 module Env : sig
   type t
 
-  val empty : backend:(module Flambda_backend_intf.S) -> t
+  val empty
+    : backend:(module Flambda_backend_intf.S)
+   -> return_continuation:Continuation.t
+   -> t
 
-  val clear_local_bindings : t -> t
+  type function_being_defined = {
+      let_rec_ident : Ident.t;
+      arity : int;
+      self_tail_call_continuation : Continuation.t;
+    }
+
+  val clear_local_bindings
+    : t
+   -> return_continuation:Continuation.t
+   -> function_being_defined
+   -> t
 
   val add_var : t -> Ident.t -> Variable.t -> t
   val add_vars : t -> Ident.t list -> Variable.t list -> t
@@ -57,6 +70,10 @@ module Env : sig
   val backend : t -> (module Flambda_backend_intf.S)
   val current_unit_id : t -> Ident.t
   val symbol_for_global' : t -> (Ident.t -> Symbol.t)
+
+  val return_continuation : t -> Continuation.t
+
+  val current_function : t -> function_being_defined option
 end
 
 (** Used to pipe some data through closure conversion *)

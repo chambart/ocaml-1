@@ -17,6 +17,13 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Env = struct
+
+  type function_being_defined = {
+      let_rec_ident : Ident.t;
+      arity : int;
+      self_tail_call_continuation : Continuation.t;
+    }
+
   type t = {
     variables : Variable.t Ident.Map.t;
     globals : Symbol.t Numbers.Int.Map.t;
@@ -24,13 +31,15 @@ module Env = struct
     backend : (module Flambda_backend_intf.S);
     current_unit_id : Ident.t;
     symbol_for_global' : (Ident.t -> Symbol.t);
+    return_continuation : Continuation.t;
+    current_function : function_being_defined option;
   }
 
   let backend t = t.backend
   let current_unit_id t = t.current_unit_id
   let symbol_for_global' t = t.symbol_for_global'
 
-  let empty ~backend =
+  let empty ~backend ~return_continuation =
     let module Backend = (val backend : Flambda_backend_intf.S) in
     let compilation_unit = Compilation_unit.get_current_exn () in
     { variables = Ident.Map.empty;
@@ -39,17 +48,24 @@ module Env = struct
       backend;
       current_unit_id = Compilation_unit.get_persistent_ident compilation_unit;
       symbol_for_global' = Backend.symbol_for_global';
+      return_continuation;
+      current_function = None;
     }
 
   let clear_local_bindings
         { variables = _; globals; simples_to_substitute = _; backend;
-          current_unit_id; symbol_for_global'; } =
+          current_unit_id; symbol_for_global'; return_continuation = _;
+          current_function = _; }
+        ~return_continuation
+        current_function_info =
     { variables = Ident.Map.empty;
       globals;
       simples_to_substitute = Ident.Map.empty;
       backend;
       current_unit_id;
       symbol_for_global';
+      return_continuation;
+      current_function = Some current_function_info;
     }
 
   let add_var t id var = { t with variables = Ident.Map.add id var t.variables }
@@ -117,6 +133,10 @@ module Env = struct
 
   let find_simple_to_substitute_exn t id =
     Ident.Map.find id t.simples_to_substitute
+
+  let return_continuation t = t.return_continuation
+
+  let current_function t = t.current_function
 end
 
 module Acc = struct

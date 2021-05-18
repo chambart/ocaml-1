@@ -153,6 +153,8 @@ val mem_newer_version_of_code_id : t -> Code_id.t -> bool
 
 val mem_closure_var : t -> Var_within_closure.t -> bool
 
+val mem_continuation : t -> Continuation.t -> bool
+
 val remove_var : t -> Variable.t -> t
 
 val remove_code_id_or_symbol : t -> Code_id_or_symbol.t -> t
