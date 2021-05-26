@@ -141,6 +141,35 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
       Cost_metrics.from_size (Code_size.apply_cont apply_cont),
       Apply_cont.free_names apply_cont)
 
+let apply_cont_use_kind apply_cont : Continuation_use_kind.t =
+  (* CR mshinwell: Is [Continuation.sort] reliable enough to detect
+     the toplevel continuation?  Probably not -- we should store it in
+     the environment. *)
+  match Continuation.sort (AC.continuation apply_cont) with
+  | Normal_or_exn ->
+    begin match Apply_cont.trap_action apply_cont with
+    | None -> Inlinable
+    | Some (Push _) -> Non_inlinable { escaping = false; }
+    | Some (Pop { raise_kind; _ }) ->
+      match raise_kind with
+      | None | Some Regular | Some Reraise ->
+        (* Until such time as we can manually add to the backtrace buffer,
+           we only convert "raise_notrace" into jumps, except if debugging
+           information generation is disabled.  (This matches the handling
+           at Cmm level; see [Cmm_helpers.raise_prim].)
+           We set [escaping = true] for the cases we do not want to
+           convert into jumps. *)
+        if !Clflags.debug then Non_inlinable { escaping = true; }
+        else Non_inlinable { escaping = false; }
+      | Some No_trace ->
+        Non_inlinable { escaping = false; }
+    end
+  | Return | Toplevel_return ->
+    Non_inlinable { escaping = false; }
+  | Define_root_symbol ->
+    assert (Option.is_none (Apply_cont.trap_action apply_cont));
+    Inlinable
+
 let simplify_apply_cont dacc apply_cont ~down_to_up =
   let { S. simples = args; simple_tys = arg_types; } =
     S.simplify_simples dacc (AC.args apply_cont)
@@ -152,35 +181,7 @@ let simplify_apply_cont dacc apply_cont ~down_to_up =
         (List.map Simple.free_names args)
         data_flow)
   in
-  let use_kind : Continuation_use_kind.t =
-    (* CR mshinwell: Is [Continuation.sort] reliable enough to detect
-       the toplevel continuation?  Probably not -- we should store it in
-       the environment. *)
-    match Continuation.sort (AC.continuation apply_cont) with
-    | Normal_or_exn ->
-      begin match Apply_cont.trap_action apply_cont with
-      | None -> Inlinable
-      | Some (Push _) -> Non_inlinable { escaping = false; }
-      | Some (Pop { raise_kind; _ }) ->
-        match raise_kind with
-        | None | Some Regular | Some Reraise ->
-          (* Until such time as we can manually add to the backtrace buffer,
-             we only convert "raise_notrace" into jumps, except if debugging
-             information generation is disabled.  (This matches the handling
-             at Cmm level; see [Cmm_helpers.raise_prim].)
-             We set [escaping = true] for the cases we do not want to
-             convert into jumps. *)
-          if !Clflags.debug then Non_inlinable { escaping = true; }
-          else Non_inlinable { escaping = false; }
-        | Some No_trace ->
-          Non_inlinable { escaping = false; }
-      end
-    | Return | Toplevel_return ->
-      Non_inlinable { escaping = false; }
-    | Define_root_symbol ->
-      assert (Option.is_none (Apply_cont.trap_action apply_cont));
-      Inlinable
-  in
+  let use_kind = apply_cont_use_kind apply_cont in
   let dacc, rewrite_id =
     DA.record_continuation_use dacc (AC.continuation apply_cont)
       use_kind ~env_at_use:(DA.denv dacc) ~arg_types

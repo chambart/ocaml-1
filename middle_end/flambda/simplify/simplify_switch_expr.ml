@@ -279,12 +279,13 @@ let simplify_switch ~simplify_let dacc switch ~down_to_up =
             TE.add_env_extension typing_env_at_use env_extension
             |> DE.with_typing_env (DA.denv dacc)
           in
+          let use_kind = Simplify_apply_cont_expr.apply_cont_use_kind action in
           let args = AC.args action in
           match args with
           | [] ->
             let dacc, rewrite_id =
               DA.record_continuation_use dacc (AC.continuation action)
-                (Non_inlinable { escaping = false; }) ~env_at_use ~arg_types:[]
+                use_kind ~env_at_use ~arg_types:[]
             in
             let dacc =
               DA.map_data_flow dacc ~f:(
@@ -300,7 +301,7 @@ let simplify_switch ~simplify_let dacc switch ~down_to_up =
             in
             let dacc, rewrite_id =
               DA.record_continuation_use dacc (AC.continuation action)
-                (Non_inlinable { escaping = false; }) ~env_at_use ~arg_types
+                use_kind ~env_at_use ~arg_types
             in
             let arity = List.map T.kind arg_types in
             let action = Apply_cont.update_args action ~args in
