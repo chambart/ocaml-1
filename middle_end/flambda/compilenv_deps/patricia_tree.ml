@@ -1139,7 +1139,7 @@ struct
   let transpose_keys_and_data_set _ =
     Misc.fatal_error "transpose_keys_and_data_set not yet implemented"
 
-  let diff_domains _ _ = Misc.fatal_error "diff_domains not yet implemented"
+  let diff_domains = diff
 
   let fold2_stop_on_key_mismatch _ _ _ _ =
     Misc.fatal_error "fold2_stop_on_key_mismatch not yet implemented"

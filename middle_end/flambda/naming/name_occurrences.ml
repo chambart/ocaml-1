@@ -363,12 +363,9 @@ end = struct
       if N.Map.is_empty map then Empty
       else Potentially_many map
     | Potentially_many map1, Potentially_many map2 ->
-      let map =
-        N.Map.fold (fun name _ map -> N.Map.remove name map)
-          map2
-          map1
-      in
-      Potentially_many map
+      let map = N.Map.diff_domains map1 map2 in
+      if N.Map.is_empty map then Empty
+      else Potentially_many map
 
   let union t1 t2 =
     match t1, t2 with
