@@ -24,6 +24,8 @@
   tests/ephe-c-api
   tests/exotic-syntax
   tests/extension-constructor
+  tests/flambda2
+  tests/flambda2-aliases
   tests/flambda
   tests/flambda-specialization
   tests/flambda-unboxing
