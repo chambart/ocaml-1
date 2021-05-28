@@ -27,6 +27,7 @@ module T = Flambda_type
 module TEE = T.Typing_env_extension
 module UA = Upwards_acc
 module UE = Upwards_env
+module AC = Apply_cont_expr
 
 type 'a after_rebuild =
      Rebuilt_expr.t
@@ -160,3 +161,41 @@ let split_direct_over_application apply ~param_arity =
       ~free_names_of_body:(Known (Apply.free_names full_apply))
   in
   expr
+
+type apply_cont_context =
+  | Apply_cont_expr
+  | Switch_branch
+
+let apply_cont_use_kind ~context apply_cont : Continuation_use_kind.t =
+  (* CR mshinwell: Is [Continuation.sort] reliable enough to detect
+     the toplevel continuation?  Probably not -- we should store it in
+     the environment. *)
+  let default : Continuation_use_kind.t =
+    match context with
+    | Apply_cont_expr -> Inlinable
+    | Switch_branch -> Non_inlinable { escaping = false; }
+  in
+  match Continuation.sort (AC.continuation apply_cont) with
+  | Normal_or_exn ->
+    begin match Apply_cont.trap_action apply_cont with
+    | None -> default
+    | Some (Push _) -> Non_inlinable { escaping = false; }
+    | Some (Pop { raise_kind; _ }) ->
+      match raise_kind with
+      | None | Some Regular | Some Reraise ->
+        (* Until such time as we can manually add to the backtrace buffer,
+           we only convert "raise_notrace" into jumps, except if debugging
+           information generation is disabled.  (This matches the handling
+           at Cmm level; see [Cmm_helpers.raise_prim].)
+           We set [escaping = true] for the cases we do not want to
+           convert into jumps. *)
+        if !Clflags.debug then Non_inlinable { escaping = true; }
+        else Non_inlinable { escaping = false; }
+      | Some No_trace ->
+        Non_inlinable { escaping = false; }
+    end
+  | Return | Toplevel_return ->
+    Non_inlinable { escaping = false; }
+  | Define_root_symbol ->
+    assert (Option.is_none (Apply_cont.trap_action apply_cont));
+    default
