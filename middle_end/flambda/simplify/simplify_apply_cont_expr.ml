@@ -77,13 +77,7 @@ let rebuild_apply_cont apply_cont ~args ~rewrite_id uacc ~after_rebuild =
     let rewrite_use_result =
       let apply_cont = AC.update_continuation_and_args apply_cont cont ~args in
       let apply_cont =
-        match AC.trap_action apply_cont with
-        | None -> apply_cont
-        | Some (Push { exn_handler; } | Pop { exn_handler; _ }) ->
-          if UE.mem_continuation uenv exn_handler
-            && not (UA.is_demoted_exn_handler uacc exn_handler)
-          then apply_cont
-          else AC.clear_trap_action apply_cont
+        Simplify_common.clear_demoted_trap_action uacc apply_cont
       in
       match rewrite with
       | None -> EB.no_rewrite apply_cont

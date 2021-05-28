@@ -30,6 +30,9 @@ let rebuild_switch ~simplify_let dacc ~arms ~scrutinee ~scrutinee_ty uacc
         with
         | Apply_cont action ->
           let action =
+            Simplify_common.clear_demoted_trap_action uacc action
+          in
+          let action =
             (* First try to absorb any [Apply_cont] expression that forms the
                entirety of the arm's action (via an intermediate zero-arity
                continuation without trap action) into the [Switch] expression
