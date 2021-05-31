@@ -36,7 +36,6 @@ module Env : sig
   val current_unit_id : t -> Ident.t
 
   val is_mutable : t -> Ident.t -> bool
-  val has_mutables : t -> bool
 
   val register_mutable_variable
      : t
@@ -86,7 +85,6 @@ module Env : sig
 end = struct
   type t = {
     current_unit_id : Ident.t;
-    has_mutables : bool ref; (* for now *)
     current_values_of_mutables_in_scope
       : (Ident.t * Lambda.value_kind) Ident.Map.t;
     mutables_needed_by_continuations : Ident.Set.t Continuation.Map.t;
@@ -105,7 +103,6 @@ end = struct
       ]
     in
     { current_unit_id;
-      has_mutables = ref false;
       current_values_of_mutables_in_scope = Ident.Map.empty;
       mutables_needed_by_continuations;
       try_stack = [];
@@ -118,9 +115,6 @@ end = struct
 
   let is_mutable t id =
     Ident.Map.mem id t.current_values_of_mutables_in_scope
-
-  let has_mutables t =
-    !(t.has_mutables)
 
   let register_mutable_variable t id kind =
     if Ident.Map.mem id t.current_values_of_mutables_in_scope then begin
@@ -1292,7 +1286,7 @@ and cps_switch env (switch : L.lambda_switch) ~scrutinee (k : Continuation.t)
           | Apply_cont (cont, trap, args) ->
             let consts_rev = (arm, cont, trap, args) :: consts_rev in
             consts_rev, wrappers
-          | Let _ | Let_mutable _ | Let_rec _ | Let_cont _ | Apply _
+          | Let _ | Let_rec _ | Let_cont _ | Apply _
           | Switch _ ->
             let consts_rev = (arm, cont, None, []) :: consts_rev in
             let wrappers = (cont, action) :: wrappers in
@@ -1400,5 +1394,4 @@ let lambda_to_ilambda lam : Ilambda.program =
     exn_continuation = {
       exn_handler = exn_continuation;
       extra_args = [] };
-    uses_mutable_variables = Env.has_mutables env;
   }

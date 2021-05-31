@@ -38,7 +38,6 @@ type user_visible =
 
 type t =
   | Let of Ident.t * user_visible * Lambda.value_kind * named * t
-  | Let_mutable of let_mutable
   | Let_rec of function_declarations * t
   | Let_cont of let_cont
   | Apply of apply
@@ -53,15 +52,6 @@ and named =
       loc : Lambda.scoped_location;
       exn_continuation : exn_continuation option;
     }
-  | Assign of { being_assigned : Ident.t; new_value : simple; }
-  | Mutable_read of Ident.t
-
-and let_mutable = {
-  id : Ident.t;
-  initial_value : simple;
-  contents_kind : Lambda.value_kind;
-  body : t;
-}
 
 and function_declaration = {
   kind : Lambda.function_kind;
@@ -115,7 +105,6 @@ type program = {
   expr : t;
   return_continuation : Continuation.t;
   exn_continuation : exn_continuation;
-  uses_mutable_variables : bool;
 }
 
 let fprintf = Format.fprintf
@@ -172,11 +161,6 @@ and print_named ppf (named : named) =
     fprintf ppf "@[<2>(%a %a)@]"
       Printlambda.primitive prim
       (Format.pp_print_list ~pp_sep:Format.pp_print_space print_simple) args
-  | Assign { being_assigned; new_value; } ->
-    fprintf ppf "@[<2>(assign@ %a@ %a)@]" Ident.print being_assigned
-      print_simple new_value
-  | Mutable_read id ->
-    fprintf ppf "@[<2>(read %a)@]" Ident.print id
 
 and print_trap_action ppf trap_action =
   match trap_action with
@@ -223,12 +207,6 @@ and print ppf (t : t) =
       print_named arg;
     let expr = let_body body in
     fprintf ppf ")@]@ %a)@]" print expr
-  | Let_mutable { id; initial_value; contents_kind; body; } ->
-    fprintf ppf "@[<2>(let_mutable@ @[<v 1>(@[<2>%a =%a@ %a@]"
-      Ident.print id
-      Printlambda.value_kind' contents_kind
-      print_simple initial_value;
-    fprintf ppf ")@]@ %a)@]" print body
   | Let_rec (id_arg_list, body) ->
     let bindings ppf id_arg_list =
       let spc = ref false in
@@ -335,8 +313,7 @@ let recursive_functions func_decls =
 
 let rec contains_closures t =
   match t with
-  | Let (_, _, _, _, body)
-  | Let_mutable { body; _ } -> contains_closures body
+  | Let (_, _, _, _, body) -> contains_closures body
   | Let_rec _ -> true
   | Let_cont { body; handler; _ } ->
     contains_closures body || contains_closures handler

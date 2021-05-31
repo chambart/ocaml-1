@@ -369,8 +369,7 @@ MIDDLE_END_FLAMBDA_FROM_LAMBDA=\
   middle_end/flambda/from_lambda/lambda_to_flambda_primitives_helpers.cmo \
   middle_end/flambda/from_lambda/lambda_to_flambda_primitives.cmo \
   middle_end/flambda/from_lambda/closure_conversion.cmo \
-  middle_end/flambda/from_lambda/cps_conversion.cmo \
-  middle_end/flambda/from_lambda/eliminate_mutable_vars.cmo
+  middle_end/flambda/from_lambda/cps_conversion.cmo
 
 
 MIDDLE_END_FLAMBDA_PARSER=\

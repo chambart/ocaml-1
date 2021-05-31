@@ -43,19 +43,6 @@ let print_ilambda ppf (ilam : Ilambda.program) =
       Ilambda.print ilam.expr
   end
 
-let print_ilambda_after_mutable_variable_elimination ppf
-      (ilam : Ilambda.program) =
-  if !Clflags.dump_ilambda then begin
-    Format.fprintf ppf
-      "\n%sAfter mutable variable elimination (return continuation %a) \
-       (exception continuation %a):%s@ %a@."
-      (Flambda_colours.each_file ())
-      Continuation.print ilam.return_continuation
-      Continuation.print ilam.exn_continuation.exn_handler
-      (Flambda_colours.normal ())
-      Ilambda.print ilam.expr
-  end
-
 let print_rawflambda ppf unit =
   if !Clflags.dump_rawflambda then begin
     Format.fprintf ppf "\n%sAfter closure conversion:%s@ %a@."
@@ -110,18 +97,6 @@ let middle_end0 ppf ~prefixname ~backend ~filename ~module_ident
         Cps_conversion.lambda_to_ilambda module_initializer)
     in
     print_ilambda ppf ilambda;
-    let ilambda =
-      if ilambda.uses_mutable_variables then begin
-        let ilambda =
-          Profile.record_call "eliminate_mutable_variables" (fun () ->
-            Eliminate_mutable_vars.run ilambda)
-        in
-        print_ilambda_after_mutable_variable_elimination ppf ilambda;
-        ilambda
-      end else begin
-        ilambda
-      end
-    in
     let flambda =
       Profile.record_call "closure_conversion" (fun () ->
         Closure_conversion.ilambda_to_flambda ~backend ~module_ident

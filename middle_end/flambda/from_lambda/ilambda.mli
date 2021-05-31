@@ -14,13 +14,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Ilambda: halfway between Lambda and Flambda. In CPS but without closures and
-    still permitting mutable variables.
+(** Ilambda: halfway between Lambda and Flambda. In CPS but without closures.
 
     This language is used only as an internal language for communication between
     the CPS and closure conversion passes. We don't do any transformations on
-    the language save for mutable variable elimination, so there is little
-    abstraction, and no features such as advanced treatment of name binding.
+    the language, so there is little abstraction, and no features such as
+    advanced treatment of name binding.
 
     Flambda expressions augment Ilambda expressions by adding constructs for:
     - the construction and manipulation of closures; and
@@ -53,7 +52,6 @@ type user_visible =
 
 type t =
   | Let of Ident.t * user_visible * Lambda.value_kind * named * t
-  | Let_mutable of let_mutable
   | Let_rec of function_declarations * t
   | Let_cont of let_cont
   | Apply of apply
@@ -72,15 +70,6 @@ and named =
     }
     (** Set [exn_continuation] to [None] iff the given primitive can never
         raise. *)
-  | Assign of { being_assigned : Ident.t; new_value : simple; }
-  | Mutable_read of Ident.t
-
-and let_mutable = {
-  id : Ident.t;
-  initial_value : simple;
-  contents_kind : Lambda.value_kind;
-  body : t;
-}
 
 and function_declaration = {
   kind : Lambda.function_kind;
@@ -135,7 +124,6 @@ type program = {
   expr : t;
   return_continuation : Continuation.t;
   exn_continuation : exn_continuation;
-  uses_mutable_variables : bool;
 }
 
 val print : Format.formatter -> t -> unit
