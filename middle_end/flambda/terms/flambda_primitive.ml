@@ -1638,6 +1638,19 @@ let args t =
   | Ternary (_, x0, x1, x2) -> [x0; x1; x2]
   | Variadic (_, xs) -> xs
 
+let update_args t args =
+  match t, args with
+  | Nullary _, [] -> t
+  | Unary (p, _), [x0] -> Unary (p, x0)
+  | Binary (p, _, _), [x0; x1] -> Binary (p, x0, x1)
+  | Ternary (p, _, _, _), [x0; x1; x2] -> Ternary (p, x0, x1, x2)
+  | Variadic (p, l), xs ->
+    assert(List.length l = List.length xs);
+    Variadic (p, xs)
+  | _, _ ->
+    Misc.fatal_errorf "Wrong arity for updating primitive %a with arguments %a"
+      print t Simple.List.print args
+
 let result_kind (t : t) =
   match t with
   | Nullary prim -> result_kind_of_nullary_primitive prim

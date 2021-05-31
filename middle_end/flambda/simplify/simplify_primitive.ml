@@ -48,12 +48,12 @@ let try_cse dacc ~original_prim ~simplified_args_with_tys ~min_name_mode
   if not (Name_mode.equal min_name_mode Name_mode.normal) then Not_applied dacc
   else
     let result_var = VB.var result_var in
-    match apply_cse dacc ~original_prim with
+    let args = List.map fst simplified_args_with_tys in
+    match apply_cse dacc ~original_prim:(P.update_args original_prim args) with
     | Some replace_with ->
       let named = Named.create_simple replace_with in
       let ty = T.alias_type_of (P.result_kind' original_prim) replace_with in
       let env_extension = TEE.one_equation (Name.var result_var) ty in
-      let args = List.map fst simplified_args_with_tys in
       let simplified_named =
         let cost_metrics =
           Cost_metrics.notify_removed
