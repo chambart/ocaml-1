@@ -149,7 +149,7 @@ and float_comparison =
 
 and value_kind =
     Pgenval | Pfloatval | Pboxedintval of boxed_integer | Pintval
-  | Pblock of { tag : Tag.t; fields : value_kind list }
+  | Pblock of { tag : int; fields : value_kind list }
 
 and block_shape =
   value_kind list option
