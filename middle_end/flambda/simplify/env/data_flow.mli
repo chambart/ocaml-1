@@ -48,13 +48,22 @@ val exit_continuation : Continuation.t -> t -> t
 (** Pop the current top of the stack. Used when exiting the current
     continuation handler. *)
 
-val record_binding
+val record_var_binding
    : Variable.t
   -> Name_occurrences.t
   -> generate_phantom_lets:bool
   -> t
   -> t
-(** Add a binding from the current handler. This enables the analysis to have
+(** Add a variable binding from the current handler. This enables the analysis to have
+    a fine-grained analysis of dependencies. *)
+
+val record_sym_binding
+   : Symbol.t
+  -> Name_occurrences.t
+  -> generate_phantom_lets:bool
+  -> t
+  -> t
+(** Add a symbol binding from the current handler. This enables the analysis to have
     a fine-grained analysis of dependencies. *)
 
 val add_used_in_current_handler : Name_occurrences.t -> t -> t
@@ -78,7 +87,7 @@ val add_extra_params_and_args :
 (* {2 Analysis} *)
 
 type result = private {
-  required_variables : Variable.Set.t;
+  required_names : Name.Set.t;
   (** The set of all variables that are in fact used to compute the
       returned value of the function being analyzed. *)
 }

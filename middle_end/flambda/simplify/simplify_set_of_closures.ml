@@ -363,8 +363,11 @@ let simplify_function context ~used_closure_vars ~shareable_constants
       code_age_relation ~lifted_consts_prev_functions =
   let name = Closure_id.to_string closure_id in
   Profile.record_call ~accumulate:true name (fun () ->
-    let code_id = FD.code_id function_decl in
-    let code = DE.find_code (DA.denv (C.dacc_prior_to_sets context)) code_id in
+    let old_code_id = FD.code_id function_decl in
+    let new_code_id =
+      Code_id.Map.find old_code_id (C.old_to_new_code_ids_all_sets context)
+    in
+    let code = DE.find_code (DA.denv (C.dacc_prior_to_sets context)) old_code_id in
     let params_and_body =
       Code.params_and_body_must_be_present code ~error_context:"Simplifying"
     in
@@ -386,7 +389,7 @@ let simplify_function context ~used_closure_vars ~shareable_constants
           let dacc =
             DA.map_denv dacc ~f:(fun denv ->
               denv
-              |> DE.enter_closure code_id
+              |> DE.enter_closure new_code_id
                    return_continuation exn_continuation
               |> DE.map_typing_env ~f:(fun typing_env ->
                 let code_age_relation =
@@ -471,10 +474,6 @@ let simplify_function context ~used_closure_vars ~shareable_constants
             raise Misc.Fatal_error)
     in
     let cost_metrics = UA.cost_metrics uacc_after_upwards_traversal in
-    let old_code_id = code_id in
-    let new_code_id =
-      Code_id.Map.find old_code_id (C.old_to_new_code_ids_all_sets context)
-    in
     let code =
       Rebuilt_static_const.create_code
         (DA.are_rebuilding_terms dacc_after_body)

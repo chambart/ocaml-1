@@ -92,8 +92,8 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
                  variables were also marked as used by the data_flow analysis.
               *)
               let marked_as_required =
-                Variable.Set.mem (KP.var extra_param)
-                  (UA.required_variables uacc)
+                Name.Set.mem (Name.var (KP.var extra_param))
+                  (UA.required_names uacc)
               in
               if used && not marked_as_required then
                 Misc.fatal_errorf
@@ -126,8 +126,8 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
                 (* CR mshinwell: We should guard this check and the one above
                    by an invariants flag *)
                 (* Same as above *)
-                if not (Variable.Set.mem (KP.var param)
-                          (UA.required_variables uacc))
+                if not (Name.Set.mem (Name.var (KP.var param))
+                          (UA.required_names uacc))
                 then begin
                   Misc.fatal_errorf
                       "The data_flow analyis marked the following \
@@ -757,15 +757,15 @@ let simplify_recursive_let_cont_handlers ~simplify_expr
       let cont_uses_env = CUE.remove (DA.continuation_uses_env dacc) cont in
       let dacc = DA.with_continuation_uses_env dacc ~cont_uses_env in
       down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
-        let required_variables = UA.required_variables uacc in
+        let required_names = UA.required_names uacc in
         let used_params_list =
           ListLabels.filter params ~f:(fun param ->
-            Variable.Set.mem (KP.var param) required_variables)
+            Name.Set.mem (Name.var (KP.var param)) required_names)
         in
         let used_params = KP.Set.of_list used_params_list in
         let used_extra_params_list =
           ListLabels.filter extra_params_and_args.extra_params ~f:(fun param ->
-            Variable.Set.mem (KP.var param) required_variables)
+            Name.Set.mem (Name.var (KP.var param)) required_names)
         in
         let used_extra_params = KP.Set.of_list used_extra_params_list in
         let rewrite =

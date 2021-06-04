@@ -22,7 +22,7 @@ type t
 val print : Format.formatter -> t -> unit
 
 val create
-   : required_variables:Variable.Set.t
+   : required_names:Name.Set.t
   -> Upwards_env.t
   -> Downwards_acc.t
   -> t
@@ -36,7 +36,7 @@ val cost_metrics : t -> Flambda.Cost_metrics.t
 
 val code_age_relation : t -> Code_age_relation.t
 
-val required_variables : t -> Variable.Set.t
+val required_names : t -> Name.Set.t
 
 (** Return the lifted constants that still need to be placed (i.e. have
     [Let]-expressions made for them) on the upwards traversal. *)

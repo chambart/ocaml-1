@@ -37,7 +37,7 @@ type t = {
   cost_metrics : Flambda.Cost_metrics.t;
   are_rebuilding_terms : ART.t;
   generate_phantom_lets : bool;
-  required_variables : Variable.Set.t;
+  required_names : Name.Set.t;
   demoted_exn_handlers : Continuation.Set.t;
 }
 
@@ -45,7 +45,7 @@ let print ppf
       { uenv; creation_dacc = _; code_age_relation; lifted_constants;
         name_occurrences; used_closure_vars; all_code = _;
         shareable_constants; cost_metrics; are_rebuilding_terms;
-        generate_phantom_lets; required_variables; demoted_exn_handlers; } =
+        generate_phantom_lets; required_names; demoted_exn_handlers; } =
   Format.fprintf ppf "@[<hov 1>(\
       @[<hov 1>(uenv@ %a)@]@ \
       @[<hov 1>(code_age_relation@ %a)@]@ \
@@ -56,7 +56,7 @@ let print ppf
       @[<hov 1>(cost_metrics@ %a)@]@ \
       @[<hov 1>(are_rebuilding_terms@ %a)@]@ \
       @[<hov 1>(generate_phantom_lets@ %b)@]@ \
-      @[<hov 1>(required_variables@ %a)@]@ \
+      @[<hov 1>(required_name@ %a)@]@ \
       @[<hov 1>(demoted_exn_handlers@ %a)@]\
       )@]"
     UE.print uenv
@@ -68,10 +68,10 @@ let print ppf
     Flambda.Cost_metrics.print cost_metrics
     ART.print are_rebuilding_terms
     generate_phantom_lets
-    Variable.Set.print required_variables
+    Name.Set.print required_names
     Continuation.Set.print demoted_exn_handlers
 
-let create ~required_variables uenv dacc =
+let create ~required_names uenv dacc =
   let are_rebuilding_terms = DE.are_rebuilding_terms (DA.denv dacc) in
   let generate_phantom_lets = DE.generate_phantom_lets (DA.denv dacc) in
   { uenv;
@@ -89,7 +89,7 @@ let create ~required_variables uenv dacc =
     cost_metrics = Flambda.Cost_metrics.zero;
     are_rebuilding_terms;
     generate_phantom_lets;
-    required_variables;
+    required_names;
     demoted_exn_handlers = DA.demoted_exn_handlers dacc;
   }
 
@@ -97,7 +97,7 @@ let creation_dacc t = t.creation_dacc
 let uenv t = t.uenv
 let code_age_relation t = t.code_age_relation
 let lifted_constants t = t.lifted_constants
-let required_variables t = t.required_variables
+let required_names t = t.required_names
 let cost_metrics t = t.cost_metrics
 let are_rebuilding_terms t = t.are_rebuilding_terms
 

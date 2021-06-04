@@ -62,7 +62,7 @@ and simplify_toplevel dacc expr ~return_continuation
         )
       in
       let data_flow = DA.data_flow dacc in
-      let { required_variables; } : Data_flow.result =
+      let { required_names; } : Data_flow.result =
         Data_flow.analyze data_flow ~return_continuation
           ~exn_continuation:(Exn_continuation.exn_handler exn_continuation)
       in
@@ -73,7 +73,7 @@ and simplify_toplevel dacc expr ~return_continuation
       let uenv =
         UE.add_exn_continuation uenv exn_continuation exn_cont_scope
       in
-      let uacc = UA.create ~required_variables uenv dacc in
+      let uacc = UA.create ~required_names uenv dacc in
       rebuild uacc ~after_rebuild:(fun expr uacc -> expr, uacc))
   in
   (* We don't check occurrences of variables or symbols here because the check

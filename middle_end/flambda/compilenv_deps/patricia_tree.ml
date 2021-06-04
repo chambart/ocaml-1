@@ -364,7 +364,8 @@ end) = struct
     | max -> Some max
 
   let rec equal t0 t1 =
-    match t0, t1 with
+    if t0 == t1 then true
+    else match t0, t1 with
     | Empty, Empty -> true
     | Leaf i, Leaf j -> i = j
     | Branch(prefix0, bit0, t00, t01), Branch(prefix1, bit1, t10, t11) ->
@@ -886,7 +887,8 @@ struct
     | max -> Some max
 
   let rec equal f t0 t1 =
-    match t0, t1 with
+    if t0 == t1 then true
+    else match t0, t1 with
     | Empty, Empty -> true
     | Leaf(i, d0), Leaf(j, d1) -> i = j && f d0 d1
     | Branch(prefix0, bit0, t00, t01), Branch(prefix1, bit1, t10, t11) ->

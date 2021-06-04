@@ -114,6 +114,7 @@ let simplify_let ~simplify_expr ~simplify_toplevel dacc let_expr ~down_to_up =
         let data_flow =
           LCS.fold (DA.get_lifted_constants dacc)
             ~init:data_flow ~f:(fun data_flow lifted_constant ->
+              (* TODO ! *)
               Data_flow.add_used_in_current_handler
                 (LC.free_names_of_defining_exprs lifted_constant) data_flow)
         in
@@ -138,13 +139,15 @@ let simplify_let ~simplify_expr ~simplify_toplevel dacc let_expr ~down_to_up =
                 in
                 match binding.let_bound with
                 | Singleton v ->
-                  Data_flow.record_binding (VB.var v) free_names
+                  Data_flow.record_var_binding (VB.var v) free_names
                     ~generate_phantom_lets acc
                 | Set_of_closures { closure_vars; name_mode = _; } ->
+                  (* TODO (code_ids) ! *)
                   ListLabels.fold_left closure_vars ~init:acc ~f:(fun acc v ->
-                    Data_flow.record_binding (VB.var v) free_names
+                    Data_flow.record_var_binding (VB.var v) free_names
                       ~generate_phantom_lets acc)
-                | Symbols _ ->
+                | Symbols { scoping_rule = _; bound_symbols = _; } ->
+                  (* TODO ! *)
                   Data_flow.add_used_in_current_handler free_names acc
                 | Depth _ -> acc))
     in
