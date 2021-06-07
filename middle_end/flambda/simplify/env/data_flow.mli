@@ -54,17 +54,14 @@ val record_var_binding
   -> generate_phantom_lets:bool
   -> t
   -> t
-(** Add a variable binding from the current handler. This enables the analysis to have
-    a fine-grained analysis of dependencies. *)
+(** Add a variable binding from the current handler. *)
 
-val record_sym_binding
-   : Symbol.t
-  -> Name_occurrences.t
-  -> generate_phantom_lets:bool
+val record_set_of_closures_binding
+   : Name.t list
+  -> Function_declaration.t Closure_id.Lmap.t
   -> t
   -> t
-(** Add a symbol binding from the current handler. This enables the analysis to have
-    a fine-grained analysis of dependencies. *)
+(** Add binding to a set of closures in the current handler. *)
 
 val add_used_in_current_handler : Name_occurrences.t -> t -> t
 (** Add name occurrences used in the body of the current continuation's
@@ -90,6 +87,8 @@ type result = private {
   required_names : Name.Set.t;
   (** The set of all variables that are in fact used to compute the
       returned value of the function being analyzed. *)
+  live_code_ids : Code_id.Set.t;
+  (** The set of code_ids live/reachable. *)
 }
 (** The result of an analysis of the uses of variables in continuations. *)
 

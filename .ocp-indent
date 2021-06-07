@@ -1,4 +1,4 @@
 JaneStreet
-max_indent=4
-match_clause=4
+max_indent=2
+match_clause=2
 strict_with=auto
