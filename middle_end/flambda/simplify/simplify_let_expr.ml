@@ -163,27 +163,31 @@ let simplify_let ~simplify_expr ~simplify_toplevel dacc let_expr ~down_to_up =
                     acc
                   | Simple _ | Prim _ | Rec_info _ -> assert false
                   end
-                | Symbols { scoping_rule = _; bound_symbols; } ->
-                  let acc = Data_flow.add_used_in_current_handler free_names acc in
-                  begin match bound_symbols with
-                  | Set_of_closures bound_syms ->
-                    begin match named with
-                    | Set_of_closures s ->
-                      let bound_names =
-                        Closure_id.Lmap.bindings bound_syms
-                        |> List.map (fun (_, sym) -> Name.symbol sym)
-                      in
-                      let fundecls =
-                        Set_of_closures.function_decls s
-                        |> Function_declarations.funs_in_order
-                      in
-                      Data_flow.record_set_of_closure_binding
-                        bound_names fundecls acc
-                    | Simple _ | Prim _ | Rec_info _ -> assert false
-                    end
-                  | Code _ -> (* TODO *) acc
-                  | Block_like _ -> acc
-                  end
+                (* | Symbols { scoping_rule = _; bound_symbols; } -> *)
+                  (* let acc = Data_flow.add_used_in_current_handler free_names acc in
+                   * begin match bound_symbols with
+                   * | Set_of_closures bound_syms ->
+                   *   begin match named with
+                   *   | Set_of_closures s ->
+                   *     let bound_names =
+                   *       Closure_id.Lmap.bindings bound_syms
+                   *       |> List.map (fun (_, sym) -> Name.symbol sym)
+                   *     in
+                   *     let fundecls =
+                   *       Set_of_closures.function_decls s
+                   *       |> Function_declarations.funs_in_order
+                   *     in
+                   *     Data_flow.record_set_of_closure_binding
+                   *       bound_names fundecls acc
+                   *   | Simple _ | Prim _ | Rec_info _ -> assert false
+                   *   end
+                   * | Code _ -> (\* TODO *\) acc
+                   * | Block_like _ -> acc
+                   * end *)
+                | Symbols _ ->
+                  (* This cannot be reached, simplify_named does not return any symbol binding, they
+                     have all been moved to lifted_constants *)
+                  assert false
                 | Depth _ -> acc))
     in
     (* Next remember any lifted constants that were generated during the
