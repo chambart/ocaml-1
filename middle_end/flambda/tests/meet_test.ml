@@ -39,9 +39,13 @@ let test_meet_chains_two_vars () =
     T.print new_type_for_var2;
   match T.meet env first_type_for_var2 new_type_for_var2 with
   | Bottom -> assert false
-  | Ok (meet_ty, env_extension) ->
+  | Ok (meet_result, env_extension) ->
     Format.eprintf "Env extension:@ %a\n%!" TEE.print env_extension;
     let env = TE.add_env_extension env env_extension in
+    let meet_ty =
+      Meet_result.extract_value meet_result
+        first_type_for_var2 new_type_for_var2
+    in
     let env = TE.add_equation env (Name.var var2) meet_ty in
     Format.eprintf "Final situation:@ %a\n%!" TE.print env
 
@@ -85,7 +89,11 @@ let test_meet_chains_three_vars () =
     T.print new_type_for_var3;
   match T.meet env first_type_for_var3 new_type_for_var3 with
   | Bottom -> assert false
-  | Ok (meet_ty, env_extension) ->
+  | Ok (meet_result, env_extension) ->
+    let meet_ty =
+      Meet_result.extract_value meet_result
+        first_type_for_var3 new_type_for_var3
+    in
     Format.eprintf "Env extension:@ %a\n%!" TEE.print env_extension;
     let env = TE.add_env_extension env env_extension in
     let env = TE.add_equation env (Name.var var3) meet_ty in
@@ -125,7 +133,10 @@ let meet_variants_don't_lose_aliases () =
     T.variant ~const_ctors ~non_const_ctors in
   match T.meet env ty1 ty2 with
   | Bottom -> assert false
-  | Ok (meet_ty, env_extension) ->
+  | Ok (meet_result, env_extension) ->
+    let meet_ty =
+      Meet_result.extract_value meet_result ty1 ty2
+    in
     Format.eprintf "@[<hov 2>Meet:@ %a@ /\\@ %a =>@ %a +@ %a@]@."
       T.print ty1 T.print ty2
       T.print meet_ty TEE.print env_extension;
@@ -135,7 +146,11 @@ let meet_variants_don't_lose_aliases () =
     let t_tag_1 = T.this_naked_immediate Target_imm.one in
     match T.meet env t_get_tag t_tag_1 with
     | Bottom -> assert false
-    | Ok (tag_meet_ty, tag_meet_env_extension) ->
+    | Ok (tag_meet_result, tag_meet_env_extension) ->
+      let tag_meet_ty =
+        Meet_result.extract_value tag_meet_result
+          t_get_tag t_tag_1
+      in
       Format.eprintf "t_get_tag: %a@.t_tag: %a@."
         T.print t_get_tag
         T.print t_tag_1;
@@ -178,13 +193,12 @@ let test_meet_two_blocks () =
    * test block2 block1 env; *)
 
   let f b1 b2 =
-    match
-    T.meet env
-      (T.alias_type_of K.value (Simple.var b1))
-      (T.alias_type_of K.value (Simple.var b2))
-    with
+    let ty1 = T.alias_type_of K.value (Simple.var b1) in
+    let ty2 = T.alias_type_of K.value (Simple.var b2) in
+    match T.meet env ty1 ty2 with
     | Bottom -> assert false
-    | Ok (t, tee) ->
+    | Ok (result, tee) ->
+        let t = Meet_result.extract_value result ty1 ty2 in
         Format.eprintf "Res:@ %a@.%a@."
           T.print t
           TEE.print tee;
