@@ -1216,15 +1216,15 @@ let meet_equations_on_params t ~params ~param_types =
            that the caller can handle this case.
            In practice, this would likely mean treating the
            corresponding continuation handler as unreachable. *)
-        Misc.fatal_errorf
-          "Bottom equation added on parameter:@.\
-           Parameter:@ %a@.\
-           Parameter type:@ %a@.\
-           Typing env:@ %a"
-          Kinded_parameter.print param
-          Type_grammar.print param_type
-          print t
-        (* add_equation t name (Type_grammar.bottom kind) *)
+        (* Misc.fatal_errorf
+         *   "Bottom equation added on parameter:@.\
+         *    Parameter:@ %a@.\
+         *    Parameter type:@ %a@.\
+         *    Typing env:@ %a"
+         *   Kinded_parameter.print param
+         *   Type_grammar.print param_type
+         *   print t *)
+        add_equation t name (Type_grammar.bottom kind)
       | Ok (meet_result, env_extension) ->
         let meet_ty =
           Meet_result.extract_value meet_result existing_type param_type
