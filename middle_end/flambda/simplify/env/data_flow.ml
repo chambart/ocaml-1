@@ -283,12 +283,12 @@ let add_apply_cont_args cont arg_name_occurrences t =
 
 module Name_graph = struct
 
-  type t = Name.Set.t Name.Map.t
+  (* type t = Name.Set.t Name.Map.t *)
 
-  let print ppf t =
-    Name.Map.print Name.Set.print ppf t
+  (* let print ppf t =
+   *   Name.Map.print Name.Set.print ppf t *)
 
-  let empty : t = Name.Map.empty
+  (* let empty : t = Name.Map.empty *)
 
   let add_edge ~src ~dst t =
     Name.Map.update src (function
@@ -296,27 +296,55 @@ module Name_graph = struct
       | Some set -> Some (Name.Set.add dst set)
     ) t
 
-  let edges ~src t =
-    match Name.Map.find src t with
-    | res -> res
-    | exception Not_found -> Name.Set.empty
+  (* let edges ~src t =
+   *   match Name.Map.find src t with
+   *   | res -> res
+   *   | exception Not_found -> Name.Set.empty *)
 
-  (* breadth-first reachability analysis. *)
-  let rec reachable code_id_deps t live_code_ids enqueued queue =
-    match Queue.take queue with
-    | exception Queue.Empty -> enqueued, live_code_ids
-    | v ->
-      let live_code_ids =
-        match Name.Map.find v code_id_deps with
-        | exception Not_found -> live_code_ids
-        | code_id -> Code_id.Set.union code_id live_code_ids
-      in
-      let neighbours = edges t ~src:v in
-      let new_neighbours = Name.Set.diff neighbours enqueued in
-      Name.Set.iter (fun dst -> Queue.push dst queue) new_neighbours;
-      reachable
-        code_id_deps t live_code_ids
-        (Name.Set.union enqueued new_neighbours) queue
+  (* module Edge (Src_map : Map.S) (Dst_set : Set.S) = struct
+   *   type src = Src_map.key
+   *   type dst = Dst_set.elt
+   *   let push ~(src:src)
+   *         (enqueued : Dst_set.t)
+   *         (queue : dst Queue.t)
+   *         (graph : Dst_set.t Src_map.t) : Dst_set.t =
+   *     let neighbours =
+   *       match Src_map.find src graph with
+   *       | exception Not_found -> Dst_set.empty
+   *       | set -> set
+   *     in
+   *     let new_neighbours = Dst_set.diff neighbours enqueued in
+   *     Dst_set.iter (fun dst -> Queue.push dst queue) new_neighbours;
+   *     Dst_set.union enqueued new_neighbours
+   * end [@@inline] (* TODO check that this applied here *)
+   * 
+   * module Name_Name_Edge = Edge(Name.Map)(Name.Set)
+   * module Name_Code_id_Edge = Edge(Name.Map)(Code_id.Set)
+   * module Code_id_Name_Edge = Edge(Code_id.Map)(Name.Set)
+   * module Code_id_Code_id_Edge = Edge(Code_id.Map)(Code_id.Set) *)
+
+  (* (* breadth-first reachability analysis. *)
+   * let rec reachable
+   *           code_
+   *           code_id_enqueued name_enqueued
+   *           name_queue code_id_queue =
+   *   let 
+   *   match Queue.take name_queue with
+   *   | exception Queue.Empty -> enqueued, live_code_ids
+   *   | v ->
+   *     let live_code_ids =
+   *       match Name.Map.find v code_id_deps with
+   *       | exception Not_found -> live_code_ids
+   *       | code_id -> Code_id.Set.union code_id live_code_ids
+   *     in
+   *     let neighbours = edges t ~src:v in
+   *     let new_neighbours = Name.Set.diff neighbours enqueued in
+   *     Name.Set.iter (fun dst -> Queue.push dst name_queue) new_neighbours;
+   *     reachable
+   *       code_id_deps t live_code_ids
+   *       (Name.Set.union enqueued new_neighbours) name_queue code_id_queue *)
+
+  (* let reachable _ _ _ _ _ _ = assert false *)
 
 end
 
@@ -326,7 +354,7 @@ end
 module Dependency_graph = struct
 
   type t = {
-    dependencies : Name_graph.t;
+    dependencies : Name.Set.t Name.Map.t;
     code_id_deps : Code_id.Set.t Name.Map.t;
     code_id_to_name : Name.Set.t Code_id.Map.t;
     code_id_to_code_id : Code_id.Set.t Code_id.Map.t;
@@ -334,8 +362,70 @@ module Dependency_graph = struct
     code_id_unconditionally_used : Code_id.Set.t;
   }
 
+  module Reachable = struct
+    module Edge (Src_map : Map.S) (Dst_set : Set.S) = struct
+      type src = Src_map.key
+      type dst = Dst_set.elt
+      let push ~(src:src)
+            (enqueued : Dst_set.t)
+            (queue : dst Queue.t)
+            (graph : Dst_set.t Src_map.t) : Dst_set.t =
+        let neighbours =
+          match Src_map.find src graph with
+          | exception Not_found -> Dst_set.empty
+          | set -> set
+        in
+        let new_neighbours = Dst_set.diff neighbours enqueued in
+        Dst_set.iter (fun dst -> Queue.push dst queue) new_neighbours;
+        Dst_set.union enqueued new_neighbours
+    end [@@inline] (* TODO check that this applied here *)
+
+    module Name_Name_Edge = Edge(Name.Map)(Name.Set)
+    module Name_Code_id_Edge = Edge(Name.Map)(Code_id.Set)
+    module Code_id_Name_Edge = Edge(Code_id.Map)(Name.Set)
+    module Code_id_Code_id_Edge = Edge(Code_id.Map)(Code_id.Set)
+
+    (* breadth-first reachability analysis. *)
+    let rec reachable_names t
+              code_id_queue code_id_enqueued
+              name_queue name_enqueued =
+      match Queue.take name_queue with
+      | exception Queue.Empty ->
+        if Queue.is_empty code_id_queue then
+          code_id_enqueued, name_enqueued
+        else
+          reachable_code_ids t
+            code_id_queue code_id_enqueued
+            name_queue name_enqueued
+      | src ->
+        let name_enqueued = Name_Name_Edge.push ~src name_enqueued name_queue t.dependencies in
+        let code_id_enqueued = Name_Code_id_Edge.push ~src code_id_enqueued code_id_queue t.code_id_deps in
+        reachable_names t
+          code_id_queue code_id_enqueued
+          name_queue name_enqueued
+
+    and reachable_code_ids t
+              code_id_queue code_id_enqueued
+              name_queue name_enqueued =
+      match Queue.take code_id_queue with
+      | exception Queue.Empty ->
+        if Queue.is_empty name_queue then
+          code_id_enqueued, name_enqueued
+        else
+          reachable_names t
+            code_id_queue code_id_enqueued
+            name_queue name_enqueued
+      | src ->
+        let name_enqueued = Code_id_Name_Edge.push ~src name_enqueued name_queue t.code_id_to_name in
+        let code_id_enqueued = Code_id_Code_id_Edge.push ~src code_id_enqueued code_id_queue t.code_id_to_code_id in
+        reachable_code_ids t
+          code_id_queue code_id_enqueued
+          name_queue name_enqueued
+
+  end
+
   let empty = {
-    dependencies = Name_graph.empty;
+    dependencies = Name.Map.empty;
     code_id_deps = Name.Map.empty;
     code_id_to_name = Code_id.Map.empty;
     code_id_to_code_id = Code_id.Map.empty;
@@ -353,7 +443,7 @@ module Dependency_graph = struct
         @[<hov 1>(unconditionally_used@ %a)@]@ \
         @[<hov 1>(code_id_unconditionally_used@ %a)@]\
         )@]"
-      Name_graph.print dependencies
+      (Name.Map.print Name.Set.print) dependencies
       (Name.Map.print Code_id.Set.print) code_id_deps
       (Code_id.Map.print Name.Set.print) code_id_to_name
       (Code_id.Map.print Code_id.Set.print) code_id_to_code_id
@@ -543,15 +633,16 @@ module Dependency_graph = struct
     in
     t
 
-  let required_names { dependencies; code_id_deps; code_id_to_name; code_id_to_code_id;
-                       unconditionally_used; code_id_unconditionally_used; } =
-    (* TODO *)
-    ignore (code_id_to_name, code_id_to_code_id, code_id_unconditionally_used);
-    let queue = Queue.create () in
-    Name.Set.iter (fun v -> Queue.push v queue) unconditionally_used;
-    Name_graph.reachable
-      code_id_deps dependencies
-      Code_id.Set.empty unconditionally_used queue
+  let required_names ({ dependencies = _; code_id_deps = _; code_id_to_name = _; code_id_to_code_id = _;
+                       unconditionally_used; code_id_unconditionally_used; } as t) =
+    (* TODO: use code_age_relation *)
+    let name_queue = Queue.create () in
+    Name.Set.iter (fun v -> Queue.push v name_queue) unconditionally_used;
+    let code_id_queue = Queue.create () in
+    Code_id.Set.iter (fun v -> Queue.push v code_id_queue) code_id_unconditionally_used;
+    Reachable.reachable_names t
+      code_id_queue code_id_unconditionally_used
+      name_queue unconditionally_used
 
 end
 
@@ -563,13 +654,24 @@ type result = {
   live_code_ids : Code_id.Set.t;
 }
 
+let print_result ppf { required_names; live_code_ids } =
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>(required_names@ %a)@]@ \
+        @[<hov 1>(live_code_ids@ %a)@]\
+        )@]"
+      Name.Set.print required_names
+      Code_id.Set.print live_code_ids
+
 let analyze ~return_continuation ~exn_continuation { stack; map; extra; } =
   Profile.record_call ~accumulate:true "data_flow" (fun () ->
     assert (stack = []);
     let deps =
       Dependency_graph.create ~return_continuation ~exn_continuation map extra
     in
-    (* Format.eprintf "/// graph@\n%a@\n@." Dependency_graph._print deps; *)
-    let required_names, live_code_ids = Dependency_graph.required_names deps in
-    { required_names; live_code_ids; })
+    Format.eprintf "/// graph@\n%a@\n@." Dependency_graph._print deps;
+    let live_code_ids, required_names = Dependency_graph.required_names deps in
+    let result = { required_names; live_code_ids; } in
+    Format.eprintf "/// result@\n%a@\n@." print_result result;
+    result
+  )
 
