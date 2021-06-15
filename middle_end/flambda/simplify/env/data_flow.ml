@@ -327,7 +327,7 @@ module Dependency_graph = struct
 
   type t = {
     dependencies : Name_graph.t;
-    code_id_deps : Code_id.t Name.Map.t;
+    code_id_deps : Code_id.Set.t Name.Map.t;
     code_id_to_name : Name.Set.t Code_id.Map.t;
     code_id_to_code_id : Code_id.Set.t Code_id.Map.t;
     unconditionally_used : Name.Set.t;
@@ -363,8 +363,11 @@ module Dependency_graph = struct
   (* Some auxiliary functions *)
   let add_code_id_dep ~src ~dst ({ code_id_deps; _ } as t) =
     let code_id_deps = Name.Map.update src (function
-      | None -> Some dst
-      | Some _ -> Misc.fatal_errorf "Same name bound multiple times"
+      | None -> Some (Code_id.Set.singleton dst)
+      | Some old -> Some (Code_id.Set.add old
+        Format.eprintf "Same name bound multiple times: %a -> %a, %a@."
+          Name.print src Code_id.print old Code_id.print dst;
+        Some dst
     ) code_id_deps
     in
     { t with code_id_deps; }
@@ -384,8 +387,7 @@ module Dependency_graph = struct
     let unconditionally_used =
       fold_name_occurrences name_occurrences ~init
         ~names:(fun set name -> Name.Set.add name set)
-        ~code_ids:(fun _ _ ->
-          Misc.fatal_errorf "Unconditionally used code_id in data_flow")
+        ~code_ids:(fun set _ -> (* TODO *) set)
     in
     { t with unconditionally_used; }
 
@@ -522,7 +524,7 @@ let analyze ~return_continuation ~exn_continuation { stack; map; extra; } =
     let deps =
       Dependency_graph.create ~return_continuation ~exn_continuation map extra
     in
-    Format.eprintf "/// graph@\n%a@\n@." Dependency_graph._print deps;
+    (* Format.eprintf "/// graph@\n%a@\n@." Dependency_graph._print deps; *)
     let required_names, live_code_ids = Dependency_graph.required_names deps in
     { required_names; live_code_ids; })
 
