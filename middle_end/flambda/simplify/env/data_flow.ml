@@ -383,7 +383,7 @@ module Dependency_graph = struct
 
   let add_continuation_info map ~return_continuation ~exn_continuation
         _ { apply_cont_args; apply_result_conts; used_in_handler;
-            bindings; continuation = _; params = _; } t =
+            bindings; code_ids = _ (* TODO *); continuation = _; params = _; } t =
     (* Add the vars used in the handler *)
     let t = add_name_occurrences used_in_handler t in
     (* Add the vars of continuation used as function call return as used *)

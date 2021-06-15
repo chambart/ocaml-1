@@ -63,6 +63,12 @@ val record_symbol_binding
   -> t
 (** Add a symbol binding from the current handler. *)
 
+val record_code_id_binding
+   : Code_id.t
+  -> Name_occurrences.t
+  -> t
+  -> t
+
 (*
 val record_set_of_closures_binding
    : Name.t list
