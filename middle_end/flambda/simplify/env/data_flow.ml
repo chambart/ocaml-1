@@ -331,6 +331,7 @@ module Dependency_graph = struct
     code_id_to_name : Name.Set.t Code_id.Map.t;
     code_id_to_code_id : Code_id.Set.t Code_id.Map.t;
     unconditionally_used : Name.Set.t;
+    code_id_unconditionally_used : Code_id.Set.t;
   }
 
   let empty = {
@@ -339,21 +340,25 @@ module Dependency_graph = struct
     code_id_to_name = Code_id.Map.empty;
     code_id_to_code_id = Code_id.Map.empty;
     unconditionally_used = Name.Set.empty;
+    code_id_unconditionally_used = Code_id.Set.empty;
   }
 
-  let _print ppf { dependencies; code_id_deps; code_id_to_name; code_id_to_code_id; unconditionally_used; } =
+  let _print ppf { dependencies; code_id_deps; code_id_to_name; code_id_to_code_id;
+                   unconditionally_used; code_id_unconditionally_used} =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(dependencies@ %a)@]@ \
         @[<hov 1>(code_id_deps@ %a)@]@ \
         @[<hov 1>(code_id_to_name@ %a)@]@ \
         @[<hov 1>(code_id_to_code_id@ %a)@]@ \
-        @[<hov 1>(unconditionally_used@ %a)@]\
+        @[<hov 1>(unconditionally_used@ %a)@]@ \
+        @[<hov 1>(code_id_unconditionally_used@ %a)@]\
         )@]"
       Name_graph.print dependencies
       (Name.Map.print Code_id.Set.print) code_id_deps
       (Code_id.Map.print Name.Set.print) code_id_to_name
       (Code_id.Map.print Code_id.Set.print) code_id_to_code_id
       Name.Set.print unconditionally_used
+      Code_id.Set.print code_id_unconditionally_used
 
   (* *)
   let fold_name_occurrences name_occurrences ~init ~names ~code_ids =
@@ -361,9 +366,13 @@ module Dependency_graph = struct
       ~init:(code_ids init (Name_occurrences.code_ids name_occurrences))
 
   (* Some auxiliary functions *)
-  let add_code_id_dep ~src ~dst ({ code_id_deps; _ } as t) =
+  let add_code_id_dep ~src ~(dst : Code_id.Set.t) ({ code_id_deps; _ } as t) =
     let code_id_deps = Name.Map.update src (function
-      | None -> Some dst
+      | None ->
+        if Code_id.Set.is_empty dst then
+          None
+        else
+          Some dst
       | Some old ->
         Misc.fatal_errorf "Same name bound multiple times: %a -> %a, %a"
           Name.print src Code_id.Set.print old Code_id.Set.print dst
@@ -379,20 +388,49 @@ module Dependency_graph = struct
     let unconditionally_used =  Name.Set.add v unconditionally_used in
     { t with unconditionally_used; }
 
+  let add_code_id_dependency ~src ~dst ({ code_id_to_name; _ } as t) =
+    let code_id_to_name =
+      Code_id.Map.update src (function
+        | None -> Some (Name.Set.singleton dst)
+        | Some set -> Some (Name.Set.add dst set))
+        code_id_to_name
+    in
+    { t with code_id_to_name; }
+
+  let add_code_id_to_code_id ~src ~dst ({ code_id_to_code_id; _ } as t) =
+    let code_id_to_code_id =
+      Code_id.Map.update src (function
+        | None ->
+          if Code_id.Set.is_empty dst then
+            None
+          else
+            Some dst
+        | Some old ->
+          Misc.fatal_errorf "Same code_id bound multiple times: %a -> %a, %a"
+            Code_id.print src Code_id.Set.print old Code_id.Set.print dst)
+        code_id_to_code_id
+    in
+    { t with code_id_to_code_id; }
+
   let add_var_used t v = add_name_used t (Name.var v)
 
   let add_name_occurrences name_occurrences
-        ({ unconditionally_used = init; _ } as t) =
+        ({ unconditionally_used; code_id_unconditionally_used; _ } as t) =
     let unconditionally_used =
-      fold_name_occurrences name_occurrences ~init
-        ~names:(fun set name -> Name.Set.add name set)
-        ~code_ids:(fun set _ -> (* TODO *) set)
+      Name_occurrences.fold_names name_occurrences
+        ~f:(fun set name -> Name.Set.add name set)
+        ~init:unconditionally_used
     in
-    { t with unconditionally_used; }
+    let code_id_unconditionally_used =
+      Code_id.Set.union
+        (Name_occurrences.code_ids name_occurrences)
+        code_id_unconditionally_used
+    in
+    { t with unconditionally_used; code_id_unconditionally_used }
 
   let add_continuation_info map ~return_continuation ~exn_continuation
         _ { apply_cont_args; apply_result_conts; used_in_handler;
-            bindings; code_ids = _ (* TODO *); continuation = _; params = _; } t =
+            bindings; code_ids; continuation = _; params = _; } t =
     (* Add the vars used in the handler *)
     let t = add_name_occurrences used_in_handler t in
     (* Add the vars of continuation used as function call return as used *)
@@ -416,6 +454,13 @@ module Dependency_graph = struct
           ~names:(fun t dst -> add_dependency ~src ~dst t)
           ~code_ids:(fun t dst -> add_code_id_dep ~src ~dst t)
       ) bindings t
+    in
+    let t =
+      Code_id.Map.fold (fun src name_occurrences graph ->
+        fold_name_occurrences name_occurrences ~init:graph
+          ~names:(fun t dst -> add_code_id_dependency ~src ~dst t)
+          ~code_ids:(fun t dst -> add_code_id_to_code_id ~src ~dst t)
+      ) code_ids t
     in
     (* Build the graph of dependencies between continuation
        parameters and arguments. *)
@@ -498,9 +543,10 @@ module Dependency_graph = struct
     in
     t
 
-  let required_names { dependencies; code_id_deps; code_id_to_name; code_id_to_code_id; unconditionally_used; } =
+  let required_names { dependencies; code_id_deps; code_id_to_name; code_id_to_code_id;
+                       unconditionally_used; code_id_unconditionally_used; } =
     (* TODO *)
-    ignore (code_id_to_name, code_id_to_code_id);
+    ignore (code_id_to_name, code_id_to_code_id, code_id_unconditionally_used);
     let queue = Queue.create () in
     Name.Set.iter (fun v -> Queue.push v queue) unconditionally_used;
     Name_graph.reachable
