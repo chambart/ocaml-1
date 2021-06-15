@@ -309,7 +309,7 @@ module Name_graph = struct
       let live_code_ids =
         match Name.Map.find v code_id_deps with
         | exception Not_found -> live_code_ids
-        | code_id -> Code_id.Set.add code_id live_code_ids
+        | code_id -> Code_id.Set.union code_id live_code_ids
       in
       let neighbours = edges t ~src:v in
       let new_neighbours = Name.Set.diff neighbours enqueued in
@@ -350,7 +350,7 @@ module Dependency_graph = struct
         @[<hov 1>(unconditionally_used@ %a)@]\
         )@]"
       Name_graph.print dependencies
-      (Name.Map.print Code_id.print) code_id_deps
+      (Name.Map.print Code_id.Set.print) code_id_deps
       (Code_id.Map.print Name.Set.print) code_id_to_name
       (Code_id.Map.print Code_id.Set.print) code_id_to_code_id
       Name.Set.print unconditionally_used
@@ -358,16 +358,15 @@ module Dependency_graph = struct
   (* *)
   let fold_name_occurrences name_occurrences ~init ~names ~code_ids =
     Name_occurrences.fold_names name_occurrences ~f:names
-      ~init:(Name_occurrences.fold_code_ids name_occurrences ~init ~f:code_ids)
+      ~init:(code_ids init (Name_occurrences.code_ids name_occurrences))
 
   (* Some auxiliary functions *)
   let add_code_id_dep ~src ~dst ({ code_id_deps; _ } as t) =
     let code_id_deps = Name.Map.update src (function
-      | None -> Some (Code_id.Set.singleton dst)
-      | Some old -> Some (Code_id.Set.add old
-        Format.eprintf "Same name bound multiple times: %a -> %a, %a@."
-          Name.print src Code_id.print old Code_id.print dst;
-        Some dst
+      | None -> Some dst
+      | Some old ->
+        Misc.fatal_errorf "Same name bound multiple times: %a -> %a, %a"
+          Name.print src Code_id.Set.print old Code_id.Set.print dst
     ) code_id_deps
     in
     { t with code_id_deps; }
