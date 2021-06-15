@@ -278,76 +278,6 @@ let add_apply_cont_args cont arg_name_occurrences t =
     { elt with apply_cont_args; }
   )
 
-(* Name graph *)
-(* ********** *)
-
-module Name_graph = struct
-
-  (* type t = Name.Set.t Name.Map.t *)
-
-  (* let print ppf t =
-   *   Name.Map.print Name.Set.print ppf t *)
-
-  (* let empty : t = Name.Map.empty *)
-
-  let add_edge ~src ~dst t =
-    Name.Map.update src (function
-      | None -> Some (Name.Set.singleton dst)
-      | Some set -> Some (Name.Set.add dst set)
-    ) t
-
-  (* let edges ~src t =
-   *   match Name.Map.find src t with
-   *   | res -> res
-   *   | exception Not_found -> Name.Set.empty *)
-
-  (* module Edge (Src_map : Map.S) (Dst_set : Set.S) = struct
-   *   type src = Src_map.key
-   *   type dst = Dst_set.elt
-   *   let push ~(src:src)
-   *         (enqueued : Dst_set.t)
-   *         (queue : dst Queue.t)
-   *         (graph : Dst_set.t Src_map.t) : Dst_set.t =
-   *     let neighbours =
-   *       match Src_map.find src graph with
-   *       | exception Not_found -> Dst_set.empty
-   *       | set -> set
-   *     in
-   *     let new_neighbours = Dst_set.diff neighbours enqueued in
-   *     Dst_set.iter (fun dst -> Queue.push dst queue) new_neighbours;
-   *     Dst_set.union enqueued new_neighbours
-   * end [@@inline] (* TODO check that this applied here *)
-   * 
-   * module Name_Name_Edge = Edge(Name.Map)(Name.Set)
-   * module Name_Code_id_Edge = Edge(Name.Map)(Code_id.Set)
-   * module Code_id_Name_Edge = Edge(Code_id.Map)(Name.Set)
-   * module Code_id_Code_id_Edge = Edge(Code_id.Map)(Code_id.Set) *)
-
-  (* (* breadth-first reachability analysis. *)
-   * let rec reachable
-   *           code_
-   *           code_id_enqueued name_enqueued
-   *           name_queue code_id_queue =
-   *   let 
-   *   match Queue.take name_queue with
-   *   | exception Queue.Empty -> enqueued, live_code_ids
-   *   | v ->
-   *     let live_code_ids =
-   *       match Name.Map.find v code_id_deps with
-   *       | exception Not_found -> live_code_ids
-   *       | code_id -> Code_id.Set.union code_id live_code_ids
-   *     in
-   *     let neighbours = edges t ~src:v in
-   *     let new_neighbours = Name.Set.diff neighbours enqueued in
-   *     Name.Set.iter (fun dst -> Queue.push dst name_queue) new_neighbours;
-   *     reachable
-   *       code_id_deps t live_code_ids
-   *       (Name.Set.union enqueued new_neighbours) name_queue code_id_queue *)
-
-  (* let reachable _ _ _ _ _ _ = assert false *)
-
-end
-
 (* Dependency graph *)
 (* **************** *)
 
@@ -471,7 +401,12 @@ module Dependency_graph = struct
     { t with code_id_deps; }
 
   let add_dependency ~src ~dst ({ dependencies; _ } as t) =
-    let dependencies = Name_graph.add_edge ~src ~dst dependencies in
+    let dependencies =
+      Name.Map.update src (function
+        | None -> Some (Name.Set.singleton dst)
+        | Some set -> Some (Name.Set.add dst set)
+      ) dependencies
+    in
     { t with dependencies; }
 
   let add_name_used ({ unconditionally_used; _ } as t) v =
