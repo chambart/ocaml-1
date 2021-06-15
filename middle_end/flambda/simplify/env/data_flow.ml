@@ -284,7 +284,7 @@ let add_apply_cont_args cont arg_name_occurrences t =
 module Dependency_graph = struct
 
   type t = {
-    dependencies : Name.Set.t Name.Map.t;
+    name_to_name : Name.Set.t Name.Map.t;
     code_id_deps : Code_id.Set.t Name.Map.t;
     code_id_to_name : Name.Set.t Code_id.Map.t;
     code_id_to_code_id : Code_id.Set.t Code_id.Map.t;
@@ -328,7 +328,7 @@ module Dependency_graph = struct
             code_id_queue code_id_enqueued
             name_queue name_enqueued
       | src ->
-        let name_enqueued = Name_Name_Edge.push ~src name_enqueued name_queue t.dependencies in
+        let name_enqueued = Name_Name_Edge.push ~src name_enqueued name_queue t.name_to_name in
         let code_id_enqueued = Name_Code_id_Edge.push ~src code_id_enqueued code_id_queue t.code_id_deps in
         reachable_names t
           code_id_queue code_id_enqueued
@@ -355,7 +355,7 @@ module Dependency_graph = struct
   end
 
   let empty = {
-    dependencies = Name.Map.empty;
+    name_to_name = Name.Map.empty;
     code_id_deps = Name.Map.empty;
     code_id_to_name = Code_id.Map.empty;
     code_id_to_code_id = Code_id.Map.empty;
@@ -363,17 +363,17 @@ module Dependency_graph = struct
     code_id_unconditionally_used = Code_id.Set.empty;
   }
 
-  let _print ppf { dependencies; code_id_deps; code_id_to_name; code_id_to_code_id;
+  let _print ppf { name_to_name; code_id_deps; code_id_to_name; code_id_to_code_id;
                    unconditionally_used; code_id_unconditionally_used} =
     Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(dependencies@ %a)@]@ \
+        @[<hov 1>(name_to_name@ %a)@]@ \
         @[<hov 1>(code_id_deps@ %a)@]@ \
         @[<hov 1>(code_id_to_name@ %a)@]@ \
         @[<hov 1>(code_id_to_code_id@ %a)@]@ \
         @[<hov 1>(unconditionally_used@ %a)@]@ \
         @[<hov 1>(code_id_unconditionally_used@ %a)@]\
         )@]"
-      (Name.Map.print Name.Set.print) dependencies
+      (Name.Map.print Name.Set.print) name_to_name
       (Name.Map.print Code_id.Set.print) code_id_deps
       (Code_id.Map.print Name.Set.print) code_id_to_name
       (Code_id.Map.print Code_id.Set.print) code_id_to_code_id
@@ -400,14 +400,14 @@ module Dependency_graph = struct
     in
     { t with code_id_deps; }
 
-  let add_dependency ~src ~dst ({ dependencies; _ } as t) =
-    let dependencies =
+  let add_dependency ~src ~dst ({ name_to_name; _ } as t) =
+    let name_to_name =
       Name.Map.update src (function
         | None -> Some (Name.Set.singleton dst)
         | Some set -> Some (Name.Set.add dst set)
-      ) dependencies
+      ) name_to_name
     in
-    { t with dependencies; }
+    { t with name_to_name; }
 
   let add_name_used ({ unconditionally_used; _ } as t) v =
     let unconditionally_used =  Name.Set.add v unconditionally_used in
@@ -568,7 +568,7 @@ module Dependency_graph = struct
     in
     t
 
-  let required_names ({ dependencies = _; code_id_deps = _; code_id_to_name = _; code_id_to_code_id = _;
+  let required_names ({ name_to_name = _; code_id_deps = _; code_id_to_name = _; code_id_to_code_id = _;
                        unconditionally_used; code_id_unconditionally_used; } as t) =
     (* TODO: use code_age_relation *)
     let name_queue = Queue.create () in
