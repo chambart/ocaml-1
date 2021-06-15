@@ -589,7 +589,7 @@ type result = {
   live_code_ids : Code_id.Set.t;
 }
 
-let print_result ppf { required_names; live_code_ids } =
+let _print_result ppf { required_names; live_code_ids } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(required_names@ %a)@]@ \
         @[<hov 1>(live_code_ids@ %a)@]\
@@ -603,10 +603,10 @@ let analyze ~return_continuation ~exn_continuation { stack; map; extra; } =
     let deps =
       Dependency_graph.create ~return_continuation ~exn_continuation map extra
     in
-    Format.eprintf "/// graph@\n%a@\n@." Dependency_graph._print deps;
+    (* Format.eprintf "/// graph@\n%a@\n@." Dependency_graph._print deps; *)
     let live_code_ids, required_names = Dependency_graph.required_names deps in
     let result = { required_names; live_code_ids; } in
-    Format.eprintf "/// result@\n%a@\n@." print_result result;
+    (* Format.eprintf "/// result@\n%a@\n@." _print_result result; *)
     result
   )
 
