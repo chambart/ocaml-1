@@ -328,23 +328,31 @@ module Dependency_graph = struct
   type t = {
     dependencies : Name_graph.t;
     code_id_deps : Code_id.t Name.Map.t;
+    code_id_to_name : Name.Set.t Code_id.Map.t;
+    code_id_to_code_id : Code_id.Set.t Code_id.Map.t;
     unconditionally_used : Name.Set.t;
   }
 
   let empty = {
     dependencies = Name_graph.empty;
     code_id_deps = Name.Map.empty;
+    code_id_to_name = Code_id.Map.empty;
+    code_id_to_code_id = Code_id.Map.empty;
     unconditionally_used = Name.Set.empty;
   }
 
-  let _print ppf { dependencies; code_id_deps; unconditionally_used; } =
+  let _print ppf { dependencies; code_id_deps; code_id_to_name; code_id_to_code_id; unconditionally_used; } =
     Format.fprintf ppf "@[<hov 1>(\
         @[<hov 1>(dependencies@ %a)@]@ \
         @[<hov 1>(code_id_deps@ %a)@]@ \
+        @[<hov 1>(code_id_to_name@ %a)@]@ \
+        @[<hov 1>(code_id_to_code_id@ %a)@]@ \
         @[<hov 1>(unconditionally_used@ %a)@]\
         )@]"
       Name_graph.print dependencies
       (Name.Map.print Code_id.print) code_id_deps
+      (Code_id.Map.print Name.Set.print) code_id_to_name
+      (Code_id.Map.print Code_id.Set.print) code_id_to_code_id
       Name.Set.print unconditionally_used
 
   (* *)
@@ -489,7 +497,9 @@ module Dependency_graph = struct
     in
     t
 
-  let required_names { dependencies; code_id_deps; unconditionally_used; } =
+  let required_names { dependencies; code_id_deps; code_id_to_name; code_id_to_code_id; unconditionally_used; } =
+    (* TODO *)
+    ignore (code_id_to_name, code_id_to_code_id);
     let queue = Queue.create () in
     Name.Set.iter (fun v -> Queue.push v queue) unconditionally_used;
     Name_graph.reachable
