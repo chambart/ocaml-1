@@ -131,8 +131,9 @@ let simplify_let ~simplify_expr ~simplify_toplevel dacc let_expr ~down_to_up =
                 ListLabels.fold_left (LC.definitions lifted_constant)
                   ~init:data_flow ~f:(fun data_flow definition ->
                     match LC.Definition.descr definition with
-                    | Code _code_id ->
-                      data_flow (* TODO: add bindings code_id->free_names *)
+                    | Code code_id ->
+                      let free_names = LC.Definition.free_names definition in
+                      Data_flow.record_code_id_binding code_id free_names data_flow
                     | Block_like { symbol; _ } ->
                       let free_names = LC.Definition.free_names definition in
                       Data_flow.record_symbol_binding symbol free_names data_flow
