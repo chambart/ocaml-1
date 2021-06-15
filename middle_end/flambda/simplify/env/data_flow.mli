@@ -56,12 +56,21 @@ val record_var_binding
   -> t
 (** Add a variable binding from the current handler. *)
 
+val record_symbol_binding
+   : Symbol.t
+  -> Name_occurrences.t
+  -> t
+  -> t
+(** Add a symbol binding from the current handler. *)
+
+(*
 val record_set_of_closures_binding
    : Name.t list
   -> Function_declaration.t Closure_id.Lmap.t
   -> t
   -> t
-(** Add binding to a set of closures in the current handler. *)
+   (** Add binding to a set of closures in the current handler. *)
+*)
 
 val add_used_in_current_handler : Name_occurrences.t -> t -> t
 (** Add name occurrences used in the body of the current continuation's

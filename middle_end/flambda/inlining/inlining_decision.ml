@@ -375,7 +375,7 @@ let speculative_inlining dacc ~apply ~function_decl ~simplify_expr
         | Never_returns -> Continuation.create ()
         | Return cont -> cont
       in
-      let { required_names; } : Data_flow.result =
+      let { required_names; live_code_ids = _; } : Data_flow.result =
         Data_flow.analyze data_flow
           ~return_continuation:function_return_cont
           ~exn_continuation:(Exn_continuation.exn_handler exn_continuation)

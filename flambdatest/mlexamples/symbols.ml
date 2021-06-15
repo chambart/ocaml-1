@@ -7,7 +7,7 @@ let input' = (saucisse, input)
 let morteau = Sys.opaque_identity 13
 let input'' = (morteau, input')
 
-let g y = input + y
+let g y = (1,2), (input + y)
 
 let tuple = (1,2)
 

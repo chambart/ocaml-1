@@ -16,8 +16,8 @@
 
 (* TODO:
 
- * ajouter à `elt` un champs : name -> code_id
- * on the way down dans les let_expr il faut différencier si on est dans
+ v ajouter à `elt` un champs : name -> code_id
+ v on the way down dans les let_expr il faut différencier si on est dans
    une fonction ou pas (ce qui est un critère différent de "à unit toplevel"):
    - si dans une fonction : pas de let_symbols ou de code_id -> assert false
    - si pas dans une fonction: on enregistre la relation symbol -> code_id
@@ -65,7 +65,7 @@ type elt = {
   used_in_handler : Name_occurrences.t;
   apply_result_conts : Continuation.Set.t;
   bindings : Name_occurrences.t Name.Map.t;
-  bindings_in_sets_of_closures : Code_id.t Name.Map.t;
+  code_ids : Name_occurrences.t Code_id.Map.t;
   apply_cont_args :
     Name_occurrences.t Numbers.Int.Map.t Continuation.Map.t;
 }
@@ -80,9 +80,8 @@ type t = {
 (* ***** *)
 
 let print_elt ppf
-      { continuation; params; used_in_handler;
-        apply_result_conts; bindings; bindings_in_sets_of_closures;
-        apply_cont_args; } =
+      { continuation; params; used_in_handler; apply_result_conts;
+        bindings; code_ids; apply_cont_args; } =
   Format.fprintf ppf
     "@[<hov 1>(\
       @[<hov 1>(continuation %a)@]@ \
@@ -90,7 +89,7 @@ let print_elt ppf
       @[<hov 1>(used_in_handler %a)@]@ \
       @[<hov 1>(apply_result_conts %a)@]@ \
       @[<hov 1>(bindings %a)@]@ \
-      @[<hov 1>(bindings_in_socs %a)@]@ \
+      @[<hov 1>(code_ids %a)@]@ \
       @[<hov 1>(apply_cont_args %a)@]\
       )@]"
     Continuation.print continuation
@@ -98,7 +97,7 @@ let print_elt ppf
     Name_occurrences.print used_in_handler
     Continuation.Set.print apply_result_conts
     (Name.Map.print Name_occurrences.print) bindings
-    (Name.Map.print Code_id.print) bindings_in_sets_of_closures
+    (Code_id.Map.print Name_occurrences.print) code_ids
     (Continuation.Map.print (Numbers.Int.Map.print Name_occurrences.print))
     apply_cont_args
 
@@ -150,7 +149,7 @@ let enter_continuation continuation params t =
   let elt = {
     continuation; params;
     bindings = Name.Map.empty;
-    bindings_in_sets_of_closures = Name.Map.empty;
+    code_ids = Code_id.Map.empty;
     used_in_handler = Name_occurrences.empty;
     apply_cont_args = Continuation.Map.empty;
     apply_result_conts = Continuation.Set.empty;
@@ -194,6 +193,37 @@ let record_var_binding var name_occurrences ~generate_phantom_lets t =
     { elt with bindings; used_in_handler; }
   )
 
+let record_symbol_binding symbol name_occurrences t =
+  update_top_of_stack ~t ~f:(fun elt ->
+    let bindings =
+      Name.Map.update (Name.symbol symbol) (function
+        | None -> Some name_occurrences
+        | Some _ ->
+            Misc.fatal_errorf
+              "The following symbol has been bound twice: %a"
+              Symbol.print symbol
+      ) elt.bindings
+    in
+    { elt with bindings; }
+  )
+
+let record_code_id_binding code_id name_occurrences t =
+  update_top_of_stack ~t ~f:(fun elt ->
+    let code_ids =
+      Code_id.Map.update code_id (function
+        | None -> Some name_occurrences
+        | Some _ ->
+            Misc.fatal_errorf
+              "The following code_id has been bound twice: %a"
+              Code_id.print code_id
+      ) elt.code_ids
+    in
+    { elt with code_ids; }
+  )
+
+
+
+(*
 let record_set_of_closures_binding names closure_id_lmap t =
   update_top_of_stack ~t ~f:(fun elt ->
     let bindings_in_sets_of_closures =
@@ -210,7 +240,8 @@ let record_set_of_closures_binding names closure_id_lmap t =
         names (Closure_id.Lmap.bindings closure_id_lmap)
     in
     { elt with bindings_in_sets_of_closures; }
-  )
+   )
+*)
 
 let add_used_in_current_handler name_occurrences t =
   update_top_of_stack ~t ~f:(fun elt ->
@@ -316,6 +347,11 @@ module Dependency_graph = struct
       (Name.Map.print Code_id.print) code_id_deps
       Name.Set.print unconditionally_used
 
+  (* *)
+  let fold_name_occurrences name_occurrences ~init ~names ~code_ids =
+    Name_occurrences.fold_names name_occurrences ~f:names
+      ~init:(Name_occurrences.fold_code_ids name_occurrences ~init ~f:code_ids)
+
   (* Some auxiliary functions *)
   let add_code_id_dep ~src ~dst ({ code_id_deps; _ } as t) =
     let code_id_deps = Name.Map.update src (function
@@ -338,14 +374,16 @@ module Dependency_graph = struct
   let add_name_occurrences name_occurrences
         ({ unconditionally_used = init; _ } as t) =
     let unconditionally_used =
-      Name_occurrences.fold_names name_occurrences ~init
-        ~f:(fun set name -> Name.Set.add name set)
+      fold_name_occurrences name_occurrences ~init
+        ~names:(fun set name -> Name.Set.add name set)
+        ~code_ids:(fun _ _ ->
+          Misc.fatal_errorf "Unconditionally used code_id in data_flow")
     in
     { t with unconditionally_used; }
 
   let add_continuation_info map ~return_continuation ~exn_continuation
-        _ { apply_cont_args; apply_result_conts; used_in_handler; bindings;
-            bindings_in_sets_of_closures; continuation = _; params = _; } t =
+        _ { apply_cont_args; apply_result_conts; used_in_handler;
+            bindings; continuation = _; params = _; } t =
     (* Add the vars used in the handler *)
     let t = add_name_occurrences used_in_handler t in
     (* Add the vars of continuation used as function call return as used *)
@@ -365,15 +403,10 @@ module Dependency_graph = struct
     (* Build the graph of dependencies between names *)
     let t =
       Name.Map.fold (fun src name_occurrences graph ->
-        Name_occurrences.fold_names name_occurrences ~init:graph
-          ~f:(fun t dst -> add_dependency ~src ~dst t)
+        fold_name_occurrences name_occurrences ~init:graph
+          ~names:(fun t dst -> add_dependency ~src ~dst t)
+          ~code_ids:(fun t dst -> add_code_id_dep ~src ~dst t)
       ) bindings t
-    in
-    (* Build the graph of dependencies between names and sets of closures*)
-    let t =
-      Name.Map.fold (fun src code_id graph ->
-        add_code_id_dep ~src ~dst:code_id graph
-      ) bindings_in_sets_of_closures t
     in
     (* Build the graph of dependencies between continuation
        parameters and arguments. *)
@@ -479,6 +512,7 @@ let analyze ~return_continuation ~exn_continuation { stack; map; extra; } =
     let deps =
       Dependency_graph.create ~return_continuation ~exn_continuation map extra
     in
+    Format.eprintf "/// graph@\n%a@\n@." Dependency_graph._print deps;
     let required_names, live_code_ids = Dependency_graph.required_names deps in
     { required_names; live_code_ids; })
 

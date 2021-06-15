@@ -112,19 +112,45 @@ let simplify_let ~simplify_expr ~simplify_toplevel dacc let_expr ~down_to_up =
     let dacc =
       DA.map_data_flow dacc ~f:(fun data_flow ->
         let data_flow =
-          LCS.fold (DA.get_lifted_constants dacc)
-            ~init:data_flow ~f:(fun data_flow lifted_constant ->
-              (* TODO ! *)
-              Data_flow.add_used_in_current_handler
-                (LC.free_names_of_defining_exprs lifted_constant) data_flow)
+          match DE.closure_info (DA.denv dacc) with
+          | Closure _ ->
+            (* lifted constants defined in a closure appear twice when simplifying
+               terms: once at their "definition" in the source, and once when
+               we finish simplifying the closure and we continue the simplification
+               at toplevel. Thus, when we are inside a closure we don't need to record
+               those dependencies: indeed we need the dependencies at toplevel
+               where the lifted constants will be placed, but not in the closure,
+               so it's better to have those dependencies in the dataflow at toplevel
+               rather than the data_flow inside the closure. *)
+            data_flow
+          | In_a_set_of_closures_but_not_yet_in_a_specific_closure ->
+            assert false
+          | Not_in_a_closure ->
+            LCS.fold (DA.get_lifted_constants dacc)
+              ~init:data_flow ~f:(fun data_flow lifted_constant ->
+                ListLabels.fold_left (LC.definitions lifted_constant)
+                  ~init:data_flow ~f:(fun data_flow definition ->
+                    match LC.Definition.descr definition with
+                    | Code _code_id ->
+                      data_flow (* TODO: add bindings code_id->free_names *)
+                    | Block_like { symbol; _ } ->
+                      let free_names = LC.Definition.free_names definition in
+                      Data_flow.record_symbol_binding symbol free_names data_flow
+                    | Set_of_closures { closure_symbols_with_types; _ } ->
+                      let free_names = LC.Definition.free_names definition in
+                      Closure_id.Lmap.fold (fun _ (symbol, _) data_flow ->
+                        Data_flow.record_symbol_binding symbol free_names data_flow
+                      ) closure_symbols_with_types data_flow
+                  )
+              )
         in
         ListLabels.fold_left
           (Simplify_named_result.bindings_to_place_in_any_order
              simplify_named_result)
           ~init:data_flow
-          ~f:(fun acc (binding : Simplify_named_result.binding_to_place) ->
+          ~f:(fun data_flow (binding : Simplify_named_result.binding_to_place) ->
             match binding.simplified_defining_expr with
-            | Invalid _ -> acc
+            | Invalid _ -> data_flow
             | Reachable { free_names; named; cost_metrics = _; } ->
               let can_be_removed =
                 match named with
@@ -132,63 +158,27 @@ let simplify_let ~simplify_expr ~simplify_toplevel dacc let_expr ~down_to_up =
                 | Prim (prim, _) -> P.at_most_generative_effects prim
               in
               if not can_be_removed then
-                Data_flow.add_used_in_current_handler free_names acc
+                Data_flow.add_used_in_current_handler free_names data_flow
               else
                 let generate_phantom_lets =
                   DE.generate_phantom_lets (DA.denv dacc)
                 in
+                (* TODO: use Bindable_let_bound.fold_all_bound_vars instead
+                   of a match here. *)
                 match binding.let_bound with
                 | Singleton v ->
                   Data_flow.record_var_binding (VB.var v) free_names
-                    ~generate_phantom_lets acc
+                    ~generate_phantom_lets data_flow
                 | Set_of_closures { closure_vars; name_mode = _; } ->
-                  begin match named with
-                  | Set_of_closures s ->
-                    let fundecls =
-                      Set_of_closures.function_decls s
-                      |> Function_declarations.funs_in_order
-                    in
-                    let bound_names =
-                      List.map (fun vb -> Name.var (VB.var vb)) closure_vars
-                    in
-                    let acc =
-                      Data_flow.record_set_of_closures_binding
-                        bound_names fundecls acc
-                    in
-                    let acc =
-                      ListLabels.fold_left closure_vars ~init:acc ~f:(fun acc v ->
-                        Data_flow.record_var_binding (VB.var v) free_names
-                          ~generate_phantom_lets acc)
-                    in
-                    acc
-                  | Simple _ | Prim _ | Rec_info _ -> assert false
-                  end
-                (* | Symbols { scoping_rule = _; bound_symbols; } -> *)
-                  (* let acc = Data_flow.add_used_in_current_handler free_names acc in
-                   * begin match bound_symbols with
-                   * | Set_of_closures bound_syms ->
-                   *   begin match named with
-                   *   | Set_of_closures s ->
-                   *     let bound_names =
-                   *       Closure_id.Lmap.bindings bound_syms
-                   *       |> List.map (fun (_, sym) -> Name.symbol sym)
-                   *     in
-                   *     let fundecls =
-                   *       Set_of_closures.function_decls s
-                   *       |> Function_declarations.funs_in_order
-                   *     in
-                   *     Data_flow.record_set_of_closure_binding
-                   *       bound_names fundecls acc
-                   *   | Simple _ | Prim _ | Rec_info _ -> assert false
-                   *   end
-                   * | Code _ -> (\* TODO *\) acc
-                   * | Block_like _ -> acc
-                   * end *)
+                  ListLabels.fold_left closure_vars ~init:data_flow
+                    ~f:(fun data_flow v ->
+                      Data_flow.record_var_binding (VB.var v) free_names
+                        ~generate_phantom_lets data_flow)
                 | Symbols _ ->
                   (* This cannot be reached, simplify_named does not return any symbol binding, they
                      have all been moved to lifted_constants *)
                   assert false
-                | Depth _ -> acc))
+                | Depth _ -> data_flow))
     in
     (* Next remember any lifted constants that were generated during the
        simplification of the defining expression and sort them, since they
