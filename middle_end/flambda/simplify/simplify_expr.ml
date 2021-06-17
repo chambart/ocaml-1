@@ -62,10 +62,17 @@ and simplify_toplevel dacc expr ~return_continuation
         )
       in
       let data_flow = DA.data_flow dacc in
+      let code_age_relation =
+        match DE.closure_info (DA.denv dacc) with
+        | Closure _ -> Code_age_relation.empty
+        | In_a_set_of_closures_but_not_yet_in_a_specific_closure -> assert false
+        | Not_in_a_closure -> DA.code_age_relation dacc
+      in
       (* Format.eprintf "*** Data_flow@\n%a@." Data_flow.print data_flow; *)
       (* TODO: use live_code_ids *)
       let { required_names; live_code_ids = _; } : Data_flow.result =
-        Data_flow.analyze data_flow ~return_continuation
+        Data_flow.analyze data_flow
+          ~code_age_relation ~return_continuation
           ~exn_continuation:(Exn_continuation.exn_handler exn_continuation)
       in
       let uenv =

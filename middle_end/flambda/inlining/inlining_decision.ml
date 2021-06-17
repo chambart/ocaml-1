@@ -377,6 +377,7 @@ let speculative_inlining dacc ~apply ~function_decl ~simplify_expr
       in
       let { required_names; live_code_ids = _; } : Data_flow.result =
         Data_flow.analyze data_flow
+          ~code_age_relation:Code_age_relation.empty
           ~return_continuation:function_return_cont
           ~exn_continuation:(Exn_continuation.exn_handler exn_continuation)
       in

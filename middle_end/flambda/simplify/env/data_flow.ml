@@ -22,7 +22,7 @@
    - si dans une fonction : pas de let_symbols ou de code_id -> assert false
    - si pas dans une fonction: on enregistre la relation symbol -> code_id
 
- * pour les lifted constants:
+ v pour les lifted constants:
    - si dans une fonction: rien à faire
    - si pas dans une fonction: rajouter le relation entre symbols et free_names/code_id
    -> à la fin de l'analyse du corps d'une fonction (après la simplification),
@@ -30,10 +30,10 @@
       utiliser les free_names du corps de la fonction (qui ne seront que des symbols),
       pour enregistrer les dépendances de la fonction (i.e. code_id -> symbol)
 
- * lors de l'analyse du corps d'une fonction, calculer
+ v lors de l'analyse du corps d'une fonction, calculer
    le set de code id utilisé par les name vivants/required
- * ce set est passé dans le uacc
- * une fois que le corps d'une fonciton est simplifié,
+ v ce set est passé dans le uacc
+ v une fois que le corps d'une fonciton est simplifié,
    ajouter au dacc du toplevel un binding
    new_code_id -> set de code_id utilisés dans la fonction
  * lors de l'analyse au toplevel, calculer en même temps les names
@@ -284,6 +284,7 @@ let add_apply_cont_args cont arg_name_occurrences t =
 module Dependency_graph = struct
 
   type t = {
+    code_age_relation : Code_age_relation.t;
     name_to_name : Name.Set.t Name.Map.t;
     name_to_code_id : Code_id.Set.t Name.Map.t;
     code_id_to_name : Name.Set.t Code_id.Map.t;
@@ -318,6 +319,7 @@ module Dependency_graph = struct
     (* breadth-first reachability analysis. *)
     let rec reachable_names t
               code_id_queue code_id_enqueued
+              older_enqueued
               name_queue name_enqueued =
       match Queue.take name_queue with
       | exception Queue.Empty ->
@@ -326,35 +328,95 @@ module Dependency_graph = struct
         else
           reachable_code_ids t
             code_id_queue code_id_enqueued
+            (Queue.create ()) older_enqueued
             name_queue name_enqueued
       | src ->
         let name_enqueued = Name_Name_Edge.push ~src name_enqueued name_queue t.name_to_name in
         let code_id_enqueued = Name_Code_id_Edge.push ~src code_id_enqueued code_id_queue t.name_to_code_id in
         reachable_names t
           code_id_queue code_id_enqueued
+          older_enqueued
           name_queue name_enqueued
 
     and reachable_code_ids t
               code_id_queue code_id_enqueued
+              older_queue older_enqueued
               name_queue name_enqueued =
       match Queue.take code_id_queue with
       | exception Queue.Empty ->
-        if Queue.is_empty name_queue then
-          code_id_enqueued, name_enqueued
-        else
+        if Queue.is_empty older_queue then
           reachable_names t
             code_id_queue code_id_enqueued
+            older_enqueued
+            name_queue name_enqueued
+        else
+          reachable_older_code_ids t
+            code_id_queue code_id_enqueued
+            older_queue older_enqueued
             name_queue name_enqueued
       | src ->
-        let name_enqueued = Code_id_Name_Edge.push ~src name_enqueued name_queue t.code_id_to_name in
-        let code_id_enqueued = Code_id_Code_id_Edge.push ~src code_id_enqueued code_id_queue t.code_id_to_code_id in
+        let name_enqueued =
+          Code_id_Name_Edge.push ~src name_enqueued name_queue t.code_id_to_name
+        in
+        let code_id_enqueued =
+          Code_id_Code_id_Edge.push ~src code_id_enqueued code_id_queue t.code_id_to_code_id
+        in
+        let older_enqueued =
+          if Code_id.Set.mem src older_enqueued then older_enqueued
+          else begin
+            Queue.push src older_queue;
+            Code_id.Set.add src older_enqueued
+          end
+        in
         reachable_code_ids t
           code_id_queue code_id_enqueued
+          older_queue older_enqueued
           name_queue name_enqueued
+
+      and reachable_older_code_ids t
+            code_id_queue code_id_enqueued
+            older_queue older_enqueued
+            name_queue name_enqueued =
+        match Queue.take older_queue with
+        | exception Queue.Empty ->
+          reachable_code_ids t
+            code_id_queue code_id_enqueued
+            older_queue older_enqueued
+            name_queue name_enqueued
+        | src ->
+          begin match Code_age_relation.get_older_version_of t.code_age_relation src with
+          | None ->
+            reachable_older_code_ids t
+              code_id_queue code_id_enqueued
+              older_queue older_enqueued
+              name_queue name_enqueued
+          | Some dst ->
+            if Code_id.Set.mem dst older_enqueued then begin
+              if Code_id.Set.mem dst code_id_enqueued then
+                reachable_older_code_ids t
+                  code_id_queue code_id_enqueued
+                  older_queue older_enqueued
+                  name_queue name_enqueued
+              else begin
+                let code_id_enqueued = Code_id.Set.add dst code_id_enqueued in
+                Queue.push dst code_id_queue;
+                reachable_older_code_ids t
+                  code_id_queue code_id_enqueued
+                  older_queue older_enqueued
+                  name_queue name_enqueued
+              end
+            end else
+              let older_enqueued = Code_id.Set.add dst older_enqueued in
+              reachable_older_code_ids t
+                code_id_queue code_id_enqueued
+                older_queue older_enqueued
+                name_queue name_enqueued
+          end
 
   end
 
-  let empty = {
+  let empty code_age_relation = {
+    code_age_relation;
     name_to_name = Name.Map.empty;
     name_to_code_id = Name.Map.empty;
     code_id_to_name = Code_id.Map.empty;
@@ -364,8 +426,9 @@ module Dependency_graph = struct
   }
 
   let _print ppf { name_to_name; name_to_code_id; code_id_to_name; code_id_to_code_id;
-                   unconditionally_used; code_id_unconditionally_used} =
+                   code_age_relation; unconditionally_used; code_id_unconditionally_used} =
     Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>(code_age_relation@ %a)@]@ \
         @[<hov 1>(name_to_name@ %a)@]@ \
         @[<hov 1>(name_to_code_id@ %a)@]@ \
         @[<hov 1>(code_id_to_name@ %a)@]@ \
@@ -373,6 +436,7 @@ module Dependency_graph = struct
         @[<hov 1>(unconditionally_used@ %a)@]@ \
         @[<hov 1>(code_id_unconditionally_used@ %a)@]\
         )@]"
+      Code_age_relation.print code_age_relation
       (Name.Map.print Name.Set.print) name_to_name
       (Name.Map.print Code_id.Set.print) name_to_code_id
       (Code_id.Map.print Name.Set.print) code_id_to_name
@@ -519,14 +583,14 @@ module Dependency_graph = struct
       end
     ) apply_cont_args t
 
-  let create ~return_continuation ~exn_continuation map extra =
+  let create ~return_continuation ~exn_continuation ~code_age_relation map extra =
     (* Build the dependencies using the regular params and args of
        continuations, and the let-bindings in continuations handlers. *)
     let t =
       Continuation.Map.fold
         (add_continuation_info map
         ~return_continuation ~exn_continuation)
-        map empty
+        map (empty code_age_relation)
     in
     (* Take into account the extra params and args. *)
     let t =
@@ -568,15 +632,18 @@ module Dependency_graph = struct
     in
     t
 
-  let required_names ({ name_to_name = _; name_to_code_id = _; code_id_to_name = _; code_id_to_code_id = _;
-                       unconditionally_used; code_id_unconditionally_used; } as t) =
-    (* TODO: use code_age_relation *)
+  let required_names
+        ({ code_age_relation = _;
+           name_to_name = _; name_to_code_id = _;
+           code_id_to_name = _; code_id_to_code_id = _;
+           unconditionally_used; code_id_unconditionally_used; } as t) =
     let name_queue = Queue.create () in
     Name.Set.iter (fun v -> Queue.push v name_queue) unconditionally_used;
     let code_id_queue = Queue.create () in
     Code_id.Set.iter (fun v -> Queue.push v code_id_queue) code_id_unconditionally_used;
     Reachable.reachable_names t
       code_id_queue code_id_unconditionally_used
+      Code_id.Set.empty
       name_queue unconditionally_used
 
 end
@@ -597,16 +664,19 @@ let _print_result ppf { required_names; live_code_ids } =
       Name.Set.print required_names
       Code_id.Set.print live_code_ids
 
-let analyze ~return_continuation ~exn_continuation { stack; map; extra; } =
+let analyze
+      ~return_continuation ~exn_continuation ~code_age_relation
+      { stack; map; extra; } =
   Profile.record_call ~accumulate:true "data_flow" (fun () ->
     assert (stack = []);
     let deps =
-      Dependency_graph.create ~return_continuation ~exn_continuation map extra
+      Dependency_graph.create map extra
+        ~return_continuation ~exn_continuation ~code_age_relation
     in
-    (* Format.eprintf "/// graph@\n%a@\n@." Dependency_graph._print deps; *)
+    Format.eprintf "/// graph@\n%a@\n@." Dependency_graph._print deps;
     let live_code_ids, required_names = Dependency_graph.required_names deps in
     let result = { required_names; live_code_ids; } in
-    (* Format.eprintf "/// result@\n%a@\n@." _print_result result; *)
+    Format.eprintf "/// result@\n%a@\n@." _print_result result;
     result
   )
 

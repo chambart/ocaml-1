@@ -110,6 +110,7 @@ type result = private {
 val analyze
    : return_continuation:Continuation.t
   -> exn_continuation:Continuation.t
+  -> code_age_relation:Code_age_relation.t
   -> t
   -> result
 (** Analyze the uses. *)
