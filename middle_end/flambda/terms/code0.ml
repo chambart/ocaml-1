@@ -316,7 +316,9 @@ end) = struct
       code_id
 
   let make_deleted t =
-    { t with params_and_body = Deleted; }
+    { t with
+      params_and_body = Deleted;
+      free_names_of_params_and_body = Name_occurrences.empty; }
 
   let is_deleted t =
     match t.params_and_body with

@@ -107,7 +107,7 @@ let run ~backend ~round unit =
       (Exported_code.mark_as_imported !imported_code)
   in
   let used_closure_vars =
-    UA.used_closure_vars uacc
+    UA.name_occurrences uacc
     |> Name_occurrences.closure_vars
   in
   let cmx =
