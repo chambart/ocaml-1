@@ -66,6 +66,7 @@ type elt = {
   apply_result_conts : Continuation.Set.t;
   bindings : Name_occurrences.t Name.Map.t;
   code_ids : Name_occurrences.t Code_id.Map.t;
+  closure_envs : Name.t Name.Map.t Var_within_closure.Map.t;
   apply_cont_args :
     Name_occurrences.t Numbers.Int.Map.t Continuation.Map.t;
 }
@@ -81,7 +82,7 @@ type t = {
 
 let print_elt ppf
       { continuation; params; used_in_handler; apply_result_conts;
-        bindings; code_ids; apply_cont_args; } =
+        bindings; code_ids; closure_envs; apply_cont_args; } =
   Format.fprintf ppf
     "@[<hov 1>(\
       @[<hov 1>(continuation %a)@]@ \
@@ -90,6 +91,7 @@ let print_elt ppf
       @[<hov 1>(apply_result_conts %a)@]@ \
       @[<hov 1>(bindings %a)@]@ \
       @[<hov 1>(code_ids %a)@]@ \
+      @[<hov 1>(closure_envs %a)@]@ \
       @[<hov 1>(apply_cont_args %a)@]\
       )@]"
     Continuation.print continuation
@@ -98,6 +100,7 @@ let print_elt ppf
     Continuation.Set.print apply_result_conts
     (Name.Map.print Name_occurrences.print) bindings
     (Code_id.Map.print Name_occurrences.print) code_ids
+    (Var_within_closure.Map.print (Name.Map.print Name.print)) closure_envs
     (Continuation.Map.print (Numbers.Int.Map.print Name_occurrences.print))
     apply_cont_args
 
@@ -150,6 +153,7 @@ let enter_continuation continuation params t =
     continuation; params;
     bindings = Name.Map.empty;
     code_ids = Code_id.Map.empty;
+    closure_envs = Var_within_closure.Map.empty;
     used_in_handler = Name_occurrences.empty;
     apply_cont_args = Continuation.Map.empty;
     apply_result_conts = Continuation.Set.empty;
@@ -517,11 +521,27 @@ module Dependency_graph = struct
     in
     { t with unconditionally_used; code_id_unconditionally_used }
 
-  let add_continuation_info map ~return_continuation ~exn_continuation
+  let add_continuation_info map
+        ~return_continuation ~exn_continuation ~used_closure_vars
         _ { apply_cont_args; apply_result_conts; used_in_handler;
-            bindings; code_ids; continuation = _; params = _; } t =
+            bindings; code_ids; closure_envs; continuation = _; params = _; } t =
     (* Add the vars used in the handler *)
     let t = add_name_occurrences used_in_handler t in
+    (* Add the dependencies created by closures vars in envs *)
+    let is_closure_var_used =
+      match (used_closure_vars : _ Or_unknown.t) with
+      | Unknown -> (fun _ -> true)
+      | Known used_closure_vars -> Name_occurrences.mem_closure_var used_closure_vars
+    in
+    let t =
+      Var_within_closure.Map.fold (fun closure_var map t ->
+        if not (is_closure_var_used closure_var) then t
+        else begin
+          Name.Map.fold (fun closure_name value_in_env t ->
+            add_dependency ~src:closure_name ~dst:value_in_env t
+          ) map t
+        end) closure_envs t
+    in
     (* Add the vars of continuation used as function call return as used *)
     let t =
       Continuation.Set.fold (fun k t ->
@@ -583,13 +603,18 @@ module Dependency_graph = struct
       end
     ) apply_cont_args t
 
-  let create ~return_continuation ~exn_continuation ~code_age_relation map extra =
+  let create
+        ~return_continuation ~exn_continuation
+        ~code_age_relation ~used_closure_vars
+        map extra =
     (* Build the dependencies using the regular params and args of
        continuations, and the let-bindings in continuations handlers. *)
     let t =
       Continuation.Map.fold
         (add_continuation_info map
-        ~return_continuation ~exn_continuation)
+           ~return_continuation
+           ~exn_continuation
+           ~used_closure_vars)
         map (empty code_age_relation)
     in
     (* Take into account the extra params and args. *)
@@ -665,13 +690,14 @@ let _print_result ppf { required_names; live_code_ids } =
       Code_id.Set.print live_code_ids
 
 let analyze
-      ~return_continuation ~exn_continuation ~code_age_relation
+      ~return_continuation ~exn_continuation
+      ~code_age_relation ~used_closure_vars
       { stack; map; extra; } =
   Profile.record_call ~accumulate:true "data_flow" (fun () ->
     assert (stack = []);
     let deps =
       Dependency_graph.create map extra
-        ~return_continuation ~exn_continuation ~code_age_relation
+        ~return_continuation ~exn_continuation ~code_age_relation ~used_closure_vars
     in
     Format.eprintf "/// graph@\n%a@\n@." Dependency_graph._print deps;
     let live_code_ids, required_names = Dependency_graph.required_names deps in
