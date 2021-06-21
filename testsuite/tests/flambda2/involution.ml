@@ -3,9 +3,9 @@
 ** native
 *)
 
-(* This test that involutions are effectively detected.
+(* This tests that involutions are effectively detected.
    It checks that for an involution f, f (f x) == x
-   This is is verified by testing that the result of the physical equality
+   This is verified by testing that the result of the physical equality
    is a known constant, through an allocation test. *)
 
 external minor_words : unit -> (float [@unboxed])
