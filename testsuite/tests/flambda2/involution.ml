@@ -3,10 +3,10 @@
 ** native
 *)
 
-(* This test that involution are effectively detected.
+(* This test that involutions are effectively detected.
    It checks that for an involution f, f (f x) == x
    This is is verified by testing that the result of the physical equality
-   is a known constants, through an allocation test. *)
+   is a known constant, through an allocation test. *)
 
 external minor_words : unit -> (float [@unboxed])
   = "caml_gc_minor_words" "caml_gc_minor_words_unboxed"
@@ -36,7 +36,7 @@ let () =
   check_no_alloc "not an involution" (test_known (succ)) 1;
   (* Actual tests *)
   check_no_alloc "not" (test_known (not)) true;
-  check_no_alloc "~-?" (test_known (~-.)) 42.;
+  check_no_alloc "~-." (test_known (~-.)) 42.;
   check_no_alloc "~-" (test_known (~-)) 42;
   check_no_alloc "Int32.neg" (test_known Int32.neg) 42l;
   check_no_alloc "Int64.neg" (test_known Int64.neg) 42L;
