@@ -51,7 +51,8 @@ let try_cse dacc ~original_prim ~simplified_args_with_tys ~min_name_mode
   else
     let result_var = VB.var result_var in
     let args = List.map fst simplified_args_with_tys in
-    match apply_cse dacc ~original_prim:(P.update_args original_prim args) with
+    let original_prim = P.update_args original_prim args in
+    match apply_cse dacc ~original_prim with
     | Some replace_with ->
       let named = Named.create_simple replace_with in
       let ty = T.alias_type_of (P.result_kind' original_prim) replace_with in
