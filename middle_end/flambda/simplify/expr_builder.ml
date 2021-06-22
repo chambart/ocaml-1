@@ -592,6 +592,7 @@ let rewrite_use uacc rewrite ~ctx id apply_cont : rewrite_use_result =
            ((arg : Continuation_extra_params_and_args.Extra_arg.t),
             (used : Apply_cont_rewrite.used)) ->
 <<<<<<< HEAD
+<<<<<<< HEAD
         let extra_arg, extra_let, free_names =
           match arg with
           | Already_in_scope simple ->
@@ -605,17 +606,24 @@ let rewrite_use uacc rewrite ~ctx id apply_cont : rewrite_use_result =
             Simple.var temp, [extra_let], Flambda_primitive.free_names prim
 =======
         let extra_arg, extra_lets =
+=======
+        let extra_arg, extra_let, free_names =
+>>>>>>> 594efb2c22... Clear unused introduced lets
           match arg with
-          | Already_in_scope simple -> simple, extra_lets
+          | Already_in_scope simple ->
+            simple, [], Name_occurrences.empty
           | New_let_binding (temp, prim) ->
-            let extra_lets =
+            let extra_let =
               (Var_in_binding_pos.create temp Name_mode.normal,
                Code_size.prim prim,
                Named.create_prim prim Debuginfo.none)
-                :: extra_lets
             in
+<<<<<<< HEAD
             Simple.var temp, extra_lets
 >>>>>>> 59facac295... Indentation
+=======
+            Simple.var temp, [extra_let], Flambda_primitive.free_names prim
+>>>>>>> 594efb2c22... Clear unused introduced lets
           | New_let_binding_with_named_args (temp, gen_prim) ->
             let prim =
               match (ctx :rewrite_use_ctx) with
@@ -634,14 +642,17 @@ let rewrite_use uacc rewrite ~ctx id apply_cont : rewrite_use_result =
 =======
                                    arguments, since they are aleady named."
             in
-            let extra_lets =
+            let extra_let =
               (Var_in_binding_pos.create temp Name_mode.normal,
                Code_size.prim prim,
                Named.create_prim prim Debuginfo.none)
-              :: extra_lets
             in
+<<<<<<< HEAD
             Simple.var temp, extra_lets
 >>>>>>> 59facac295... Indentation
+=======
+            Simple.var temp, [extra_let], Flambda_primitive.free_names prim
+>>>>>>> 594efb2c22... Clear unused introduced lets
         in
         let extra_args_rev =
           match used with
