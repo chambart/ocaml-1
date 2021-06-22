@@ -35,8 +35,10 @@ let apply_cse dacc ~original_prim =
           ~name_mode_of_existing_simple:NM.normal
       with
       | exception Not_found ->
-        (* CR pchambart: is this really reachable ? Should this be a fatal_error ? *)
-        None
+        (* CR pchambart: this exception was not caught for some time, it is
+           expected never to happen, hence the fatal_error *)
+        Misc.fatal_errorf "No canonical simple for the CSE candidate: %a"
+          Simple.print simple
       | simple -> Some simple
 
 let try_cse dacc ~original_prim ~simplified_args_with_tys ~min_name_mode
