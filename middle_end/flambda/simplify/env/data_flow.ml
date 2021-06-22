@@ -59,6 +59,7 @@ Notes:
 (* Typedefs *)
 (* ******** *)
 
+(* CR: get rid of Name_occurences everywhere, this is not small while we need only the names *)
 type elt = {
   continuation : Continuation.t;
   params : Variable.t list;
