@@ -22,6 +22,34 @@ let rebuild_let symbol_scoping_rule simplify_named_result
       removed_operations ~lifted_constants_from_defining_expr
       ~at_unit_toplevel ~body uacc ~after_rebuild =
   let lifted_constants_from_defining_expr =
+    (* TODO: do only if we are actually rebuilding terms *)
+    LCS.fold lifted_constants_from_defining_expr ~init:LCS.empty
+      ~f:(fun acc lifted_constant ->
+        let bound = LC.bound_symbols lifted_constant in
+        let code_id_live =
+          match UA.live_code_ids uacc with
+          | Unknown ->
+            Bound_symbols.binds_code bound
+          | Known live_code_ids ->
+            not (Code_id.Set.intersection_is_empty
+                   (Bound_symbols.code_being_defined bound)
+                   live_code_ids)
+        in
+        let symbol_live =
+          not (Name.Set.intersection_is_empty
+                 (Name.set_of_symbol_set (Bound_symbols.being_defined bound))
+                 (UA.required_names uacc))
+        in
+        if symbol_live || code_id_live then
+          LCS.add acc lifted_constant
+        else
+          let () =
+            Format.printf "filtered %a@."
+              Lifted_constant.print lifted_constant
+          in
+          acc)
+  in
+  let lifted_constants_from_defining_expr =
     Sort_lifted_constants.sort lifted_constants_from_defining_expr
   in
   (* At this point, the free names in [uacc] are the free names of [body],
