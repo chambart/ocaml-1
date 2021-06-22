@@ -258,7 +258,7 @@ let create_raw_let_symbol uacc bound_symbols scoping_rule static_consts ~body =
     RE.create_let (UA.are_rebuilding_terms uacc) bindable defining_expr
       ~body ~free_names_of_body, uacc
 
-let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
+let create_let_symbol0 uacc _code_age_relation (bound_symbols : Bound_symbols.t)
       (static_consts : Rebuilt_static_const.Group.t) ~body =
   (* Upon entry to this function, [UA.name_occurrences uacc] must precisely
      indicate the free names of [body]. *)
@@ -286,7 +286,8 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
       else
         (* CR-someday mshinwell: This could be made more precise, but would
            probably require a proper analysis. *)
-        let code_ids_static_consts =
+        (*
+        let _code_ids_static_consts =
           Rebuilt_static_const.Group.fold_left static_consts
             ~init:Code_id.Set.empty
             ~f:(fun code_ids static_const ->
@@ -294,17 +295,26 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
               |> Name_occurrences.code_ids
               |> Code_id.Set.union code_ids)
         in
+        *)
         let all_code_ids_bound_names =
           Bound_symbols.code_being_defined bound_symbols
         in
         Code_id.Set.fold (fun bound_code_id result ->
-            let in_newer_version_of_code_ids_after_but_not_code_ids_after =
+          (*
+             let in_newer_version_of_code_ids_after_but_not_code_ids_after =
               Name_occurrences.mem_newer_version_of_code_id
                 free_names_after bound_code_id
               && not (Name_occurrences.mem_code_id free_names_after
                 bound_code_id)
-            in
+             in
+             *)
             let can_make_deleted =
+              match UA.live_code_ids uacc with
+              | Unknown -> false
+              | Known live_code_ids ->
+                not (Code_id.Set.mem bound_code_id live_code_ids)
+            in
+            (*
               in_newer_version_of_code_ids_after_but_not_code_ids_after
                 && (not (Code_id.Set.mem bound_code_id code_ids_static_consts))
                 (* We cannot delete code unless it is certain that a
@@ -317,8 +327,9 @@ let create_let_symbol0 uacc code_age_relation (bound_symbols : Bound_symbols.t)
                   ~all_code_ids_still_existing:all_code_ids_bound_names
                 && Code_age_relation.newer_versions_form_linear_chain'
                   code_age_relation bound_code_id
-                  ~all_free_names_still_existing:free_names_after
+               ~all_free_names_still_existing:free_names_after
             in
+            *)
             if can_make_deleted then Code_id.Set.add bound_code_id result
             else result)
           all_code_ids_bound_names

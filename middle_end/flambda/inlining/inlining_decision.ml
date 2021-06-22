@@ -390,7 +390,7 @@ let speculative_inlining dacc ~apply ~function_decl ~simplify_expr
           UE.add_return_continuation uenv return_continuation scope
             return_arity
       in
-      let uacc = UA.create ~required_names uenv dacc in
+      let uacc = UA.create ~required_names ~live_code_ids:Unknown uenv dacc in
       rebuild uacc ~after_rebuild:(fun expr uacc -> expr, uacc)
     )
   in

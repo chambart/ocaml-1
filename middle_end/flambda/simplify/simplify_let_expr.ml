@@ -21,6 +21,9 @@ open! Simplify_import
 let rebuild_let symbol_scoping_rule simplify_named_result
       removed_operations ~lifted_constants_from_defining_expr
       ~at_unit_toplevel ~body uacc ~after_rebuild =
+  let lifted_constants_from_defining_expr =
+    Sort_lifted_constants.sort lifted_constants_from_defining_expr
+  in
   (* At this point, the free names in [uacc] are the free names of [body],
      plus all used closure vars seen in the whole compilation unit. *)
   let no_constants_from_defining_expr =
@@ -194,9 +197,7 @@ let simplify_let ~simplify_expr ~simplify_toplevel dacc let_expr ~down_to_up =
        of the defining expression.  (Not even in the case of a
        [Set_of_closures] binding, since "let symbol" is disallowed under a
        lambda.) *)
-    let lifted_constants_from_defining_expr =
-      Sort_lifted_constants.sort (DA.get_lifted_constants dacc)
-    in
+    let lifted_constants_from_defining_expr = DA.get_lifted_constants dacc in
     let dacc = DA.add_lifted_constants dacc prior_lifted_constants in
     let at_unit_toplevel = DE.at_unit_toplevel (DA.denv dacc) in
     (* Simplify the body of the let-expression and make the new [Let] bindings
