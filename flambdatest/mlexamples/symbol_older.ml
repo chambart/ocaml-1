@@ -13,8 +13,10 @@ end = struct
     | C
 
   let[@inline] f x =
+    let init = Sys.opaque_identity () in
     let[@inline] g y =
       let h () =
+        let () = Sys.opaque_identity init in
         match x with
         | A -> ("A", y)
         | B -> ("B", 1 + 0)

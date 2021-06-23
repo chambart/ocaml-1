@@ -110,13 +110,13 @@ let run ~backend ~round unit =
     UA.name_occurrences uacc
     |> Name_occurrences.closure_vars
   in
-  let cmx =
-    Flambda_cmx.prepare_cmx_file_contents ~return_cont_env
-      ~return_continuation ~module_symbol ~used_closure_vars all_code
-  in
   let unit =
     FU.create ~return_continuation ~exn_continuation ~module_symbol ~body
       ~used_closure_vars:(Known used_closure_vars)
+  in
+  let cmx =
+    Flambda_cmx.prepare_cmx_file_contents ~return_cont_env
+      ~return_continuation ~module_symbol ~used_closure_vars all_code
   in
   { cmx;
     unit;

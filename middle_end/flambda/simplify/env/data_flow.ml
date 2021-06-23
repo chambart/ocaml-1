@@ -56,6 +56,23 @@ Notes:
 
 *)
 
+module Reachable_code_ids = struct
+
+  type t = {
+    live_code_ids : Code_id.Set.t;
+    ancestors_of_live_code_id : Code_id.Set.t;
+  }
+
+  let print ppf { live_code_ids; ancestors_of_live_code_id; } =
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>(live_code_ids@ %a)@]@ \
+        @[<hov 1>(ancestors_of_live_code_id@ %a)@]\
+      )@]"
+      Code_id.Set.print live_code_ids
+      Code_id.Set.print ancestors_of_live_code_id
+
+end
+
 (* Typedefs *)
 (* ******** *)
 
@@ -76,6 +93,11 @@ type t = {
   stack : elt list;
   map : elt Continuation.Map.t;
   extra : Continuation_extra_params_and_args.t Continuation.Map.t;
+}
+
+type result = {
+  required_names : Name.Set.t;
+  reachable_code_ids : Reachable_code_ids.t;
 }
 
 (* Print *)
@@ -126,6 +148,15 @@ let print ppf { stack; map; extra } =
     print_stack stack
     print_map map
     print_extra extra
+
+let _print_result ppf { required_names; reachable_code_ids; } =
+    Format.fprintf ppf "@[<hov 1>(\
+        @[<hov 1>(required_names@ %a)@]@ \
+        @[<hov 1>(reachable_code_ids@ %a)@]\
+        )@]"
+      Name.Set.print required_names
+      Reachable_code_ids.print reachable_code_ids
+
 
 (* Creation *)
 (* ******** *)
@@ -329,7 +360,11 @@ module Dependency_graph = struct
       match Queue.take name_queue with
       | exception Queue.Empty ->
         if Queue.is_empty code_id_queue then
-          code_id_enqueued, name_enqueued
+          { required_names = name_enqueued;
+            reachable_code_ids = {
+              live_code_ids = code_id_enqueued;
+              ancestors_of_live_code_id = older_enqueued;
+            }; }
         else
           reachable_code_ids t
             code_id_queue code_id_enqueued
@@ -677,19 +712,6 @@ end
 (* Analysis *)
 (* ******** *)
 
-type result = {
-  required_names : Name.Set.t;
-  live_code_ids : Code_id.Set.t;
-}
-
-let _print_result ppf { required_names; live_code_ids } =
-    Format.fprintf ppf "@[<hov 1>(\
-        @[<hov 1>(required_names@ %a)@]@ \
-        @[<hov 1>(live_code_ids@ %a)@]\
-        )@]"
-      Name.Set.print required_names
-      Code_id.Set.print live_code_ids
-
 let analyze
       ~return_continuation ~exn_continuation
       ~code_age_relation ~used_closure_vars
@@ -700,10 +722,9 @@ let analyze
       Dependency_graph.create map extra
         ~return_continuation ~exn_continuation ~code_age_relation ~used_closure_vars
     in
-    Format.eprintf "/// graph@\n%a@\n@." Dependency_graph._print deps;
-    let live_code_ids, required_names = Dependency_graph.required_names deps in
-    let result = { required_names; live_code_ids; } in
-    Format.eprintf "/// result@\n%a@\n@." _print_result result;
+    (* Format.eprintf "/// graph@\n%a@\n@." Dependency_graph._print deps; *)
+    let result = Dependency_graph.required_names deps in
+    (* Format.eprintf "/// result@\n%a@\n@." _print_result result; *)
     result
   )
 

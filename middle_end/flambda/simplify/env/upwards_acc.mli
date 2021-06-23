@@ -23,7 +23,7 @@ val print : Format.formatter -> t -> unit
 
 val create
    : required_names:Name.Set.t
-  -> live_code_ids:(Code_id.Set.t Or_unknown.t)
+  -> reachable_code_ids:(Data_flow.Reachable_code_ids.t Or_unknown.t)
   -> Upwards_env.t
   -> Downwards_acc.t
   -> t
@@ -39,7 +39,7 @@ val code_age_relation : t -> Code_age_relation.t
 
 val required_names : t -> Name.Set.t
 
-val live_code_ids : t -> Code_id.Set.t Or_unknown.t
+val reachable_code_ids : t -> Data_flow.Reachable_code_ids.t Or_unknown.t
 
 (** Return the lifted constants that still need to be placed (i.e. have
     [Let]-expressions made for them) on the upwards traversal. *)

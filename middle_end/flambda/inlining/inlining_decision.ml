@@ -375,7 +375,7 @@ let speculative_inlining dacc ~apply ~function_decl ~simplify_expr
         | Never_returns -> Continuation.create ()
         | Return cont -> cont
       in
-      let { required_names; live_code_ids = _; } : Data_flow.result =
+      let { required_names; reachable_code_ids = _; } : Data_flow.result =
         Data_flow.analyze data_flow
           ~code_age_relation:Code_age_relation.empty
           ~used_closure_vars:Unknown
@@ -390,7 +390,7 @@ let speculative_inlining dacc ~apply ~function_decl ~simplify_expr
           UE.add_return_continuation uenv return_continuation scope
             return_arity
       in
-      let uacc = UA.create ~required_names ~live_code_ids:Unknown uenv dacc in
+      let uacc = UA.create ~required_names ~reachable_code_ids:Unknown uenv dacc in
       rebuild uacc ~after_rebuild:(fun expr uacc -> expr, uacc)
     )
   in

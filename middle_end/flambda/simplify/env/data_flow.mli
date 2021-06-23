@@ -98,12 +98,24 @@ val add_extra_params_and_args :
 
 (* {2 Analysis} *)
 
+module Reachable_code_ids : sig
+
+  type t = {
+    live_code_ids : Code_id.Set.t;
+    (** The set of code ids live/reachable. *)
+    ancestors_of_live_code_id : Code_id.Set.t;
+    (** The set of code ids that are ancestors of at least one live code id. *)
+  }
+
+  val print : Format.formatter -> t -> unit
+
+end
+
 type result = private {
   required_names : Name.Set.t;
   (** The set of all variables that are in fact used to compute the
       returned value of the function being analyzed. *)
-  live_code_ids : Code_id.Set.t;
-  (** The set of code_ids live/reachable. *)
+  reachable_code_ids : Reachable_code_ids.t;
 }
 (** The result of an analysis of the uses of variables in continuations. *)
 

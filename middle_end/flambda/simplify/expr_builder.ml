@@ -258,7 +258,7 @@ let create_raw_let_symbol uacc bound_symbols scoping_rule static_consts ~body =
     RE.create_let (UA.are_rebuilding_terms uacc) bindable defining_expr
       ~body ~free_names_of_body, uacc
 
-let create_let_symbol0 uacc _code_age_relation (bound_symbols : Bound_symbols.t)
+let create_let_symbol0 uacc ~scoping_rule _code_age_relation (bound_symbols : Bound_symbols.t)
       (static_consts : Rebuilt_static_const.Group.t) ~body =
   (* Upon entry to this function, [UA.name_occurrences uacc] must precisely
      indicate the free names of [body]. *)
@@ -309,10 +309,12 @@ let create_let_symbol0 uacc _code_age_relation (bound_symbols : Bound_symbols.t)
              in
              *)
             let can_make_deleted =
-              match UA.live_code_ids uacc with
-              | Unknown -> false
-              | Known live_code_ids ->
-                not (Code_id.Set.mem bound_code_id live_code_ids)
+              match UA.reachable_code_ids uacc with
+              | Unknown ->
+                false
+              | Known { live_code_ids; ancestors_of_live_code_id = _; } ->
+                let b = not (Code_id.Set.mem bound_code_id live_code_ids) in
+                b
             in
             (*
               in_newer_version_of_code_ids_after_but_not_code_ids_after
@@ -344,7 +346,7 @@ let create_let_symbol0 uacc _code_age_relation (bound_symbols : Bound_symbols.t)
               ~if_code_id_is_member_of:code_ids_to_make_deleted)
     in
     let expr, uacc =
-      create_raw_let_symbol uacc bound_symbols Syntactic static_consts ~body
+      create_raw_let_symbol uacc bound_symbols scoping_rule static_consts ~body
     in
     let uacc =
       if not will_bind_code then uacc
@@ -376,21 +378,8 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
       ~f:(remove_unused_closure_vars uacc)
   in
   let expr, uacc =
-    match scoping_rule with
-    | Syntactic ->
-      create_let_symbol0 uacc code_age_relation bound_symbols static_consts
+      create_let_symbol0 uacc ~scoping_rule code_age_relation bound_symbols static_consts
         ~body
-    | Dominator ->
-      let expr, uacc =
-        create_raw_let_symbol uacc bound_symbols scoping_rule static_consts
-          ~body
-      in
-      let uacc =
-        LC.defining_exprs lifted_constant
-        |> Rebuilt_static_const.Group.pieces_of_code_for_cmx
-        |> UA.remember_code_for_cmx uacc
-      in
-      expr, uacc
   in
   Variable.Map.fold (fun var proj (expr, uacc) ->
       let rec apply_projection proj =
