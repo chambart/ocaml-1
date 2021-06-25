@@ -20,10 +20,15 @@ open! Simplify_import
 
 let rebuild_let simplify_named_result
       removed_operations ~lifted_constants_from_defining_expr
-      ~at_unit_toplevel ~body uacc ~after_rebuild =
+      ~at_unit_toplevel ~(closure_info:Closure_info.t)
+      ~body uacc ~after_rebuild =
   let lifted_constants_from_defining_expr =
-    if not at_unit_toplevel then lifted_constants_from_defining_expr
-    else begin
+    match closure_info with
+  | In_a_set_of_closures_but_not_yet_in_a_specific_closure ->
+    assert false
+  | Closure _ ->
+    lifted_constants_from_defining_expr
+  | Not_in_a_closure -> begin
       (* TODO: do only if we are actually rebuilding terms *)
       LCS.fold lifted_constants_from_defining_expr ~init:LCS.empty
         ~f:(fun acc lifted_constant ->
@@ -253,6 +258,7 @@ let simplify_let ~simplify_expr ~simplify_toplevel dacc let_expr ~down_to_up =
     let lifted_constants_from_defining_expr = DA.get_lifted_constants dacc in
     let dacc = DA.add_lifted_constants dacc prior_lifted_constants in
     let at_unit_toplevel = DE.at_unit_toplevel (DA.denv dacc) in
+    let closure_info = DE.closure_info (DA.denv dacc) in
     (* Simplify the body of the let-expression and make the new [Let] bindings
        around the simplified body.  [Simplify_named] will already have
        prepared [dacc] with the necessary bindings for the simplification of
@@ -263,4 +269,4 @@ let simplify_let ~simplify_expr ~simplify_toplevel dacc let_expr ~down_to_up =
           rebuild_body uacc ~after_rebuild:(fun body uacc ->
             rebuild_let simplify_named_result
               removed_operations ~lifted_constants_from_defining_expr
-              ~at_unit_toplevel ~body uacc ~after_rebuild))))
+              ~at_unit_toplevel ~closure_info ~body uacc ~after_rebuild))))
