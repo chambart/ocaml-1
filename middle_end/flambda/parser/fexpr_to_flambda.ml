@@ -707,7 +707,7 @@ let rec expr env (e : Fexpr.expr) : Flambda.Expr.t =
       |> Flambda.Static_const.Group.create
     in
     let body = expr env body in
-    Flambda.Let.create (Bindable_let_bound.symbols bound_symbols Syntactic)
+    Flambda.Let.create (Bindable_let_bound.symbols bound_symbols)
       (Flambda.Named.create_static_consts static_consts)
       ~body
       ~free_names_of_body:Unknown

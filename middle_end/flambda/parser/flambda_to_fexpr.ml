@@ -492,9 +492,7 @@ and let_expr env le =
       dynamic_let_expr env [ var ] defining_expr body
     | Set_of_closures { closure_vars; _ } ->
       dynamic_let_expr env closure_vars defining_expr body
-    | Symbols { scoping_rule = Dominator; _ } ->
-      Misc.fatal_error "TODO: dominator-scoped symbols"
-    | Symbols { bound_symbols; scoping_rule = Syntactic } ->
+    | Symbols { bound_symbols } ->
       static_let_expr env bound_symbols defining_expr body
     | Depth _dv ->
       Misc.fatal_error "TODO: depth variables"

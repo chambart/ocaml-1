@@ -224,10 +224,10 @@ let make_new_let_bindings uacc
         expr, uacc
        )
 
-let create_raw_let_symbol uacc bound_symbols scoping_rule static_consts ~body =
+let create_raw_let_symbol uacc bound_symbols static_consts ~body =
   (* Upon entry to this function, [UA.name_occurrences uacc] must precisely
      indicate the free names of [body]. *)
-  let bindable = Bindable_let_bound.symbols bound_symbols scoping_rule in
+  let bindable = Bindable_let_bound.symbols bound_symbols in
   let free_names_of_static_consts =
     Rebuilt_static_const.Group.free_names static_consts
   in
@@ -258,24 +258,24 @@ let create_raw_let_symbol uacc bound_symbols scoping_rule static_consts ~body =
     RE.create_let (UA.are_rebuilding_terms uacc) bindable defining_expr
       ~body ~free_names_of_body, uacc
 
-let create_let_symbol0 uacc ~scoping_rule _code_age_relation (bound_symbols : Bound_symbols.t)
+let create_let_symbol0 uacc _code_age_relation (bound_symbols : Bound_symbols.t)
       (static_consts : Rebuilt_static_const.Group.t) ~body =
   (* Upon entry to this function, [UA.name_occurrences uacc] must precisely
      indicate the free names of [body]. *)
-  let free_names_after = UA.name_occurrences uacc in
-  let bound_names_unused =
-    Bound_symbols.for_all_everything_being_defined bound_symbols
-      ~f:(fun (code_id_or_symbol : Code_id_or_symbol.t) ->
-        match code_id_or_symbol with
-        | Code_id code_id ->
-          (not (Name_occurrences.mem_code_id
-            free_names_after code_id))
-          &&
-          (not (Name_occurrences.mem_newer_version_of_code_id
-            free_names_after code_id))
-        | Symbol sym ->
-          not (Name_occurrences.mem_symbol free_names_after sym))
-  in
+  (* let free_names_after = UA.name_occurrences uacc in *)
+  let bound_names_unused = false in
+  (*   Bound_symbols.for_all_everything_being_defined bound_symbols
+   *     ~f:(fun (code_id_or_symbol : Code_id_or_symbol.t) ->
+   *       match code_id_or_symbol with
+   *       | Code_id code_id ->
+   *         (not (Name_occurrences.mem_code_id
+   *           free_names_after code_id))
+   *         &&
+   *         (not (Name_occurrences.mem_newer_version_of_code_id
+   *           free_names_after code_id))
+   *       | Symbol sym ->
+   *         not (Name_occurrences.mem_symbol free_names_after sym))
+   * in *)
   if bound_names_unused then body, uacc
   else
     let will_bind_code = Bound_symbols.binds_code bound_symbols in
@@ -346,7 +346,7 @@ let create_let_symbol0 uacc ~scoping_rule _code_age_relation (bound_symbols : Bo
               ~if_code_id_is_member_of:code_ids_to_make_deleted)
     in
     let expr, uacc =
-      create_raw_let_symbol uacc bound_symbols scoping_rule static_consts ~body
+      create_raw_let_symbol uacc bound_symbols static_consts ~body
     in
     let uacc =
       if not will_bind_code then uacc
@@ -369,7 +369,7 @@ let remove_unused_closure_vars uacc static_const =
       Set_of_closures.create (Set_of_closures.function_decls set_of_closures)
         ~closure_elements)
 
-let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
+let create_let_symbols uacc
       code_age_relation lifted_constant ~body =
   let bound_symbols = LC.bound_symbols lifted_constant in
   let symbol_projections = LC.symbol_projections lifted_constant in
@@ -378,7 +378,7 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
       ~f:(remove_unused_closure_vars uacc)
   in
   let expr, uacc =
-      create_let_symbol0 uacc ~scoping_rule code_age_relation bound_symbols static_consts
+      create_let_symbol0 uacc code_age_relation bound_symbols static_consts
         ~body
   in
   Variable.Map.fold (fun var proj (expr, uacc) ->
@@ -450,72 +450,81 @@ let create_let_symbols uacc (scoping_rule : Symbol_scoping_rule.t)
     symbol_projections
     (expr, uacc)
 
-let place_lifted_constants uacc (scoping_rule : Symbol_scoping_rule.t)
+let place_lifted_constants uacc
       ~lifted_constants_from_defining_expr ~lifted_constants_from_body
-      ~put_bindings_around_body ~body ~critical_deps_of_bindings =
-  let calculate_constants_to_place lifted_constants ~critical_deps
-        ~to_float =
-    (* If we are at a [Dominator]-scoped binding, then we float up
-       as many constants as we can whose definitions are fully static
-       (i.e. do not involve variables) to the nearest enclosing
-       [Syntactic]ally-scoped [Let]-binding.  This is done by peeling
-       off the definitions starting at the outermost one.  We keep
-       track of the "critical dependencies", which are those symbols
-       that are definitely going to have their definitions placed at
-       the current [Let]-binding, and any reference to which in another
-       binding (even if fully static) will cause that binding to be
-       placed too. *)
-    (* CR-soon mshinwell: This won't be needed once we can remove
-       [Dominator]-scoped bindings; every "let symbol" can then have
-       [Dominator] scoping.  This should both simplify the code and
-       increase speed a fair bit. *)
-    match scoping_rule with
-    | Syntactic ->
-      lifted_constants, to_float, critical_deps
-    | Dominator ->
-      LCS.fold_outermost_first lifted_constants
-        ~init:(LCS.empty, to_float, critical_deps)
-        ~f:(fun (to_place, to_float, critical_deps) lifted_const ->
-          let must_place =
-            (not (LC.is_fully_static lifted_const))
-              || Name_occurrences.inter_domain_is_non_empty critical_deps
-                    (LC.free_names_of_defining_exprs lifted_const)
-          in
-          if must_place then
-            let critical_deps =
-              LC.bound_symbols lifted_const
-              |> Bound_symbols.free_names
-              |> Name_occurrences.union critical_deps
-            in
-            let to_place = LCS.add_innermost to_place lifted_const in
-            to_place, to_float, critical_deps
-          else
-            let to_float = LCS.add_innermost to_float lifted_const in
-            to_place, to_float, critical_deps)
-  in
+      ~put_bindings_around_body ~body ~critical_deps_of_bindings:_ =
+  (* let calculate_constants_to_place lifted_constants ~critical_deps
+   *       ~to_float =
+   *   (\* If we are at a [Dominator]-scoped binding, then we float up
+   *      as many constants as we can whose definitions are fully static
+   *      (i.e. do not involve variables) to the nearest enclosing
+   *      [Syntactic]ally-scoped [Let]-binding.  This is done by peeling
+   *      off the definitions starting at the outermost one.  We keep
+   *      track of the "critical dependencies", which are those symbols
+   *      that are definitely going to have their definitions placed at
+   *      the current [Let]-binding, and any reference to which in another
+   *      binding (even if fully static) will cause that binding to be
+   *      placed too. *\)
+   *   (\* CR-soon mshinwell: This won't be needed once we can remove
+   *      [Dominator]-scoped bindings; every "let symbol" can then have
+   *      [Dominator] scoping.  This should both simplify the code and
+   *      increase speed a fair bit. *\)
+   *   (\* match scoping_rule with
+   *    * | Syntactic ->
+   *    *   lifted_constants, to_float, critical_deps
+   *    * | Dominator -> *\)
+   *     LCS.fold_outermost_first lifted_constants
+   *       ~init:(LCS.empty, to_float, critical_deps)
+   *       ~f:(fun (to_place, to_float, critical_deps) lifted_const ->
+   *         Format.printf "place: %a@."
+   *           Bound_symbols.print (LC.bound_symbols lifted_const);
+   *         let must_place =
+   *           true
+   *           (\* (not (LC.is_fully_static lifted_const))
+   *            *   || Name_occurrences.inter_domain_is_non_empty critical_deps
+   *            *         (LC.free_names_of_defining_exprs lifted_const) *\)
+   *         in
+   *         if must_place then
+   *           let critical_deps =
+   *             LC.bound_symbols lifted_const
+   *             |> Bound_symbols.free_names
+   *             |> Name_occurrences.union critical_deps
+   *           in
+   *           let to_place = LCS.add_innermost to_place lifted_const in
+   *           to_place, to_float, critical_deps
+   *         else
+   *           let to_float = LCS.add_innermost to_float lifted_const in
+   *           to_place, to_float, critical_deps)
+   * in *)
   (* We handle constants arising from the defining expression, which
      may be used in [bindings], separately from those arising from the
      [body], which may reference the [bindings]. *)
-  let to_place_around_defining_expr, to_float, critical_deps =
-    calculate_constants_to_place lifted_constants_from_defining_expr
-      ~critical_deps:Name_occurrences.empty ~to_float:LCS.empty
+  let to_place_around_defining_expr =
+    lifted_constants_from_defining_expr
+    (* calculate_constants_to_place lifted_constants_from_defining_expr
+     *   ~critical_deps:Name_occurrences.empty ~to_float:LCS.empty *)
   in
-  let critical_deps =
-    (* Make sure we don't move constants past the binding(s) if there
-       is a dependency. *)
-    Name_occurrences.union critical_deps critical_deps_of_bindings
-  in
-  let to_place_around_body, to_float, _critical_deps =
-    calculate_constants_to_place lifted_constants_from_body
-      ~critical_deps ~to_float
+  let to_place_around_body(* , to_float *) =
+    lifted_constants_from_body(* , LCS.empty *)
+    (* calculate_constants_to_place lifted_constants_from_body
+     *   ~critical_deps ~to_float *)
   in
   (* Propagate constants that are to float upwards. *)
-  let uacc = UA.with_lifted_constants uacc to_float in
+  (* if (not (LCS.is_empty (UA.lifted_constants uacc))) then
+   *   Format.printf "clear lifted constant:@.@[<hov 1> %a@]@.DEF@.@[<hov 1> %a@]@.BODY@.@[<hov 1> %a@]@."
+   *     LCS.print (UA.lifted_constants uacc)
+   *     LCS.print lifted_constants_from_defining_expr
+   *     LCS.print lifted_constants_from_body; *)
+  let uacc = UA.with_lifted_constants uacc LCS.empty in
   (* Place constants whose definitions must go at the current binding. *)
+
+  (* Format.printf "YUK@."; *)
   let place_constants uacc ~around constants =
     LCS.fold_innermost_first constants ~init:(around, uacc)
       ~f:(fun (body, uacc) lifted_const ->
-        create_let_symbols uacc scoping_rule
+        (* Format.printf "place: %a@."
+         *   Bound_symbols.print (LC.bound_symbols lifted_const); *)
+        create_let_symbols uacc
           (UA.code_age_relation uacc) lifted_const ~body)
   in
   let body, uacc =

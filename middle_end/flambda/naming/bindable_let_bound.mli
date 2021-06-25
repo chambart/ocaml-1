@@ -18,7 +18,6 @@
 
 type symbols = private {
   bound_symbols : Bound_symbols.t;
-  scoping_rule : Symbol_scoping_rule.t;
 }
 
 type t = private
@@ -45,7 +44,7 @@ val singleton : Var_in_binding_pos.t -> t
 
 val set_of_closures : closure_vars:Var_in_binding_pos.t list -> t
 
-val symbols : Bound_symbols.t -> Symbol_scoping_rule.t -> t
+val symbols : Bound_symbols.t -> t
 
 val depth : Depth_variable.t -> t
 
@@ -77,5 +76,3 @@ val fold_all_bound_vars
 val all_bound_vars : t -> Var_in_binding_pos.Set.t
 
 val all_bound_vars' : t -> Variable.Set.t
-
-val let_symbol_scoping_rule : t -> Symbol_scoping_rule.t option

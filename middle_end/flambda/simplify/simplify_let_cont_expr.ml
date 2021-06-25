@@ -32,7 +32,6 @@ let rebuild_one_continuation_handler cont ~at_unit_toplevel
     then handler, uacc
     else
       EB.place_lifted_constants uacc
-        Dominator
         ~lifted_constants_from_defining_expr:LCS.empty
         ~lifted_constants_from_body:(UA.lifted_constants uacc)
         ~put_bindings_around_body:(fun uacc ~body -> body, uacc)

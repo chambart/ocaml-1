@@ -114,6 +114,16 @@ and simplify_toplevel dacc expr ~return_continuation
           Continuation.print return_continuation
           Continuation.print exn_continuation
       end);
+  let () =
+    match DE.closure_info (DA.denv dacc) with
+    | Closure _ -> ()
+    | Not_in_a_closure ->
+      if not (LCS.is_empty (UA.lifted_constants uacc)) then
+        let lifted_constants_at_end = UA.lifted_constants uacc in
+        Format.printf "END lifted_constant:@.@[<hov 1> %a@]@."
+          LCS.print lifted_constants_at_end
+    | In_a_set_of_closures_but_not_yet_in_a_specific_closure -> assert false
+  in
   expr, uacc
 
 and [@inline always] simplify_let dacc let_expr ~down_to_up =

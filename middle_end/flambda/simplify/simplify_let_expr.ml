@@ -18,7 +18,7 @@
 
 open! Simplify_import
 
-let rebuild_let symbol_scoping_rule simplify_named_result
+let rebuild_let simplify_named_result
       removed_operations ~lifted_constants_from_defining_expr
       ~at_unit_toplevel ~body uacc ~after_rebuild =
   let lifted_constants_from_defining_expr =
@@ -90,11 +90,6 @@ let rebuild_let symbol_scoping_rule simplify_named_result
     (* The let binding was removed. *)
     after_rebuild body uacc
   else
-    let scoping_rule =
-      (* We use [Dominator] scoping for any symbol bindings we place, as the
-         types of the symbols may have been used out of syntactic scope. *)
-      Option.value ~default:Symbol_scoping_rule.Dominator symbol_scoping_rule
-    in
     let critical_deps_of_bindings =
       ListLabels.fold_left bindings
         ~init:Name_occurrences.empty
@@ -104,7 +99,6 @@ let rebuild_let symbol_scoping_rule simplify_named_result
     in
     let body, uacc =
       EB.place_lifted_constants uacc
-        scoping_rule
         ~lifted_constants_from_defining_expr
         ~lifted_constants_from_body
         ~put_bindings_around_body:
@@ -119,9 +113,6 @@ let rebuild_let symbol_scoping_rule simplify_named_result
 let simplify_let ~simplify_expr ~simplify_toplevel dacc let_expr ~down_to_up =
   let module L = Flambda.Let in
   L.pattern_match let_expr ~f:(fun bindable_let_bound ~body ->
-    let symbol_scoping_rule =
-      Bindable_let_bound.let_symbol_scoping_rule bindable_let_bound
-    in
     (* Remember then clear the lifted constants memory in [DA] so we can
        easily find out which constants are generated during simplification
        of the defining expression and the [body]. *)
@@ -238,6 +229,6 @@ let simplify_let ~simplify_expr ~simplify_toplevel dacc let_expr ~down_to_up =
       ~down_to_up:(fun dacc ~rebuild:rebuild_body ->
         down_to_up dacc ~rebuild:(fun uacc ~after_rebuild ->
           rebuild_body uacc ~after_rebuild:(fun body uacc ->
-            rebuild_let symbol_scoping_rule simplify_named_result
+            rebuild_let simplify_named_result
               removed_operations ~lifted_constants_from_defining_expr
               ~at_unit_toplevel ~body uacc ~after_rebuild))))
