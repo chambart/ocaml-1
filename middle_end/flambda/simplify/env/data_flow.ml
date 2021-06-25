@@ -84,7 +84,7 @@ type elt = {
   apply_result_conts : Continuation.Set.t;
   bindings : Name_occurrences.t Name.Map.t;
   code_ids : Name_occurrences.t Code_id.Map.t;
-  closure_envs : Name.t Name.Map.t Var_within_closure.Map.t;
+  closure_envs : Name_occurrences.t Name.Map.t Var_within_closure.Map.t;
   apply_cont_args :
     Name_occurrences.t Numbers.Int.Map.t Continuation.Map.t;
 }
@@ -123,7 +123,7 @@ let print_elt ppf
     Continuation.Set.print apply_result_conts
     (Name.Map.print Name_occurrences.print) bindings
     (Code_id.Map.print Name_occurrences.print) code_ids
-    (Var_within_closure.Map.print (Name.Map.print Name.print)) closure_envs
+    (Var_within_closure.Map.print (Name.Map.print Name_occurrences.print)) closure_envs
     (Continuation.Map.print (Numbers.Int.Map.print Name_occurrences.print))
     apply_cont_args
 
@@ -257,7 +257,21 @@ let record_code_id_binding code_id name_occurrences t =
     { elt with code_ids; }
   )
 
-
+let record_closure_element_binding src closure_var dst t =
+  update_top_of_stack ~t ~f:(fun elt ->
+    let closure_envs =
+      Var_within_closure.Map.update closure_var (function
+        | None -> Some (Name.Map.singleton src dst)
+        | Some map ->
+          Some
+            (Name.Map.update src (function
+               | None -> Some dst
+               | Some dst' -> Some (Name_occurrences.union dst dst'))
+               map)
+      ) elt.closure_envs
+    in
+    { elt with closure_envs }
+  )
 
 (*
 let record_set_of_closures_binding names closure_id_lmap t =
@@ -573,8 +587,10 @@ module Dependency_graph = struct
       Var_within_closure.Map.fold (fun closure_var map t ->
         if not (is_closure_var_used closure_var) then t
         else begin
-          Name.Map.fold (fun closure_name value_in_env t ->
-            add_dependency ~src:closure_name ~dst:value_in_env t
+          Name.Map.fold (fun closure_name values_in_env t ->
+            Name_occurrences.fold_names ~f:(fun t value_in_env ->
+              add_dependency ~src:closure_name ~dst:value_in_env t)
+              values_in_env ~init:t
           ) map t
         end) closure_envs t
     in

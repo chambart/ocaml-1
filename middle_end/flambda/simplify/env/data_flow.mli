@@ -78,6 +78,13 @@ val record_set_of_closures_binding
    (** Add binding to a set of closures in the current handler. *)
 *)
 
+val record_closure_element_binding
+   : Name.t
+  -> Var_within_closure.t
+  -> Name_occurrences.t
+  -> t
+  -> t
+
 val add_used_in_current_handler : Name_occurrences.t -> t -> t
 (** Add name occurrences used in the body of the current continuation's
     handler, *excluding* uses in apply_cont expressions, which are tracked

@@ -162,10 +162,42 @@ let simplify_let ~simplify_expr ~simplify_toplevel dacc let_expr ~down_to_up =
                       let free_names = LC.Definition.free_names definition in
                       Data_flow.record_symbol_binding symbol free_names data_flow
                     | Set_of_closures { closure_symbols_with_types; _ } ->
-                      let free_names = LC.Definition.free_names definition in
-                      Closure_id.Lmap.fold (fun _ (symbol, _) data_flow ->
-                        Data_flow.record_symbol_binding symbol free_names data_flow
-                      ) closure_symbols_with_types data_flow
+                      let expr = LC.Definition.defining_expr definition in
+                      match Rebuilt_static_const.to_const expr with
+                      | Some (Set_of_closures set_of_closures) ->
+                        let free_names =
+                          Function_declarations.free_names
+                            (Set_of_closures.function_decls set_of_closures)
+                        in
+                        let closure_elements =
+                          Set_of_closures.closure_elements set_of_closures
+                        in
+                        Closure_id.Lmap.fold (fun _ (symbol, _) data_flow ->
+                          let data_flow =
+                            Data_flow.record_symbol_binding symbol free_names data_flow
+                          in
+                          Var_within_closure.Map.fold (fun closure_var simple data_flow ->
+                            Data_flow.record_closure_element_binding
+                              (Name.symbol symbol) closure_var
+                              (Simple.free_names simple) data_flow)
+                            closure_elements data_flow
+                        ) closure_symbols_with_types data_flow
+                      | Some (
+                        Code _
+                        | Block _
+                        | Boxed_float _
+                        | Boxed_int32 _
+                        | Boxed_int64 _
+                        | Boxed_nativeint _
+                        | Immutable_float_block _
+                        | Immutable_float_array _
+                        | Mutable_string _
+                        | Immutable_string _)
+                      | None ->
+                        let free_names = LC.Definition.free_names definition in
+                        Closure_id.Lmap.fold (fun _ (symbol, _) data_flow ->
+                          Data_flow.record_symbol_binding symbol free_names data_flow
+                        ) closure_symbols_with_types data_flow
                   )
               )
         in
