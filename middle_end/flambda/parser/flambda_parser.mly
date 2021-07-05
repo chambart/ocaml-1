@@ -116,7 +116,6 @@ let make_boxed_const_int (i, m) : static_data =
 %token KWD_DELETED [@symbol "deleted"]
 %token KWD_DEPTH [@symbol "depth"]
 %token KWD_DIRECT [@symbol "direct"]
-%token KWD_DOMINATOR_SCOPED [@symbol "dominator_scoped"]
 %token KWD_DONE  [@symbol "done"]
 %token KWD_DYNAMIC [@symbol "dynamic"]
 %token KWD_END   [@symbol "end"]
@@ -255,15 +254,11 @@ exn_continuation_id:
 ;
 
 let_symbol(body):
-  | KWD_LET; scoping_rule = symbol_scoping_rule;
+  | KWD_LET;
     bindings = separated_nonempty_list(KWD_AND, symbol_binding);
     closure_elements = with_closure_elements_opt;
-    KWD_IN; body = body; { { bindings; closure_elements; scoping_rule; body } }
+    KWD_IN; body = body; { { bindings; closure_elements; body } }
 ;
-
-symbol_scoping_rule:
-  | { None }
-  | KWD_DOMINATOR_SCOPED { Some Dominator }
 
 symbol_binding:
   | s = static_data_binding { Data s }
