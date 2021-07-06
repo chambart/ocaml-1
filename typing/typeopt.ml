@@ -206,7 +206,7 @@ let value_kind env ty =
               if is_mutable then
                 Pgenval
               else
-                Pblock { tag = Tag.zero; fields }
+                Pblock { tag = 0; fields }
             | _ ->
               Pgenval
           end
@@ -226,12 +226,12 @@ let value_kind env ty =
             Pgenval
           else begin match record_representation with
             | Record_regular ->
-              Pblock { tag = Tag.zero; fields }
+              Pblock { tag = 0; fields }
             | Record_float ->
-              Pblock { tag = Tag.double_array_tag;
+              Pblock { tag = Obj.double_array_tag;
                        fields = List.map (fun _ -> Pfloatval) fields }
             | Record_inlined tag ->
-              Pblock { tag = Tag.create_exn tag; fields }
+              Pblock { tag; fields }
             | Record_unboxed _ ->
               assert false
             | Record_extension _ ->
@@ -246,7 +246,7 @@ let value_kind env ty =
         let visited = Numbers.Int.Set.add ty.id visited in
         let fuel = fuel - 1 in
         let fields = List.map (loop env ~visited ~fuel) fields in
-        Pblock { tag = Tag.zero; fields }
+        Pblock { tag = 0; fields }
       end
     | _ ->
       Pgenval

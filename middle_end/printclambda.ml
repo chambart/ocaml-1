@@ -35,7 +35,7 @@ let value_kind =
   | Pboxedintval Pint32 -> ":int32"
   | Pboxedintval Pint64 -> ":int64"
   | Pblock { tag; fields } ->
-    asprintf ":[%a: %a]" Tag.print tag
+    asprintf ":[%d: %a]" tag
       (Format.pp_print_list ~pp_sep:(fun ppf () -> fprintf ppf ",@ ")
          Printlambda.value_kind') fields
 
