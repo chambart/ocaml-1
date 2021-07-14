@@ -29,18 +29,21 @@ type table_data =
     continuations : (Continuation.t * Continuation.exported) list
   }
 
-type t0 =
-  { original_compilation_unit : Compilation_unit.t;
-    final_typing_env : Flambda2_types.Typing_env.Serializable.t;
-    all_code : Exported_code.t;
-    exported_offsets : Exported_offsets.t;
-    used_closure_vars : Var_within_closure.Set.t;
-    table_data : table_data
-  }
+type t0 = {
+  original_compilation_unit : Compilation_unit.t;
+  final_typing_env : Flambda2_types.Typing_env.Serializable.t;
+  all_code : Exported_code.t;
+  exported_offsets : Exported_offsets.t;
+  used_closure_vars : Var_within_closure.Set.t;
+  table_data : table_data
+}
 
 type t = t0 list
 
+let empty = []
+
 let create ~final_typing_env ~all_code ~exported_offsets ~used_closure_vars =
+(* XXX Verifier
   let typing_env_exported_ids =
     Flambda2_types.Typing_env.Serializable.all_ids_for_export final_typing_env
   in
@@ -150,13 +153,29 @@ let import_typing_env_and_code0 t =
   let renaming =
     Renaming.create_import_map ~symbols ~variables ~simples ~consts ~code_ids
       ~continuations ~used_closure_vars ~original_compilation_unit
+*)
+  let table_data =
+    Flambda_type.Typing_env.Serializable.all_ids_for_export final_typing_env
+    |> Ids_for_export.Table_data.create
+  in
+  [{ original_compilation_unit = Compilation_unit.get_current_exn ();
+     final_typing_env;
+     all_code;
+     exported_offsets;
+     used_closure_vars;
+     table_data;
+  }]
+
+let import_typing_env_and_code0 t =
+  let renaming =
+    Ids_for_export.Table_data.to_import_renaming t.table_data
+      ~used_closure_vars:t.used_closure_vars
   in
   let typing_env =
     Flambda2_types.Typing_env.Serializable.apply_renaming t.final_typing_env
       renaming
   in
-  let all_code = Exported_code.apply_renaming code_ids renaming t.all_code in
-  typing_env, all_code
+  typing_env, t.all_code
 
 let import_typing_env_and_code t =
   match t with
@@ -191,6 +210,10 @@ let with_exported_offsets t exported_offsets =
     Misc.fatal_error "Cannot set exported offsets on multiple units"
 
 let update_for_pack0 ~pack_units ~pack t =
+(* XXX verifier
+  let update_cu unit =
+    if Compilation_unit.Set.mem unit pack_units then pack else unit
+  in
   let symbols =
     Symbol_importer.update_for_pack ~pack_units ~pack t.table_data.symbols
   in
@@ -212,6 +235,9 @@ let update_for_pack0 ~pack_units ~pack t =
   in
   let table_data =
     { symbols; variables; simples; consts; code_ids; continuations }
+*)
+  let table_data =
+    Ids_for_export.Table_data.update_for_pack t.table_data ~pack_units ~pack
   in
   { t with table_data }
 
@@ -255,3 +281,43 @@ let [@ocamlformat "disable"] print ppf t =
   | t0 :: t ->
     Format.fprintf ppf "Packed units:@ @[<v>(%a)%a@]"
       print0 t0 print_rest t
+
+type header_for_cmx_file = {
+  t : t;
+  code_sections_map : int Code_id.Map.t;
+}
+
+let create_code_sections_map t ~f =
+  ListLabels.fold_left t ~init:Code_id.Map.empty
+    ~f:(fun map t0 ->
+      Exported_code.fold_for_cmx t0.all_code ~init:map
+        ~f:(fun map code_id code_for_cmx ->
+          let index = f code_for_cmx in
+          Code_id.Map.add code_id index map))
+
+let header_contents t ~add_code_section =
+  let code_sections_map = create_code_sections_map t ~f:add_code_section in
+  let t =
+    ListLabels.map t ~f:(fun t0 ->
+      { t0 with
+        all_code = Exported_code.prepare_for_cmx_header_section t0.all_code;
+      })
+  in
+  let header =
+    { t;
+      code_sections_map;
+    }
+  in
+  Obj.repr header
+
+let associate_with_loaded_cmx_file ~header_contents
+      ~read_flambda_section_from_cmx_file =
+  let header : header_for_cmx_file = Obj.obj header_contents in
+  ListLabels.map header.t ~f:(fun t0 ->
+    let all_code =
+      Exported_code.associate_with_loaded_cmx_file t0.all_code
+        ~read_flambda_section_from_cmx_file
+        ~code_sections_map:header.code_sections_map
+        ~used_closure_vars:t0.used_closure_vars
+    in
+    { t0 with all_code; })

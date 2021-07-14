@@ -38,8 +38,9 @@ let rec all_ids_up_to_root t ~resolver id =
     then Code_id.Set.singleton id
     else
       match resolver comp_unit with
-      | exception _ ->
-        Misc.fatal_errorf "Exception in resolver@ Backtrace is: %s"
+      | exception exn ->
+        Misc.fatal_errorf "Exception in resolver:@ \n%s\nBacktrace is: %s"
+          (Printexc.to_string exn)
           (Printexc.raw_backtrace_to_string (Printexc.get_raw_backtrace ()))
       | None -> Code_id.Set.singleton id
       | Some t -> begin
