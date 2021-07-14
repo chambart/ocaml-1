@@ -327,71 +327,71 @@ let create_let_symbols uacc lifted_constant ~body =
     create_let_symbol0 uacc bound_symbols static_consts ~body
   in
   Variable.Map.fold (fun var proj (expr, uacc) ->
-    let rec apply_projection proj =
-      match LC.apply_projection lifted_constant proj with
-      | Some simple ->
-        (* If the projection is from one of the symbols bound by the
-           "let symbol" that we've just created, we'll always end up here,
-           avoiding any problem about where to do the projection versus
-           the initialisation of a possibly-recursive group of symbols.
-           We may end up with a "variable = variable" [Let] here, but
-           [Un_cps] (or a subsequent pass of [Simplify]) will remove it.
-           This is the same situation as when continuations are inlined;
-           we can't use a name permutation to resolve the problem as both
-           [var] and [var'] may occur in [expr], and permuting could cause
-           an unbound name.
-           It is possible for one projection to yield a variable that is
-           in turn defined by another symbol projection, so we need to
-           expand transitively. *)
-        Simple.pattern_match' simple
-          ~const:(fun _ ->
-            Named.create_simple simple, Code_size.simple simple)
-          ~symbol:(fun _ ~coercion:_ ->
-            Named.create_simple simple, Code_size.simple simple)
-          ~var:(fun var ~coercion:_ ->
-            match Variable.Map.find var symbol_projections with
-            | exception Not_found ->
-              Named.create_simple simple, Code_size.simple simple
-            | proj ->
-              (* CR lmaurer: Coercion dropped? *)
-              apply_projection proj)
-      | None ->
-        let prim : P.t =
-          let symbol = Simple.symbol (Symbol_projection.symbol proj) in
-          match Symbol_projection.projection proj with
-          | Block_load { index; } ->
-            let index = Simple.const_int index in
-            let block_access_kind : P.Block_access_kind.t =
-              Values {
-                tag = Tag.Scannable.zero;
-                size = Unknown;
-                field_kind = Any_value;
-              }
-            in
-            Binary (Block_load (block_access_kind, Immutable), symbol,
-                    index)
-          | Project_var { project_from; var; } ->
-            Unary (Project_var { project_from; var; }, symbol)
-        in
-        Named.create_prim prim Debuginfo.none, Code_size.prim prim
-    in
-    (* It's possible that this might create duplicates of the same
-       projection operation, but it's unlikely there will be a
-       significant number, and since we're at toplevel we tolerate
-       them. *)
-    let defining_expr, code_size_of_defining_expr = apply_projection proj in
-    let cost_metrics_of_defining_expr =
-      Cost_metrics.from_size code_size_of_defining_expr
-    in
-    let free_names_of_defining_expr = Named.free_names defining_expr in
-    let expr, uacc, _ =
-      create_let uacc (BLB.singleton (VB.create var Name_mode.normal))
-        defining_expr ~free_names_of_defining_expr ~body:expr
-        ~cost_metrics_of_defining_expr
-    in
-    (* Not removing any operation here as the let bindings would have
-       been created for the first time here.*)
-    expr, uacc)
+      let rec apply_projection proj =
+        match LC.apply_projection lifted_constant proj with
+        | Some simple ->
+          (* If the projection is from one of the symbols bound by the
+             "let symbol" that we've just created, we'll always end up here,
+             avoiding any problem about where to do the projection versus
+             the initialisation of a possibly-recursive group of symbols.
+             We may end up with a "variable = variable" [Let] here, but
+             [Un_cps] (or a subsequent pass of [Simplify]) will remove it.
+             This is the same situation as when continuations are inlined;
+             we can't use a name permutation to resolve the problem as both
+             [var] and [var'] may occur in [expr], and permuting could cause
+             an unbound name.
+             It is possible for one projection to yield a variable that is
+             in turn defined by another symbol projection, so we need to
+             expand transitively. *)
+          Simple.pattern_match' simple
+            ~const:(fun _ ->
+              Named.create_simple simple, Code_size.simple simple)
+            ~symbol:(fun _ ~coercion:_ ->
+              Named.create_simple simple, Code_size.simple simple)
+            ~var:(fun var ~coercion:_ ->
+              match Variable.Map.find var symbol_projections with
+              | exception Not_found ->
+                Named.create_simple simple, Code_size.simple simple
+              | proj ->
+                (* CR lmaurer: Coercion dropped? *)
+                apply_projection proj)
+        | None ->
+          let prim : P.t =
+            let symbol = Simple.symbol (Symbol_projection.symbol proj) in
+            match Symbol_projection.projection proj with
+            | Block_load { index; } ->
+              let index = Simple.const_int index in
+              let block_access_kind : P.Block_access_kind.t =
+                Values {
+                  tag = Tag.Scannable.zero;
+                  size = Unknown;
+                  field_kind = Any_value;
+                }
+              in
+              Binary (Block_load (block_access_kind, Immutable), symbol,
+                index)
+            | Project_var { project_from; var; } ->
+              Unary (Project_var { project_from; var; }, symbol)
+          in
+          Named.create_prim prim Debuginfo.none, Code_size.prim prim
+      in
+      (* It's possible that this might create duplicates of the same
+         projection operation, but it's unlikely there will be a
+         significant number, and since we're at toplevel we tolerate
+         them. *)
+      let defining_expr, code_size_of_defining_expr = apply_projection proj in
+      let cost_metrics_of_defining_expr =
+        Cost_metrics.from_size code_size_of_defining_expr
+      in
+      let free_names_of_defining_expr = Named.free_names defining_expr in
+      let expr, uacc, _ =
+        create_let uacc (BLB.singleton (VB.create var Name_mode.normal))
+          defining_expr ~free_names_of_defining_expr ~body:expr
+          ~cost_metrics_of_defining_expr
+      in
+      (* Not removing any operation here as the let bindings would have
+         been created for the first time here.*)
+      expr, uacc)
     symbol_projections
     (expr, uacc)
 
