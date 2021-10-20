@@ -255,6 +255,9 @@ Working version
 - #10692: Expose Parse.module_type and Parse.module_expr
   (Guillaume Petiot, review by Gabriel Scherer)
 
+- #10716: More precise type annotations on Lambda
+  (Pierre Chambart, review by ...)
+
 ### Build system:
 
 ### Bug fixes:
