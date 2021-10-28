@@ -1708,6 +1708,7 @@ typing/typeopt.cmo : \
     typing/predef.cmi \
     typing/path.cmi \
     utils/numbers.cmi \
+    utils/misc.cmi \
     lambda/lambda.cmi \
     typing/ident.cmi \
     typing/env.cmi \
@@ -1724,6 +1725,7 @@ typing/typeopt.cmx : \
     typing/predef.cmx \
     typing/path.cmx \
     utils/numbers.cmx \
+    utils/misc.cmx \
     lambda/lambda.cmx \
     typing/ident.cmx \
     typing/env.cmx \
