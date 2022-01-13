@@ -176,6 +176,7 @@ let import_typing_env_and_code0 t =
     Flambda2_types.Typing_env.Serializable.apply_renaming t.final_typing_env
       renaming
   in
+  (* XXX APPLY RENAMING TO CODE *)
   typing_env, t.all_code
 
 let import_typing_env_and_code t =

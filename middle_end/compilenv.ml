@@ -440,7 +440,7 @@ let set_export_info_for_unit ui (export_info : Export_info.t) =
 let set_export_info (export_info : Export_info.t) : unit =
   set_export_info_for_unit current_unit export_info
 
-let get_flambda1_export_info ui =
+let get_flambda1_export_info_for_unit ui =
   assert(Config.flambda);
   if num_sections_read_from_cmx_file ui <> 1 then
     Misc.fatal_error "Not a Flambda 1 approx (wrong number of sections)"
@@ -470,7 +470,7 @@ let approx_for_global comp_unit =
     match get_global_info id with
     | None -> None
     | Some ui ->
-      let exported = get_flambda1_export_info ui in
+      let exported = get_flambda1_export_info_for_unit ui in
       Hashtbl.add export_infos_table modname exported;
       merged_environment := Export_info.merge !merged_environment exported;
       Some exported
