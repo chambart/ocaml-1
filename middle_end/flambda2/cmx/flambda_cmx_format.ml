@@ -29,16 +29,20 @@ type table_data =
     continuations : (Continuation.t * Continuation.exported) list
   }
 
-type t0 = {
+type 'exported_code t0 = {
   original_compilation_unit : Compilation_unit.t;
   final_typing_env : Flambda2_types.Typing_env.Serializable.t;
-  all_code : Exported_code.t;
+  all_code : 'exported_code;
   exported_offsets : Exported_offsets.t;
   used_closure_vars : Var_within_closure.Set.t;
   table_data : table_data
 }
 
-type t = t0 list
+type raw_t0 = Exported_code.raw t0
+type loaded_t0 = Exported_code.t t0
+
+type t = loaded_t0 list
+type raw = raw_t0 list
 
 let empty = []
 
@@ -285,7 +289,7 @@ let [@ocamlformat "disable"] print ppf t =
       print0 t0 print_rest t
 
 type header_for_cmx_file = {
-  t : t;
+  t : raw;
   code_sections_map : int Code_id.Map.t;
 }
 

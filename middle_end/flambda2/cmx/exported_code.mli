@@ -15,6 +15,8 @@
 
 type t
 
+type raw
+
 include Contains_ids.S with type t := t
 
 val apply_renaming : Code_id.t Code_id.Map.t -> Renaming.t -> t -> t
@@ -61,10 +63,10 @@ val fold_for_cmx
     has been marshalled to the .cmx file (e.g. by using [fold]).
     The returned value of type [t] should not be altered before it is
     marshalled to the .cmx file. *)
-val prepare_for_cmx_header_section : t -> t
+val prepare_for_cmx_header_section : t -> raw
 
 val associate_with_loaded_cmx_file
-   : t
+   : raw
   -> read_flambda_section_from_cmx_file:(index:int -> Obj.t)
   -> code_sections_map:int Code_id.Map.t
   -> used_closure_vars:Var_within_closure.Set.t

@@ -20,6 +20,8 @@
 
 type t
 
+type raw
+
 val create :
   final_typing_env:Flambda2_types.Typing_env.Serializable.t ->
   all_code:Exported_code.t ->

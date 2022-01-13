@@ -19,19 +19,17 @@ module C = Code
 
 type t =
   { code : Code_or_metadata.t Code_id.Map.t;
-    (* XXX code_sections_map inutile ? *)
-    code_sections_map : int Code_id.Map.t
   }
 
-let [@ocamlformat "disable"] print ppf { code; code_sections_map; } =
+type raw = t
+
+let [@ocamlformat "disable"] print ppf { code; } =
   Format.fprintf ppf "@[<hov 1>(\
-      @[(code@ %a)@]@ \
-      @[(code_sections_map@ %a)@]\
+      @[(code@ %a)@]@\
       @]"
   (Code_id.Map.print Code_or_metadata.print) code
-  (Code_id.Map.print Numbers.Int.print) code_sections_map
 
-let empty = { code = Code_id.Map.empty; code_sections_map = Code_id.Map.empty }
+let empty = { code = Code_id.Map.empty }
 
 let add_code ~keep_code code_map t =
   let added_code =
@@ -50,21 +48,17 @@ let add_code ~keep_code code_map t =
       else code_or_metadata)
     code_map
   in
-  { t with code = Code_id.Map.disjoint_union t.code added_code }
+  { code = Code_id.Map.disjoint_union t.code added_code }
 
 let mark_as_imported t =
   let code = Code_id.Map.map_sharing Code_or_metadata.remember_only_metadata t.code in
-  { t with code; }
+  { code; }
 
 let merge
-      { code = code1; code_sections_map = code_sections_map1; }
-      { code = code2; code_sections_map = code_sections_map2; } =
+      { code = code1; }
+      { code = code2; } =
   let code = Code_id.Map.union Code_or_metadata.merge code1 code2 in
-  let code_sections_map =
-    Code_id.Map.disjoint_union code_sections_map1 code_sections_map2
-  in
   { code;
-    code_sections_map;
   }
 
 
@@ -99,7 +93,7 @@ let remove_unreachable ~reachable_names t =
       Name_occurrences.mem_code_id reachable_names code_id)
     t.code
   in
-  { t with code }
+  { code }
 
 let remove_unused_closure_vars_from_result_types ~used_closure_vars t =
   Code_id.Map.map
@@ -134,8 +128,7 @@ let apply_renaming code_id_map renaming t =
            Code_id.Map.add code_id code_or_metadata all_code)
         t.code Code_id.Map.empty
     in
-    (* XXX Shouldn't we also rename the code_section_map ? *)
-    { t with code }
+    { code }
 
 let iter_code t ~f =
   Code_id.Map.iter
@@ -154,7 +147,7 @@ let prepare_for_cmx_header_section t =
   let code =
     Code_id.Map.map Code_or_metadata.prepare_for_cmx_header_section t.code
   in
-  { t with code }
+  { code }
 
 let associate_with_loaded_cmx_file t
       ~read_flambda_section_from_cmx_file ~code_sections_map
@@ -175,4 +168,4 @@ let associate_with_loaded_cmx_file t
         Code_or_metadata.associate_with_loaded_cmx_file code_or_metadata code_id loader)
       t.code
   in
-  { code; code_sections_map; }
+  { code; }
