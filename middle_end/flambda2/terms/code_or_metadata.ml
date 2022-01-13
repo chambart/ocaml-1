@@ -41,8 +41,17 @@ type code_status =
         code_id : Code_id.t;
         metadata : Code_metadata.t
       }
-(* XXX represent in type *)
-  | Pending_association_with_cmx_file of Code_metadata.t
+
+module Present = struct
+  type t =
+    | Code_present
+    | Metadata_only
+end
+
+type raw = {
+  metadata : Code_metadata.t;
+  present : Present.t;
+}
 
 type t =
   | Code_present of { mutable code : code_status }
@@ -66,13 +75,6 @@ let [@ocamlformat "disable"] print ppf t =
          @[<hov 1>(metadata@ %a)@]\
        ))@]"
       Code_metadata.print not_loaded.metadata
-  | Code_present { code = Pending_association_with_cmx_file metadata; } ->
-    Format.fprintf ppf
-      "@[<hov 1>(Present@ (\
-         @[<hov 1>(code@ Pending_association_with_cmx_file)@]\
-         @[<hov 1>(metadata@ %a)@]\
-       ))@]"
-      Code_metadata.print metadata
   | Metadata_only code_metadata ->
     Format.fprintf ppf "@[<hov 1>(Metadata_only@ (code_metadata@ %a))@]"
       Code_metadata.print code_metadata
@@ -104,22 +106,10 @@ let load_code_if_necessary code =
   match code with
   | Loaded code -> code
   | Not_loaded { loader; code_id; metadata = _ } -> load_code loader code_id
-  | Pending_association_with_cmx_file _ ->
-    Misc.fatal_error
-      "Must associate [Exported_code] with a .cmx file before calling \
-       [load_code_if_necessary]"
-
-(* let load_if_necessary t =
- *   match t with
- *   | Code_present present ->
- *     let code = load_code_if_necessary present.code in
- *     present.code <- Loaded code
- *   | Metadata_only _ -> () *)
 
 let code_status_metadata = function
   | Loaded code -> Code.code_metadata code
   | Not_loaded { metadata; _ } -> metadata
-  | Pending_association_with_cmx_file metadata -> metadata
 
 let merge code_id t1 t2 =
   match t1, t2 with
@@ -227,20 +217,17 @@ let view (t : t) : View.t =
   | Metadata_only code_metadata ->
     Metadata_only code_metadata
 
-let prepare_for_cmx_header_section t =
+let prepare_for_cmx_header_section t : raw =
   match t with
   | Code_present present ->
     let metadata = code_status_metadata present.code in
-    Code_present { code = Pending_association_with_cmx_file metadata }
-  | Metadata_only _ ->
-    t
+    { metadata; present = Code_present }
+  | Metadata_only metadata ->
+    { metadata; present = Metadata_only }
 
-let associate_with_loaded_cmx_file t code_id loader =
-  match t with
-  | Code_present { code = (Loaded _ | Not_loaded _) } ->
-    Misc.fatal_error "Code in .cmx files should always be in state \
-                      [Pending_association_with_cmx_file]"
-  | Code_present { code = Pending_association_with_cmx_file metadata } ->
+let associate_with_loaded_cmx_file {metadata; present} code_id loader =
+  match present with
+  | Code_present ->
     Code_present { code = Not_loaded { loader; code_id; metadata } }
-  | Metadata_only _ ->
-    t
+  | Metadata_only ->
+    Metadata_only metadata

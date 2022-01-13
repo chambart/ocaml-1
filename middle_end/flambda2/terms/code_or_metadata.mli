@@ -30,6 +30,7 @@ type loader =
   }
 
 type t
+type raw
 
 module View : sig
   type t = private
@@ -57,9 +58,9 @@ val code_present : t -> bool
 
 val view : t -> View.t
 
-val prepare_for_cmx_header_section : t -> t
+val prepare_for_cmx_header_section : t -> raw
 
-val associate_with_loaded_cmx_file : t -> Code_id.t -> loader -> t
+val associate_with_loaded_cmx_file : raw -> Code_id.t -> loader -> t
 
 (** As for [Code_metadata], the free names of a value of type [t] do not include
     the code ID, which is only kept for convenience. *)

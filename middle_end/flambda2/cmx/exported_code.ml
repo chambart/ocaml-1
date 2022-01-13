@@ -17,11 +17,14 @@
 
 module C = Code
 
+type raw =
+  { code : Code_or_metadata.raw Code_id.Map.t;
+  }
+
 type t =
   { code : Code_or_metadata.t Code_id.Map.t;
   }
 
-type raw = t
 
 let [@ocamlformat "disable"] print ppf { code; } =
   Format.fprintf ppf "@[<hov 1>(\
@@ -143,13 +146,13 @@ let fold_for_cmx t ~init ~f =
         t.code
         init
 
-let prepare_for_cmx_header_section t =
+let prepare_for_cmx_header_section t : raw =
   let code =
     Code_id.Map.map Code_or_metadata.prepare_for_cmx_header_section t.code
   in
   { code }
 
-let associate_with_loaded_cmx_file t
+let associate_with_loaded_cmx_file (t : raw)
       ~read_flambda_section_from_cmx_file ~code_sections_map
       ~used_closure_vars ~original_compilation_unit =
   let read_flambda_section_from_cmx_file ~index : Code_or_metadata.code_in_cmx =
