@@ -155,7 +155,7 @@ let import_typing_env_and_code0 t =
       ~continuations ~used_closure_vars ~original_compilation_unit
 *)
   let table_data =
-    Flambda_type.Typing_env.Serializable.all_ids_for_export final_typing_env
+    Typing_env.Serializable.all_ids_for_export final_typing_env
     |> Ids_for_export.Table_data.create
   in
   [{ original_compilation_unit = Compilation_unit.get_current_exn ();
@@ -170,6 +170,7 @@ let import_typing_env_and_code0 t =
   let renaming =
     Ids_for_export.Table_data.to_import_renaming t.table_data
       ~used_closure_vars:t.used_closure_vars
+      ~original_compilation_unit:t.original_compilation_unit
   in
   let typing_env =
     Flambda2_types.Typing_env.Serializable.apply_renaming t.final_typing_env
@@ -319,5 +320,6 @@ let associate_with_loaded_cmx_file ~header_contents
         ~read_flambda_section_from_cmx_file
         ~code_sections_map:header.code_sections_map
         ~used_closure_vars:t0.used_closure_vars
+        ~original_compilation_unit:t0.original_compilation_unit
     in
     { t0 with all_code; })

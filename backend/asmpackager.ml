@@ -170,136 +170,145 @@ let make_package_object ~ppf_dump members targetobj targetname coercion
 
 let get_export_info_flambda2 ui : Flambda2_cmx.Flambda_cmx_format.t option =
   assert(Config.flambda2);
-  match ui.ui_export_info with
-  | Clambda _ -> assert false
-  | Flambda1 _ -> assert false
-  | Flambda2 info -> info
+  (* match ui.ui_export_info with
+   * | Clambda _ -> assert false
+   * | Flambda1 _ -> assert false
+   * | Flambda2 info -> info *)
+  ignore ui;
+  assert false
 
 let get_export_info_flambda1 ui : Export_info.t =
   assert(Config.flambda);
-  match ui.ui_export_info with
-  | Clambda _ -> assert false
-  | Flambda1 (info : Export_info.t) -> info
-  | Flambda2 _ -> assert false
+  (* match ui.ui_export_info with
+   * | Clambda _ -> assert false
+   * | Flambda1 (info : Export_info.t) -> info
+   * | Flambda2 _ -> assert false *)
+  ignore ui;
+  assert false
 
 let get_approx ui : Clambda.value_approximation =
   assert(not (Config.flambda || Config.flambda2));
-  match ui.ui_export_info with
-  | Clambda info -> info
-  | Flambda1 _ -> assert false
-  | Flambda2 _ -> assert false
+  (* match ui.ui_export_info with
+   * | Clambda info -> info
+   * | Flambda1 _ -> assert false
+   * | Flambda2 _ -> assert false *)
+  ignore ui;
+  assert false
 
-let build_package_cmx members cmxfile =
-  let unit_names =
-    List.map (fun m -> m.pm_name) members in
-  let filter lst =
-    List.filter (fun (name, _crc) -> not (List.mem name unit_names)) lst in
-  let union lst =
-    List.fold_left
-      (List.fold_left
-          (fun accu n -> if List.mem n accu then accu else n :: accu))
-      [] lst in
-  let units =
-    List.fold_right
-      (fun m accu ->
-        match m.pm_kind with PM_intf -> accu | PM_impl info -> info :: accu)
-      members [] in
-  (* CR vlaviron: The code for [pack_units1] and [pack_units2] relies on
-     [Compilenv.unit_for_global] to find the correct compilation unit for the
-     packed modules. This is fragile, and means that we must keep
-     [Compilenv.global_infos_table] alive longer than we would otherwise need.
-     We should consider computing the sets earlier, to remove the dependency
-     on the table. *)
-  let pack_units1 : Compilation_unit.Set.t lazy_t =
-    lazy (List.fold_left
-            (fun set info ->
-               let unit_id = Compilenv.unit_id_from_name info.ui_name in
-               Compilation_unit.Set.add
-                 (Compilenv.unit_for_global unit_id) set)
-            Compilation_unit.Set.empty units) in
-  let pack_units2 : Flambda2_identifiers.Compilation_unit.Set.t lazy_t =
-    let unit_for_global ident : Flambda2_identifiers.Compilation_unit.t =
-      let linkage_name : Flambda2_identifiers.Linkage_name.t =
-        ident
-        |> Compilenv.unit_for_global
-        |> Compilation_unit.get_linkage_name
-        |> Linkage_name.to_string
-        |> Flambda2_identifiers.Linkage_name.create in
-      Flambda2_identifiers.Compilation_unit.create ident linkage_name in
-    lazy (List.fold_left
-            (fun set info ->
-               let unit_id : Ident.t =
-                 Compilenv.unit_id_from_name info.ui_name
-               in
-               Flambda2_identifiers.Compilation_unit.Set.add
-                 (unit_for_global unit_id) set)
-            Flambda2_identifiers.Compilation_unit.Set.empty units) in
-  let units : Cmx_format.unit_infos list =
-    if Config.flambda then
-      List.map (fun info ->
-          { info with
-            ui_export_info =
-              Flambda1
-                (Export_info_for_pack.import_for_pack ~pack_units:(Lazy.force pack_units1)
-                   ~pack:(Compilenv.current_unit ())
-                   (get_export_info_flambda1 info)) })
-        units
-    else
-      units
-  in
-  let ui = Compilenv.current_unit_infos() in
-  let ui_export_info =
-    if Config.flambda then
-      let ui_export_info =
-        List.fold_left (fun acc info ->
-            Export_info.merge acc (get_export_info_flambda1 info))
-          (Export_info_for_pack.import_for_pack ~pack_units:(Lazy.force pack_units1)
-             ~pack:(Compilenv.current_unit ())
-             (get_export_info_flambda1 ui))
-          units
-      in
-      Flambda1 ui_export_info
-    else if Config.flambda2 then
-      let pack = Flambda2_identifiers.Compilation_unit.get_current_exn () in
-      let flambda_export_info =
-        List.fold_left (fun acc info ->
-            Flambda2_cmx.Flambda_cmx_format.merge
-              (Flambda2_cmx.Flambda_cmx_format.update_for_pack
-                 ~pack_units:(Lazy.force pack_units2) ~pack
-                 (get_export_info_flambda2 info))
-              acc)
-          (Flambda2_cmx.Flambda_cmx_format.update_for_pack
-             ~pack_units:(Lazy.force pack_units2) ~pack
-             (get_export_info_flambda2 ui))
-          units
-      in
-      Flambda2 flambda_export_info
-    else
-      Clambda (get_approx ui)
-  in
-  Export_info_for_pack.clear_import_state ();
-  let pkg_infos =
-    { ui_name = ui.ui_name;
-      ui_symbol = ui.ui_symbol;
-      ui_defines =
-          List.flatten (List.map (fun info -> info.ui_defines) units) @
-          [ui.ui_symbol];
-      ui_imports_cmi =
-          (ui.ui_name, Some (Env.crc_of_unit ui.ui_name)) ::
-          filter(Asmlink.extract_crc_interfaces());
-      ui_imports_cmx =
-          filter(Asmlink.extract_crc_implementations());
-      ui_curry_fun =
-          union(List.map (fun info -> info.ui_curry_fun) units);
-      ui_apply_fun =
-          union(List.map (fun info -> info.ui_apply_fun) units);
-      ui_send_fun =
-          union(List.map (fun info -> info.ui_send_fun) units);
-      ui_force_link =
-          List.exists (fun info -> info.ui_force_link) units;
-      ui_export_info;
-    } in
-  Compilenv.write_unit_info pkg_infos cmxfile
+(* let build_package_cmx members cmxfile =
+ *   let unit_names =
+ *     List.map (fun m -> m.pm_name) members in
+ *   let filter lst =
+ *     List.filter (fun (name, _crc) -> not (List.mem name unit_names)) lst in
+ *   let union lst =
+ *     List.fold_left
+ *       (List.fold_left
+ *           (fun accu n -> if List.mem n accu then accu else n :: accu))
+ *       [] lst in
+ *   let units =
+ *     List.fold_right
+ *       (fun m accu ->
+ *         match m.pm_kind with PM_intf -> accu | PM_impl info -> info :: accu)
+ *       members [] in
+ *   (\* CR vlaviron: The code for [pack_units1] and [pack_units2] relies on
+ *      [Compilenv.unit_for_global] to find the correct compilation unit for the
+ *      packed modules. This is fragile, and means that we must keep
+ *      [Compilenv.global_infos_table] alive longer than we would otherwise need.
+ *      We should consider computing the sets earlier, to remove the dependency
+ *      on the table. *\)
+ *   let pack_units1 : Compilation_unit.Set.t lazy_t =
+ *     lazy (List.fold_left
+ *             (fun set info ->
+ *                let unit_id = Compilenv.unit_id_from_name info.ui_name in
+ *                Compilation_unit.Set.add
+ *                  (Compilenv.unit_for_global unit_id) set)
+ *             Compilation_unit.Set.empty units) in
+ *   let pack_units2 : Flambda2_identifiers.Compilation_unit.Set.t lazy_t =
+ *     let unit_for_global ident : Flambda2_identifiers.Compilation_unit.t =
+ *       let linkage_name : Flambda2_identifiers.Linkage_name.t =
+ *         ident
+ *         |> Compilenv.unit_for_global
+ *         |> Compilation_unit.get_linkage_name
+ *         |> Linkage_name.to_string
+ *         |> Flambda2_identifiers.Linkage_name.create in
+ *       Flambda2_identifiers.Compilation_unit.create ident linkage_name in
+ *     lazy (List.fold_left
+ *             (fun set info ->
+ *                let unit_id : Ident.t =
+ *                  Compilenv.unit_id_from_name info.ui_name
+ *                in
+ *                Flambda2_identifiers.Compilation_unit.Set.add
+ *                  (unit_for_global unit_id) set)
+ *             Flambda2_identifiers.Compilation_unit.Set.empty units) in
+ *   let units : Cmx_format.unit_infos list =
+ *     if Config.flambda then
+ *       List.map (fun info ->
+ *           { info with
+ *             ui_export_info =
+ *               Flambda1
+ *                 (Export_info_for_pack.import_for_pack ~pack_units:(Lazy.force pack_units1)
+ *                    ~pack:(Compilenv.current_unit ())
+ *                    (get_export_info_flambda1 info)) })
+ *         units
+ *     else
+ *       units
+ *   in
+ *   let ui = Compilenv.current_unit_infos() in
+ *   let ui_export_info =
+ *     if Config.flambda then
+ *       let ui_export_info =
+ *         List.fold_left (fun acc info ->
+ *             Export_info.merge acc (get_export_info_flambda1 info))
+ *           (Export_info_for_pack.import_for_pack ~pack_units:(Lazy.force pack_units1)
+ *              ~pack:(Compilenv.current_unit ())
+ *              (get_export_info_flambda1 ui))
+ *           units
+ *       in
+ *       Flambda1 ui_export_info
+ *     else if Config.flambda2 then
+ *       let pack = Flambda2_identifiers.Compilation_unit.get_current_exn () in
+ *       let flambda_export_info =
+ *         List.fold_left (fun acc info ->
+ *             Flambda2_cmx.Flambda_cmx_format.merge
+ *               (Flambda2_cmx.Flambda_cmx_format.update_for_pack
+ *                  ~pack_units:(Lazy.force pack_units2) ~pack
+ *                  (get_export_info_flambda2 info))
+ *               acc)
+ *           (Flambda2_cmx.Flambda_cmx_format.update_for_pack
+ *              ~pack_units:(Lazy.force pack_units2) ~pack
+ *              (get_export_info_flambda2 ui))
+ *           units
+ *       in
+ *       Flambda2 flambda_export_info
+ *     else
+ *       Clambda (get_approx ui)
+ *   in
+ *   Export_info_for_pack.clear_import_state ();
+ *   let pkg_infos =
+ *     { ui_name = ui.ui_name;
+ *       ui_symbol = ui.ui_symbol;
+ *       ui_defines =
+ *           List.flatten (List.map (fun info -> info.ui_defines) units) @
+ *           [ui.ui_symbol];
+ *       ui_imports_cmi =
+ *           (ui.ui_name, Some (Env.crc_of_unit ui.ui_name)) ::
+ *           filter(Asmlink.extract_crc_interfaces());
+ *       ui_imports_cmx =
+ *           filter(Asmlink.extract_crc_implementations());
+ *       ui_curry_fun =
+ *           union(List.map (fun info -> info.ui_curry_fun) units);
+ *       ui_apply_fun =
+ *           union(List.map (fun info -> info.ui_apply_fun) units);
+ *       ui_send_fun =
+ *           union(List.map (fun info -> info.ui_send_fun) units);
+ *       ui_force_link =
+ *           List.exists (fun info -> info.ui_force_link) units;
+ *       ui_export_info;
+ *     } in
+ *   Compilenv.write_unit_info pkg_infos cmxfile *)
+
+let build_package_cmx _members _cmxfile =
+  failwith "TODO"
 
 (* Make the .cmx and the .o for the package *)
 

@@ -381,6 +381,17 @@ let global_approx id =
       | None -> Clambda.Value_unknown
       | Some ui -> get_clambda_approx ui
 
+(* Exporting and importing cross module information for Closure *)
+
+let set_global_approx_for_unit ui approx =
+  assert(not Config.flambda && not Config.flambda2);
+  match ui.ui_sections_to_write_rev with
+  | [] -> ignore ((add_section ui (Closure approx)) : int)
+  | _::_ -> Misc.fatal_error "Closure value approximation already set"
+
+let set_global_approx approx =
+  set_global_approx_for_unit current_unit approx
+
 (* Return the symbol used to refer to a global identifier *)
 
 let symbol_for_global id =
@@ -418,22 +429,31 @@ let symbol_for_global' id =
   else
     Symbol.of_global_linkage (unit_for_global id) sym_label
 
-(* Handling of export information for Flambda 2 *)
+(* Handling of export information for Flambda 1 *)
 
-(*
-let get_flambda_export_info ui =
+let set_export_info_for_unit ui (export_info : Export_info.t) =
   assert(Config.flambda);
-  match ui.ui_export_info with
-  | Clambda _ | Flambda2 _ -> assert false
-  | Flambda1 ei -> ei
+  match ui.ui_sections_to_write_rev with
+  | [] -> ignore ((add_section ui (Flambda1 export_info)) : int)
+  | _::_ -> Misc.fatal_error "Closure value approximation already set"
 
-let set_export_info export_info =
+let set_export_info (export_info : Export_info.t) : unit =
+  set_export_info_for_unit current_unit export_info
+
+let get_flambda1_export_info ui =
   assert(Config.flambda);
-  current_unit.ui_export_info <- Flambda1 export_info
-
-let flambda2_set_export_info export_info =
-  assert(Config.flambda2);
-  current_unit.ui_export_info <- Flambda2 (Some export_info)
+  if num_sections_read_from_cmx_file ui <> 1 then
+    Misc.fatal_error "Not a Flambda 1 approx (wrong number of sections)"
+  else
+    match read_section_from_cmx_file ui ~index:0 with
+    | Some info ->
+      let (info : section_contents) = Obj.obj info in
+      begin match info with
+      | Flambda1 export_info -> export_info
+      | Closure _
+      | Flambda2 _ -> Misc.fatal_error "Not a Flambda 1 export info"
+    end
+    | None -> Misc.fatal_error "Flambda 1 section could not be read"
 
 let approx_for_global comp_unit =
   let id = Compilation_unit.get_persistent_ident comp_unit in
@@ -450,24 +470,25 @@ let approx_for_global comp_unit =
     match get_global_info id with
     | None -> None
     | Some ui ->
-      let exported = get_flambda_export_info ui in
+      let exported = get_flambda1_export_info ui in
       Hashtbl.add export_infos_table modname exported;
       merged_environment := Export_info.merge !merged_environment exported;
       Some exported
 
 let approx_env () = !merged_environment
 
-(* Record that a currying function or application function is needed *)
-*)
+(* Handling of export information for Flambda 2 *)
+
 let ensure_is_flambda_section ui section_contents =
   match section_contents with
   | None -> None
   | Some section_contents ->
     match ((Obj.obj section_contents) : section_contents) with
-    | Flambda contents -> Some contents
-    | Closure _ ->
+    | Flambda2 contents -> Some contents
+    | Flambda1 _ | Closure _ ->
       Misc.fatal_errorf "The .cmx file for module %s was written by the \
-          Closure middle end, not Flambda 2.  Please recompile it."
+          Closure of Flambda 1 middle end, not Flambda 2. \
+          Please recompile it."
         ui.ui_name
 
 let read_flambda_section_from_cmx_file ui ~index =
@@ -480,7 +501,7 @@ let read_flambda_header_section_for_unit_from_cmx_file ui =
   read_section_from_cmx_file ui ~index
   |> ensure_is_flambda_section ui
   |> Option.map (fun contents ->
-      Flambda_cmx_format.associate_with_loaded_cmx_file
+      Flambda2_cmx.Flambda_cmx_format.associate_with_loaded_cmx_file
         ~header_contents:contents
         ~read_flambda_section_from_cmx_file:(fun ~index ->
           match read_flambda_section_from_cmx_file ui ~index with
@@ -500,17 +521,22 @@ let set_flambda_export_info_for_unit ui flambda_cmx =
        to take account of these offsets, before being put out as the last
        section. *)
     let header_contents =
-      Flambda_cmx_format.header_contents flambda_cmx
+      Flambda2_cmx.Flambda_cmx_format.header_contents flambda_cmx
         ~add_code_section:(fun contents ->
-          add_section ui (Flambda contents))
+          add_section ui (Flambda2 contents))
       |> Obj.repr
     in
-    ignore ((add_section ui (Flambda header_contents)) : int)
+    ignore ((add_section ui (Flambda2 header_contents)) : int)
   | _::_ -> Misc.fatal_error "Flambda export info already set"
 
 let set_flambda_export_info flambda_cmx =
   set_flambda_export_info_for_unit current_unit flambda_cmx
+
+let flambda2_set_export_info = set_flambda_export_info
+(* XXX apply rename *)
 (* >>>>>>> 78ecc37ccb (split cmx) *)
+
+(* Record that a currying function or application function is needed *)
 
 let need_curry_fun n =
   if not (List.mem n current_unit.ui_curry_fun) then

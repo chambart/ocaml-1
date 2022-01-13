@@ -79,21 +79,7 @@ let get_global_info comp_unit =
          Closure_conversion about the linkage names of module blocks *)
       Compilation_unit.get_persistent_ident comp_unit
     in
-    match Compilenv.get_global_info' id with
-    | None | Some (Flambda2 None) -> None
-    | Some (Flambda2 (Some info)) -> Some info
-    | Some (Clambda _) ->
-      (* CR mshinwell: This should be a user error, not a fatal error. Same
-         below. *)
-      Misc.fatal_errorf
-        "The .cmx file for unit %a was compiled with the Closure middle-end, \
-         not Flambda 2, and cannot be loaded"
-        Compilation_unit.print comp_unit
-    | Some (Flambda1 _) ->
-      Misc.fatal_errorf
-        "The .cmx file for unit %a was compiled with the Flambda 1 middle-end, \
-         not Flambda 2, and cannot be loaded"
-        Compilation_unit.print comp_unit
+    Compilenv.read_flambda_header_section_from_cmx_file id
 
 let print_rawflambda ppf unit =
   if Flambda_features.dump_rawflambda ()

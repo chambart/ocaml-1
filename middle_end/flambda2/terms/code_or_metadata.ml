@@ -15,20 +15,111 @@
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+type code_in_cmx =
+  { code : Code.t;
+    table_data : Ids_for_export.Table_data.t
+  }
+
+type loader =
+  { (* To avoid creating a new closure per piece of code, we record here a
+       closure that is able to load from the correct .cmx file (values of type
+       [t] may involve code from various different .cmx files), with the actual
+       section index stored separately in the [code_sections_map] (which was
+       already computed). *)
+    read_flambda_section_from_cmx_file : index:int -> code_in_cmx;
+    used_closure_vars : Var_within_closure.Set.t;
+    original_compilation_unit : Compilation_unit.t;
+    code_sections_map : int Code_id.Map.t
+  }
+
+[@@@ocaml.warning "-37"]
+
+type code_status =
+  | Loaded of Code.t
+  | Not_loaded of
+      { loader : loader;
+        code_id : Code_id.t;
+        metadata : Code_metadata.t
+      }
+(* XXX represent in type *)
+  | Pending_association_with_cmx_file of Code_metadata.t
+
 type t =
-  | Code_present of Code.t
+  | Code_present of { mutable code : code_status }
   | Metadata_only of Code_metadata.t
 
-let print ppf t =
+module View = struct
+  type t =
+    | Code_present of Code.t
+    | Metadata_only of Code_metadata.t
+end
+
+let [@ocamlformat "disable"] print ppf t =
   match t with
-  | Code_present code ->
+  | Code_present { code = Loaded code } ->
     Format.fprintf ppf "@[<hov 1>(Code_present@ (@[<hov 1>(code@ %a)@]))@]"
       Code.print code
+  | Code_present { code = Not_loaded not_loaded } ->
+    Format.fprintf ppf
+      "@[<hov 1>(Present@ (\
+         @[<hov 1>(code@ Not_loaded)@]\
+         @[<hov 1>(metadata@ %a)@]\
+       ))@]"
+      Code_metadata.print not_loaded.metadata
+  | Code_present { code = Pending_association_with_cmx_file metadata; } ->
+    Format.fprintf ppf
+      "@[<hov 1>(Present@ (\
+         @[<hov 1>(code@ Pending_association_with_cmx_file)@]\
+         @[<hov 1>(metadata@ %a)@]\
+       ))@]"
+      Code_metadata.print metadata
   | Metadata_only code_metadata ->
     Format.fprintf ppf "@[<hov 1>(Metadata_only@ (code_metadata@ %a))@]"
       Code_metadata.print code_metadata
 
-let create code = Code_present code
+let create code = Code_present { code = Loaded code }
+
+let load_code
+    { code_sections_map;
+      read_flambda_section_from_cmx_file;
+      used_closure_vars;
+      original_compilation_unit
+    } code_id : Code.t =
+  match Code_id.Map.find code_id code_sections_map with
+  | exception Not_found ->
+    Misc.fatal_errorf "Code ID %a not found in code sections map:@ %a"
+      Code_id.print code_id
+      (Code_id.Map.print Numbers.Int.print)
+      code_sections_map
+  | index ->
+    (* This calls back into [Compilenv]. *)
+    let { code; table_data } = read_flambda_section_from_cmx_file ~index in
+    let renaming =
+      Ids_for_export.Table_data.to_import_renaming table_data ~used_closure_vars
+        ~original_compilation_unit
+    in
+    Code.apply_renaming code renaming
+
+let load_code_if_necessary code =
+  match code with
+  | Loaded code -> code
+  | Not_loaded { loader; code_id; metadata = _ } -> load_code loader code_id
+  | Pending_association_with_cmx_file _ ->
+    Misc.fatal_error
+      "Must associate [Exported_code] with a .cmx file before calling \
+       [load_code_if_necessary]"
+
+(* let load_if_necessary t =
+ *   match t with
+ *   | Code_present present ->
+ *     let code = load_code_if_necessary present.code in
+ *     present.code <- Loaded code
+ *   | Metadata_only _ -> () *)
+
+let code_status_metadata = function
+  | Loaded code -> Code.code_metadata code
+  | Not_loaded { metadata; _ } -> metadata
+  | Pending_association_with_cmx_file metadata -> metadata
 
 let merge code_id t1 t2 =
   match t1, t2 with
@@ -42,9 +133,9 @@ let merge code_id t1 t2 =
   | Code_present _, Code_present _ ->
     Misc.fatal_errorf "Cannot merge two definitions for code id %a"
       Code_id.print code_id
-  | Metadata_only cm_imported, (Code_present code_present as t)
-  | (Code_present code_present as t), Metadata_only cm_imported ->
-    let cm_present = Code.code_metadata code_present in
+  | Metadata_only cm_imported, (Code_present { code } as t)
+  | (Code_present { code } as t), Metadata_only cm_imported ->
+    let cm_present = code_status_metadata code in
     if Code_metadata.approx_equal cm_present cm_imported
     then Some t
     else
@@ -56,36 +147,67 @@ let merge code_id t1 t2 =
 
 let free_names t =
   match t with
-  | Code_present code -> Code.free_names code
+  | Code_present present ->
+    let code = load_code_if_necessary present.code in
+    present.code <- Loaded code;
+    Code.free_names code
   | Metadata_only code_metadata -> Code_metadata.free_names code_metadata
 
 let apply_renaming t renaming =
   match t with
-  | Code_present code ->
+  | Code_present present ->
+    (* XXX In the original patch apply renaming does nothing on not loaded code
+       Is that ok ? Why (parce qu'il n'y a pas de noms en commun ?) ?
+       Qu'en est-t'il des metadata ? *)
+    let code = load_code_if_necessary present.code in
+    present.code <- Loaded code;
     let code = Code.apply_renaming code renaming in
-    Code_present code
+    Code_present { code = Loaded code }
   | Metadata_only code_metadata ->
     let code_metadata = Code_metadata.apply_renaming code_metadata renaming in
     Metadata_only code_metadata
 
 let all_ids_for_export t =
   match t with
-  | Code_present code -> Code.all_ids_for_export code
+  | Code_present present ->
+    let code = load_code_if_necessary present.code in
+    present.code <- Loaded code;
+    Code.all_ids_for_export code
   | Metadata_only code_metadata ->
     Code_metadata.all_ids_for_export code_metadata
 
-let remember_only_metadata t =
-  match t with
-  | Code_present code -> Metadata_only (Code.code_metadata code)
-  | Metadata_only _ -> t
-
 let code_metadata t =
   match t with
-  | Code_present code -> Code.code_metadata code
+  | Code_present { code } -> code_status_metadata code
   | Metadata_only code_metadata -> code_metadata
 
+let remember_only_metadata t =
+  match t with
+  | Code_present { code } -> Metadata_only (code_status_metadata code)
+  | Metadata_only _ -> t
+
 let iter_code t ~f =
-  match t with Code_present code -> f code | Metadata_only _ -> ()
+  match t with
+  | Code_present { code } ->
+    let code = load_code_if_necessary code in
+    f code
+  | Metadata_only _ -> ()
+
+let fold_code_for_cmx t ~init ~f =
+  match t with
+  | Code_present { code } ->
+    let code = load_code_if_necessary code in
+    let table_data =
+      Code.all_ids_for_export code
+      |> Ids_for_export.Table_data.create
+    in
+    let code_in_cmx =
+      { code;
+        table_data;
+      }
+    in
+    f init code_in_cmx
+  | Metadata_only _ -> init
 
 let map_result_types t ~f =
   match t with
@@ -95,3 +217,30 @@ let map_result_types t ~f =
 
 let code_present t =
   match t with Code_present _ -> true | Metadata_only _ -> false
+
+let view (t : t) : View.t =
+  match t with
+  | Code_present present ->
+    let code = load_code_if_necessary present.code in
+    present.code <- Loaded code;
+    Code_present code
+  | Metadata_only code_metadata ->
+    Metadata_only code_metadata
+
+let prepare_for_cmx_header_section t =
+  match t with
+  | Code_present present ->
+    let metadata = code_status_metadata present.code in
+    Code_present { code = Pending_association_with_cmx_file metadata }
+  | Metadata_only _ ->
+    t
+
+let associate_with_loaded_cmx_file t code_id loader =
+  match t with
+  | Code_present { code = (Loaded _ | Not_loaded _) } ->
+    Misc.fatal_error "Code in .cmx files should always be in state \
+                      [Pending_association_with_cmx_file]"
+  | Code_present { code = Pending_association_with_cmx_file metadata } ->
+    Code_present { code = Not_loaded { loader; code_id; metadata } }
+  | Metadata_only _ ->
+    t

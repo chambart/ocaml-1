@@ -161,13 +161,12 @@ module Table_data = struct
       continuations;
     }
 
-  let to_import_renaming t ~used_closure_vars =
+  let to_import_renaming t ~used_closure_vars ~original_compilation_unit =
     (* First create map for data that does not contain ids, i.e. everything
       except simples *)
-    let filter import =
-      fun key data ->
-        let new_key = import data in
-        if key == new_key then None else Some new_key
+    let filter import key data =
+      let new_key = import data in
+      if key == new_key then None else Some new_key
     in
     let symbols =
       Symbol.Map.filter_map (filter Symbol.import) t.symbols
@@ -178,24 +177,50 @@ module Table_data = struct
     let simples =
       Simple.Map.filter_map (filter Simple.import) t.simples
     in
-    let consts =
-      Const.Map.filter_map (filter Const.import) t.consts
-    in
+    let consts = Const.Map.filter_map (filter Const.import) t.consts in
     let code_ids =
       Code_id.Map.filter_map (filter Code_id.import) t.code_ids
     in
     let continuations =
-      Continuation.Map.filter_map (filter Continuation.import)
+      Continuation.Map.filter_map
+        (filter Continuation.import)
         t.continuations
     in
-    Renaming.create_import_map
-      ~symbols
-      ~variables
-      ~simples
-      ~consts
-      ~code_ids
-      ~continuations
-      ~used_closure_vars
+    Renaming.create_import_map ~symbols ~variables ~simples ~consts ~code_ids
+      ~continuations ~used_closure_vars ~original_compilation_unit
+
+    (* let filter import =
+     *   fun key data ->
+     *     let new_key = import data in
+     *     if key == new_key then None else Some new_key
+     * in
+     * let symbols =
+     *   Symbol.Map.filter_map (filter Symbol.import) t.symbols
+     * in
+     * let variables =
+     *   Variable.Map.filter_map (filter Variable.import) t.variables
+     * in
+     * let simples =
+     *   Simple.Map.filter_map (filter Simple.import) t.simples
+     * in
+     * let consts =
+     *   Const.Map.filter_map (filter Const.import) t.consts
+     * in
+     * let code_ids =
+     *   Code_id.Map.filter_map (filter Code_id.import) t.code_ids
+     * in
+     * let continuations =
+     *   Continuation.Map.filter_map (filter Continuation.import)
+     *     t.continuations
+     * in
+     * Renaming.create_import_map
+     *   ~symbols
+     *   ~variables
+     *   ~simples
+     *   ~consts
+     *   ~code_ids
+     *   ~continuations
+     *   ~used_closure_vars *)
 
   let update_for_pack t ~pack_units ~pack =
     let update_cu unit =

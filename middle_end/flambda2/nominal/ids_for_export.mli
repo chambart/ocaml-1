@@ -68,14 +68,12 @@ module Table_data : sig
 
   val create : ids_for_export -> t
 
-  val to_import_renaming
-     : t
-    -> used_closure_vars:Var_within_closure.Set.t
-    -> Renaming.t
+  val to_import_renaming :
+    t ->
+    used_closure_vars:Var_within_closure.Set.t ->
+    original_compilation_unit:Compilation_unit.t ->
+    Renaming.t
 
-  val update_for_pack
-     : t
-    -> pack_units:Compilation_unit.Set.t
-    -> pack:Compilation_unit.t
-    -> t
+  val update_for_pack :
+    t -> pack_units:Compilation_unit.Set.t -> pack:Compilation_unit.t -> t
 end

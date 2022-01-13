@@ -98,6 +98,16 @@ val record_global_approx_toplevel: unit -> unit
         (* Record the current approximation for the current toplevel phrase
            clambda-only *)
 
+val set_export_info: Export_info.t -> unit
+        (* Record the information of the unit being compiled
+           flambda-only *)
+val approx_env: unit -> Export_info.t
+        (* Returns all the information loaded from external compilation units
+           flambda-only *)
+val approx_for_global: Compilation_unit.t -> Export_info.t option
+        (* Loads the exported information declaring the compilation_unit
+           flambda-only *)
+
 val clear_export_info_for_unit : Cmx_format.unit_infos -> unit
 
 val read_flambda_header_section_for_unit_from_cmx_file

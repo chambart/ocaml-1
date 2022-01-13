@@ -17,14 +17,25 @@
 
 module C = Code
 
-type t = Code_or_metadata.t Code_id.Map.t
+type t =
+  { code : Code_or_metadata.t Code_id.Map.t;
+    (* XXX code_sections_map inutile ? *)
+    code_sections_map : int Code_id.Map.t
+  }
 
-let print ppf t = Code_id.Map.print Code_or_metadata.print ppf t
+let [@ocamlformat "disable"] print ppf { code; code_sections_map; } =
+  Format.fprintf ppf "@[<hov 1>(\
+      @[(code@ %a)@]@ \
+      @[(code_sections_map@ %a)@]\
+      @]"
+  (Code_id.Map.print Code_or_metadata.print) code
+  (Code_id.Map.print Numbers.Int.print) code_sections_map
 
-let empty = Code_id.Map.empty
+let empty = { code = Code_id.Map.empty; code_sections_map = Code_id.Map.empty }
 
 let add_code ~keep_code code_map t =
-  Code_id.Map.mapi
+  let added_code =
+    Code_id.Map.mapi
     (fun code_id code ->
       if not (Code_id.equal code_id (Code.code_id code))
       then
@@ -38,19 +49,31 @@ let add_code ~keep_code code_map t =
       then Code_or_metadata.remember_only_metadata code_or_metadata
       else code_or_metadata)
     code_map
-  |> Code_id.Map.disjoint_union t
+  in
+  { t with code = Code_id.Map.disjoint_union t.code added_code }
 
 let mark_as_imported t =
-  Code_id.Map.map_sharing Code_or_metadata.remember_only_metadata t
+  let code = Code_id.Map.map_sharing Code_or_metadata.remember_only_metadata t.code in
+  { t with code; }
 
-let merge t1 t2 = Code_id.Map.union Code_or_metadata.merge t1 t2
+let merge
+      { code = code1; code_sections_map = code_sections_map1; }
+      { code = code2; code_sections_map = code_sections_map2; } =
+  let code = Code_id.Map.union Code_or_metadata.merge code1 code2 in
+  let code_sections_map =
+    Code_id.Map.disjoint_union code_sections_map1 code_sections_map2
+  in
+  { code;
+    code_sections_map;
+  }
 
-let mem code_id t = Code_id.Map.mem code_id t
 
-let find_exn t code_id = Code_id.Map.find code_id t
+let mem code_id t = Code_id.Map.mem code_id t.code
+
+let find_exn t code_id = Code_id.Map.find code_id t.code
 
 let find t code_id =
-  match Code_id.Map.find code_id t with
+  match Code_id.Map.find code_id t.code with
   | exception Not_found ->
     (* In some cases a code ID is created, the corresponding closure stored into
        another closure, but the corresponding closure variable ends up never
@@ -70,10 +93,13 @@ let find t code_id =
   | code_or_metadata -> Some code_or_metadata
 
 let remove_unreachable ~reachable_names t =
+  let code =
   Code_id.Map.filter
     (fun code_id _code_or_metadata ->
       Name_occurrences.mem_code_id reachable_names code_id)
-    t
+    t.code
+  in
+  { t with code }
 
 let remove_unused_closure_vars_from_result_types ~used_closure_vars t =
   Code_id.Map.map
@@ -88,27 +114,65 @@ let all_ids_for_export t =
       Ids_for_export.union
         (Ids_for_export.add_code_id all_ids code_id)
         (Code_or_metadata.all_ids_for_export code_or_metadata))
-    t Ids_for_export.empty
+    t.code Ids_for_export.empty
 
 let apply_renaming code_id_map renaming t =
   if Renaming.is_empty renaming && Code_id.Map.is_empty code_id_map
   then t
   else
-    Code_id.Map.fold
-      (fun code_id code_or_metadata all_code ->
-        let code_id =
-          match Code_id.Map.find code_id code_id_map with
-          | exception Not_found -> code_id
-          | code_id -> code_id
-        in
-        let code_or_metadata =
-          Code_or_metadata.apply_renaming code_or_metadata renaming
-        in
-        Code_id.Map.add code_id code_or_metadata all_code)
-      t Code_id.Map.empty
+    let code =
+      Code_id.Map.fold
+        (fun code_id code_or_metadata all_code ->
+           let code_id =
+             match Code_id.Map.find code_id code_id_map with
+             | exception Not_found -> code_id
+             | code_id -> code_id
+           in
+           let code_or_metadata =
+             Code_or_metadata.apply_renaming code_or_metadata renaming
+           in
+           Code_id.Map.add code_id code_or_metadata all_code)
+        t.code Code_id.Map.empty
+    in
+    (* XXX Shouldn't we also rename the code_section_map ? *)
+    { t with code }
 
 let iter_code t ~f =
   Code_id.Map.iter
     (fun _code_id code_or_metadata ->
       Code_or_metadata.iter_code code_or_metadata ~f)
-    t
+    t.code
+
+let fold_for_cmx t ~init ~f =
+  Code_id.Map.fold (fun code_id code_or_metadata acc ->
+      Code_or_metadata.fold_code_for_cmx code_or_metadata ~init:acc
+        ~f:(fun acc code_in_cmx -> f acc code_id (Obj.repr code_in_cmx)))
+        t.code
+        init
+
+let prepare_for_cmx_header_section t =
+  let code =
+    Code_id.Map.map Code_or_metadata.prepare_for_cmx_header_section t.code
+  in
+  { t with code }
+
+let associate_with_loaded_cmx_file t
+      ~read_flambda_section_from_cmx_file ~code_sections_map
+      ~used_closure_vars ~original_compilation_unit =
+  let read_flambda_section_from_cmx_file ~index : Code_or_metadata.code_in_cmx =
+    read_flambda_section_from_cmx_file ~index
+    |> Obj.obj
+  in
+  let loader : Code_or_metadata.loader = {
+    read_flambda_section_from_cmx_file;
+    used_closure_vars;
+    original_compilation_unit;
+    code_sections_map;
+    }
+  in
+  let code =
+    Code_id.Map.mapi (fun code_id code_or_metadata ->
+        Code_or_metadata.associate_with_loaded_cmx_file code_or_metadata code_id loader)
+      t.code
+  in
+  { code; code_sections_map; }
