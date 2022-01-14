@@ -138,7 +138,12 @@ end = struct
       let export_id = Symbol.Map.find sym t.sym in
       Some (Export_id.Map.find export_id !(t.ex_table))
     with
-    | Not_found -> extern_symbol_descr sym
+    | Not_found ->
+      (* In a top level symbol let rec, there can be some yet undefined symbol,
+         we don't want to try loading them from the cmx *)
+      if Compilation_unit.is_current (Symbol.compilation_unit sym)
+      then None
+      else extern_symbol_descr sym
 
   let get_descr t (approx : Export_info.approx) =
     match approx with
