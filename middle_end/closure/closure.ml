@@ -1132,8 +1132,13 @@ let rec close ({ backend; fenv; cenv ; mutable_vars } as env) lam =
          })
   | Lprim(Pgetglobal id, [], loc) ->
       let dbg = Debuginfo.from_location loc in
-      check_constant_result (getglobal dbg id)
-                            (Compilenv.global_approx id)
+      let approx =
+        let modname = Ident.name id in
+        if modname = Compilenv.current_unit_name () then
+           Value_tuple !global_approx
+        else Compilenv.global_approx id
+      in
+      check_constant_result (getglobal dbg id) approx
   | Lprim(Pfield (n, _), [lam], loc) ->
       let (ulam, approx) = close env lam in
       let dbg = Debuginfo.from_location loc in
