@@ -168,15 +168,6 @@ let make_package_object ~ppf_dump members targetobj targetname coercion
 
 (* Make the .cmx file for the package *)
 
-let get_export_info_flambda2 ui : Flambda2_cmx.Flambda_cmx_format.t option =
-  assert(Config.flambda2);
-  (* match ui.ui_export_info with
-   * | Clambda _ -> assert false
-   * | Flambda1 _ -> assert false
-   * | Flambda2 info -> info *)
-  ignore ui;
-  assert false
-
 let build_package_cmx members cmxfile =
   let unit_names =
     List.map (fun m -> m.pm_name) members in
@@ -275,11 +266,11 @@ let build_package_cmx members cmxfile =
           Flambda2_cmx.Flambda_cmx_format.merge
             (Flambda2_cmx.Flambda_cmx_format.update_for_pack
                ~pack_units:(Lazy.force pack_units2) ~pack
-               (get_export_info_flambda2 info))
+               (Compilenv.read_flambda_header_section_for_unit_from_cmx_file info))
             acc)
         (Flambda2_cmx.Flambda_cmx_format.update_for_pack
            ~pack_units:(Lazy.force pack_units2) ~pack
-           (get_export_info_flambda2 ui))
+           (Compilenv.read_flambda_header_section_for_unit_from_cmx_file ui))
         units
     in
     Option.iter (Compilenv.set_flambda_export_info_for_unit pkg_infos)
