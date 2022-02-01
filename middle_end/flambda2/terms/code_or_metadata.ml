@@ -48,10 +48,10 @@ module Present = struct
     | Metadata_only
 end
 
-type raw = {
-  metadata : Code_metadata.t;
-  present : Present.t;
-}
+type raw =
+  { metadata : Code_metadata.t;
+    present : Present.t
+  }
 
 type t =
   | Code_present of { mutable code : code_status }
@@ -147,8 +147,8 @@ let apply_renaming t renaming =
   match t with
   | Code_present present ->
     (* XXX In the original patch apply renaming does nothing on not loaded code
-       Is that ok ? Why (parce qu'il n'y a pas de noms en commun ?) ?
-       Qu'en est-t'il des metadata ? *)
+       Is that ok ? Why (parce qu'il n'y a pas de noms en commun ?) ? Qu'en
+       est-t'il des metadata ? *)
     let code = load_code_if_necessary present.code in
     present.code <- Loaded code;
     let code = Code.apply_renaming code renaming in
@@ -188,20 +188,24 @@ let fold_code_for_cmx t ~init ~f =
   | Code_present { code } ->
     let code = load_code_if_necessary code in
     let table_data =
-      Code.all_ids_for_export code
-      |> Ids_for_export.Table_data.create
+      Code.all_ids_for_export code |> Ids_for_export.Table_data.create
     in
-    let code_in_cmx =
-      { code;
-        table_data;
-      }
-    in
+    let code_in_cmx = { code; table_data } in
     f init code_in_cmx
   | Metadata_only _ -> init
 
 let map_result_types t ~f =
   match t with
-  | Code_present code -> Code_present (Code.map_result_types code ~f)
+  | Code_present { code = Not_loaded not_loaded } ->
+    Code_present
+      { code =
+          Not_loaded
+            { not_loaded with
+              metadata = Code_metadata.map_result_types not_loaded.metadata ~f
+            }
+      }
+  | Code_present { code = Loaded code } ->
+    Code_present { code = Loaded (Code.map_result_types code ~f) }
   | Metadata_only code_metadata ->
     Metadata_only (Code_metadata.map_result_types code_metadata ~f)
 
@@ -214,20 +218,17 @@ let view (t : t) : View.t =
     let code = load_code_if_necessary present.code in
     present.code <- Loaded code;
     Code_present code
-  | Metadata_only code_metadata ->
-    Metadata_only code_metadata
+  | Metadata_only code_metadata -> Metadata_only code_metadata
 
 let prepare_for_cmx_header_section t : raw =
   match t with
   | Code_present present ->
     let metadata = code_status_metadata present.code in
     { metadata; present = Code_present }
-  | Metadata_only metadata ->
-    { metadata; present = Metadata_only }
+  | Metadata_only metadata -> { metadata; present = Metadata_only }
 
-let associate_with_loaded_cmx_file {metadata; present} code_id loader =
+let associate_with_loaded_cmx_file { metadata; present } code_id loader =
   match present with
   | Code_present ->
     Code_present { code = Not_loaded { loader; code_id; metadata } }
-  | Metadata_only ->
-    Metadata_only metadata
+  | Metadata_only -> Metadata_only metadata

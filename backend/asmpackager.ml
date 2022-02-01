@@ -281,7 +281,6 @@ let build_package_cmx members cmxfile =
       (Compilenv.global_approx_for_unit ui)
   end;
   Compilenv.write_unit_info pkg_infos cmxfile
->>>>>>> 1beef28734 (WIP asmpackager)
 
 (* Make the .cmx and the .o for the package *)
 

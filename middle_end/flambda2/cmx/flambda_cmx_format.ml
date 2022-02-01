@@ -47,6 +47,69 @@ type raw = raw_t0 list
 let empty = []
 
 let create ~final_typing_env ~all_code ~exported_offsets ~used_closure_vars =
+  let typing_env_exported_ids =
+    Flambda2_types.Typing_env.Serializable.all_ids_for_export final_typing_env
+  in
+  let all_code_exported_ids = Exported_code.all_ids_for_export all_code in
+  let exported_ids =
+    Ids_for_export.union typing_env_exported_ids all_code_exported_ids
+  in
+  let symbols =
+    Symbol.Set.fold
+      (fun symbol symbols -> (symbol, Symbol.export symbol) :: symbols)
+      exported_ids.symbols []
+  in
+  let variables =
+    Variable.Set.fold
+      (fun variable variables ->
+        (variable, Variable.export variable) :: variables)
+      exported_ids.variables []
+  in
+  let simples =
+    Reg_width_things.Simple.Set.fold
+      (fun simple simples -> (simple, Simple.export simple) :: simples)
+      exported_ids.simples []
+  in
+  let consts =
+    Const.Set.fold
+      (fun const consts -> (const, Const.export const) :: consts)
+      exported_ids.consts []
+  in
+  let code_ids =
+    Code_id.Set.fold
+      (fun code_id code_ids -> (code_id, Code_id.export code_id) :: code_ids)
+      exported_ids.code_ids []
+  in
+  let continuations =
+    Continuation.Set.fold
+      (fun continuation continuations ->
+        (continuation, Continuation.export continuation) :: continuations)
+      exported_ids.continuations []
+  in
+  let table_data =
+    { symbols; variables; simples; consts; code_ids; continuations }
+  in
+  [ { original_compilation_unit = Compilation_unit.get_current_exn ();
+      final_typing_env;
+      all_code;
+      exported_offsets;
+      used_closure_vars;
+      table_data
+    } ]
+
+(* let create ~final_typing_env ~all_code ~exported_offsets ~used_closure_vars =
+ *   let table_data =
+ *     Typing_env.Serializable.all_ids_for_export final_typing_env
+ *     |> Ids_for_export.Table_data.create
+ *   in
+ *   [{ original_compilation_unit = Compilation_unit.get_current_exn ();
+ *      final_typing_env;
+ *      all_code;
+ *      exported_offsets;
+ *      used_closure_vars;
+ *      table_data;
+ *   }] *)
+
 (* XXX Verifier
   let typing_env_exported_ids =
     Flambda2_types.Typing_env.Serializable.all_ids_for_export final_typing_env
@@ -158,30 +221,86 @@ let import_typing_env_and_code0 t =
     Renaming.create_import_map ~symbols ~variables ~simples ~consts ~code_ids
       ~continuations ~used_closure_vars ~original_compilation_unit
 *)
-  let table_data =
-    Typing_env.Serializable.all_ids_for_export final_typing_env
-    |> Ids_for_export.Table_data.create
-  in
-  [{ original_compilation_unit = Compilation_unit.get_current_exn ();
-     final_typing_env;
-     all_code;
-     exported_offsets;
-     used_closure_vars;
-     table_data;
-  }]
+
+module Make_importer (S : sig
+  type t
+
+  type exported
+
+  val import : exported -> t
+
+  val map_compilation_unit :
+    (Compilation_unit.t -> Compilation_unit.t) -> exported -> exported
+
+  include Container_types.S with type t := t
+end) : sig
+  val import : (S.t * S.exported) list -> S.t S.Map.t
+
+  val update_for_pack :
+    pack_units:Compilation_unit.Set.t ->
+    pack:Compilation_unit.t ->
+    (S.t * S.exported) list ->
+    (S.t * S.exported) list
+end = struct
+  let import from_table_data =
+    (* The returned map gives the hash collisions. *)
+    List.fold_left
+      (fun import_map (key, exported) ->
+        let new_key = S.import exported in
+        if key == new_key then import_map else S.Map.add key new_key import_map)
+      S.Map.empty from_table_data
+
+  let update_for_pack ~pack_units ~pack from_table_data =
+    let update_cu unit =
+      if Compilation_unit.Set.mem unit pack_units then pack else unit
+    in
+    List.map
+      (fun (symbol, exported) ->
+        let exported = S.map_compilation_unit update_cu exported in
+        symbol, exported)
+      from_table_data
+end
+[@@inline always]
+
+module Symbol_importer = Make_importer (Symbol)
+module Variable_importer = Make_importer (Variable)
+module Simple_importer = Make_importer (Simple)
+module Const_importer = Make_importer (Const)
+module Code_id_importer = Make_importer (Code_id)
+module Continuation_importer = Make_importer (Continuation)
 
 let import_typing_env_and_code0 t =
+  let symbols = Symbol_importer.import t.table_data.symbols in
+  let variables = Variable_importer.import t.table_data.variables in
+  let simples = Simple_importer.import t.table_data.simples in
+  let consts = Const_importer.import t.table_data.consts in
+  let code_ids = Code_id_importer.import t.table_data.code_ids in
+  let continuations = Continuation_importer.import t.table_data.continuations in
+  let used_closure_vars = t.used_closure_vars in
+  let original_compilation_unit = t.original_compilation_unit in
   let renaming =
-    Ids_for_export.Table_data.to_import_renaming t.table_data
-      ~used_closure_vars:t.used_closure_vars
-      ~original_compilation_unit:t.original_compilation_unit
+    Renaming.create_import_map ~symbols ~variables ~simples ~consts ~code_ids
+      ~continuations ~used_closure_vars ~original_compilation_unit
   in
   let typing_env =
     Flambda2_types.Typing_env.Serializable.apply_renaming t.final_typing_env
       renaming
   in
-  (* XXX APPLY RENAMING TO CODE *)
+  (* XXX APPLY RENAMING TO CODE ? en fait non à faire plus tard *)
   typing_env, t.all_code
+
+(* let import_typing_env_and_code0 t =
+ *   let renaming =
+ *     Ids_for_export.Table_data.to_import_renaming t.table_data
+ *       ~used_closure_vars:t.used_closure_vars
+ *       ~original_compilation_unit:t.original_compilation_unit
+ *   in
+ *   let typing_env =
+ *     Flambda2_types.Typing_env.Serializable.apply_renaming t.final_typing_env
+ *       renaming
+ *   in
+ *   (\* XXX APPLY RENAMING TO CODE *\)
+ *   typing_env, t.all_code *)
 
 let import_typing_env_and_code t =
   match t with
@@ -216,10 +335,6 @@ let with_exported_offsets t exported_offsets =
     Misc.fatal_error "Cannot set exported offsets on multiple units"
 
 let update_for_pack0 ~pack_units ~pack t =
-(* XXX verifier
-  let update_cu unit =
-    if Compilation_unit.Set.mem unit pack_units then pack else unit
-  in
   let symbols =
     Symbol_importer.update_for_pack ~pack_units ~pack t.table_data.symbols
   in
@@ -241,9 +356,6 @@ let update_for_pack0 ~pack_units ~pack t =
   in
   let table_data =
     { symbols; variables; simples; consts; code_ids; continuations }
-*)
-  let table_data =
-    Ids_for_export.Table_data.update_for_pack t.table_data ~pack_units ~pack
   in
   { t with table_data }
 
@@ -255,10 +367,14 @@ let update_for_pack ~pack_units ~pack t_opt =
 let merge t1_opt t2_opt =
   match t1_opt, t2_opt with
   | None, None -> None
-  | Some _, None | None, Some _ ->
+  | Some _, None ->
+    Misc.fatal_error
+      "A Some pack units do not have their export info set.\n\
+       Flambda doesn't support packing opaque and normal units together."
+  | None, Some _ ->
     (* CR vlaviron: turn this into a proper user error *)
     Misc.fatal_error
-      "Some pack units do not have their export info set.\n\
+      "B Some pack units do not have their export info set.\n\
        Flambda doesn't support packing opaque and normal units together."
   | Some t1, Some t2 -> Some (t1 @ t2)
 
