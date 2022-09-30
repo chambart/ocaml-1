@@ -75,6 +75,7 @@ external with_tag : int -> t -> t = "caml_obj_with_tag"
   (* @since 4.09.0 *)
 
 val null : t
+external null_symbol : t = "caml_null_value"
 
 val first_non_constant_constructor_tag : int
 val last_non_constant_constructor_tag : int

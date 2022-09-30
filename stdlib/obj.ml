@@ -48,6 +48,7 @@ external add_offset : t -> Int32.t -> t = "caml_obj_add_offset"
 external with_tag : int -> t -> t = "caml_obj_with_tag"
 
 external get_null : unit -> t = "caml_get_null" [@@noalloc]
+external null_symbol : t = "caml_null_value"
 
 let null = get_null ()
 
