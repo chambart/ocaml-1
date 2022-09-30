@@ -1068,13 +1068,19 @@ value caml_interprete(code_t prog, asize_t prog_size)
       Next;
     Instruct(C_CALLN): {
       int nargs = *pc++;
-      *--sp = accu;
-      Setup_for_c_call;
-      accu = Primitive(*pc)(sp + 2, nargs);
-      Restore_after_c_call;
-      sp += nargs;
-      pc++;
-      Next;
+      if(nargs == 0) {
+        accu = (value) caml_prim_table.contents[*pc];
+        pc++;
+        Next;
+      } else {
+        *--sp = accu;
+        Setup_for_c_call;
+        accu = Primitive(*pc)(sp + 2, nargs);
+        Restore_after_c_call;
+        sp += nargs;
+        pc++;
+        Next;
+      }
     }
 
 /* Integer constants */

@@ -43,7 +43,6 @@ type error =
       defined_as: type_expr;
       expansions: (type_expr * type_expr) list;
     }
-  | Null_arity_external
   | Missing_native_external
   | Unbound_type_var of type_expr * type_declaration
   | Cannot_extend_private_type of Path.t
@@ -1392,9 +1391,6 @@ let transl_value_decl env loc valdecl =
           ~native_repr_args
           ~native_repr_res
       in
-      if prim.prim_arity = 0 &&
-         (prim.prim_name = "" || prim.prim_name.[0] <> '%') then
-        raise(Error(valdecl.pval_type.ptyp_loc, Null_arity_external));
       if !Clflags.native_code
       && prim.prim_arity > 5
       && prim.prim_native_name = ""
@@ -1750,8 +1746,6 @@ let report_error ppf = function
            fprintf ppf "This type constructor expands to type")
         (function ppf ->
            fprintf ppf "but is used here with type")
-  | Null_arity_external ->
-      fprintf ppf "External identifiers must be functions"
   | Missing_native_external ->
       fprintf ppf "@[<hv>An external function with more than 5 arguments \
                    requires a second stub function@ \

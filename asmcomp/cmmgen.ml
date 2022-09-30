@@ -460,6 +460,8 @@ let rec transl env e =
           assert false
       | (Pmakeblock(tag, _mut, _kind), args) ->
           make_alloc dbg tag (List.map (transl env) args)
+      | (Pccall prim, []) ->
+          Cconst_symbol (Primitive.native_name prim, dbg)
       | (Pccall prim, args) ->
           transl_ccall env prim args dbg
       | (Pduparray (kind, _), [Uprim (Pmakearray (kind', _), args, _dbg)]) ->

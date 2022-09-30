@@ -77,7 +77,6 @@ type error =
       defined_as: type_expr;
       expansions: (type_expr * type_expr) list;
     }
-  | Null_arity_external
   | Missing_native_external
   | Unbound_type_var of type_expr * type_declaration
   | Cannot_extend_private_type of Path.t
