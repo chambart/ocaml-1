@@ -364,3 +364,54 @@ let rec okay =
 [%%expect{|
 val okay : string ref = {contents = "foobar"}
 |}]
+
+(* Test that unused recursive values are not allowed inside while and for *)
+let rec x =
+  while false do
+    let _ = y in
+    ()
+  done;
+and y = x :: y
+[%%expect{|
+Lines 2-5, characters 2-6:
+2 | ..while false do
+3 |     let _ = y in
+4 |     ()
+5 |   done.
+Error: This kind of expression is not allowed as right-hand side of `let rec'
+|}]
+
+let rec x =
+  while false do
+    ()
+  done;
+and y = x :: y
+[%%expect{|
+val x : unit = ()
+val y : unit list = [(); <cycle>]
+|}]
+
+let rec x =
+  for _ = 0 to 1 do
+    let _ = y in
+    ()
+  done;
+and y = x :: y
+[%%expect{|
+Lines 2-5, characters 2-6:
+2 | ..for _ = 0 to 1 do
+3 |     let _ = y in
+4 |     ()
+5 |   done.
+Error: This kind of expression is not allowed as right-hand side of `let rec'
+|}]
+
+let rec x =
+  for _ = 0 to 1 do
+    ()
+  done;
+and y = x :: y
+[%%expect{|
+val x : unit = ()
+val y : unit list = [(); <cycle>]
+|}]
