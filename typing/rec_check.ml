@@ -544,14 +544,14 @@ let rec expression : Typedtree.expression -> term_judg =
       (*
         G1 |- low: m[Dereference]
         G2 |- high: m[Dereference]
-        G3 |- body: m[Guard]
+        G3 |- body: m[Dereference]
         ---
         G1 + G2 + G3 |- for _ = low to high do body done: m
       *)
       join [
         expression low << Dereference;
         expression high << Dereference;
-        expression body << Guard;
+        expression body << Dereference;
       ]
     | Texp_constant _ ->
       empty
@@ -685,13 +685,13 @@ let rec expression : Typedtree.expression -> term_judg =
     | Texp_while (cond, body) ->
       (*
         G1 |- cond: m[Dereference]
-        G2 |- body: m[Guard]
+        G2 |- body: m[Dereference]
         ---------------------------------
         G1 + G2 |- while cond do body done: m
       *)
       join [
         expression cond << Dereference;
-        expression body << Guard;
+        expression body << Dereference;
       ]
     | Texp_send (e1, _) ->
       (*
