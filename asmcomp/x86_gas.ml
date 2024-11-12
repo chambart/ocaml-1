@@ -297,6 +297,10 @@ let print_line b = function
   | Private_extern s -> bprintf b "\t.private_extern %s" s
   | Set (arg1, arg2) -> bprintf b "\t.set %s, %a" arg1 cst arg2
   | Size (s, c) -> bprintf b "\t.size %s,%a" s cst c
+  | Test_align (aligned_symbol, n) ->
+      bprintf b "\t.if (. - %s) %% %d != 0\n" aligned_symbol n;
+      bprintf b "\t.err\n";
+      bprintf b "\t.endif"
   | Type (s, typ) -> bprintf b "\t.type %s,%s" s typ
 
   (* masm only *)

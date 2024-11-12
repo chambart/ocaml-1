@@ -107,6 +107,7 @@ module D = struct
   let setvar (x, y) = directive (Set (x, y))
   let size name cst = directive (Size (name, cst))
   let space n = directive (Space n)
+  let test_align aligned_symbol n = directive (Test_align (aligned_symbol, n))
   let text () = section [ ".text" ] None []
   let type_ name typ = directive (Type (name, typ))
   let word cst = directive (Word cst)

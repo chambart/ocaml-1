@@ -252,6 +252,7 @@ let print_line b = function
   | Private_extern _
   | Set _
   | Size _
+  | Test_align _
   | Type _
     -> assert false
 

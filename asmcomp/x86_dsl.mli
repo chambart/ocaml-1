@@ -98,6 +98,7 @@ module D : sig
   val setvar: string * constant -> unit
   val size: string -> constant -> unit
   val space: int -> unit
+  val test_align: string -> int -> unit
   val text: unit -> unit
   val type_: string -> string -> unit
   val word: constant -> unit

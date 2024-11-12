@@ -230,6 +230,7 @@ type asm_line =
   | Private_extern of string
   | Set of string * constant
   | Size of string * constant
+  | Test_align of string * int
   | Type of string * string
 
 type asm_program = asm_line list

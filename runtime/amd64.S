@@ -833,8 +833,15 @@ LBL(caml_start_program):
              6*8 /* callee save regs */ +                             \
              8   /* ret addr */
 #endif
+        .align 2
+LBL(tt):
+        nop
         call    *%r12
 LBL(108):
+        .if (LBL(108) - LBL(tt)) % 2 != 0
+        .err
+        .endif
+        nop
     /* pop exn handler */
         movq    0(%rsp), %r11
         movq    %r11, Caml_state(exn_handler)
@@ -1258,8 +1265,14 @@ CFI_STARTPROC
           DW_OP_plus_uconst, RETADDR_ENTRY_SIZE
 #endif
         movq    %rdi, %rax /* first argument */
+        .align 2
+LBL(tt2):
         callq   *(%rbx) /* closure in %rbx (second argument) */
 LBL(frame_runstack):
+        .if (LBL(108) - LBL(tt)) % 2 != 0
+        .err
+        .endif
+        nop
         leaq    32(%rsp), %r11 /* SP with exn handler popped */
         movq    Handler_value(%r11), %rbx
 1:      movq    Caml_state(current_stack), C_ARG_1 /* arg to caml_free_stack */

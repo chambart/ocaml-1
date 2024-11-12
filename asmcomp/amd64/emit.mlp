@@ -258,10 +258,23 @@ let record_frame env live dbg =
   let lbl = record_frame_label env live dbg in
   def_label lbl
 
+let aligned_lbl n =
+  D.align n;
+  let aligned = new_label () in
+  def_label aligned;
+  aligned
+
+let test_align aligned_lbl n =
+  D.test_align (emit_label aligned_lbl) n
+
 let emit_call_gc gc =
+  let aligned = aligned_lbl 2 in
+  I.nop ();
   def_label gc.gc_lbl;
   emit_call "caml_call_gc";
   def_label gc.gc_frame_lbl;
+  test_align aligned 2;
+  I.nop ();
   I.jmp (label gc.gc_return_lbl)
 
 let bound_error_label env dbg =
@@ -281,9 +294,13 @@ let bound_error_label env dbg =
   end
 
 let emit_call_bound_error bd =
+  let aligned = aligned_lbl 2 in
+  I.nop ();
   def_label bd.bd_lbl;
   emit_call "caml_ml_array_bound_error";
-  def_label bd.bd_frame
+  def_label bd.bd_frame;
+  test_align aligned 2;
+  I.nop ()
 
 let emit_call_bound_errors env =
   List.iter emit_call_bound_error env.bound_error_sites;
@@ -513,12 +530,19 @@ let emit_instr env fallthrough i =
       add_used_symbol s;
       load_symbol_addr s (res i 0)
   | Lop(Icall_ind) ->
+      let aligned = aligned_lbl 2 in
       I.call (arg i 0);
-      record_frame env i.live (Dbg_other i.dbg)
+      record_frame env i.live (Dbg_other i.dbg);
+      test_align aligned 2;
+      I.nop ()
   | Lop(Icall_imm { func; }) ->
       add_used_symbol func;
+      let aligned = aligned_lbl 2 in
+      I.nop ();
       emit_call func;
-      record_frame env i.live (Dbg_other i.dbg)
+      record_frame env i.live (Dbg_other i.dbg);
+      test_align aligned 2;
+      I.nop ()
   | Lop(Itailcall_ind) ->
       output_epilogue env (fun () -> I.jmp (arg i 0))
   | Lop(Itailcall_imm { func; }) ->
@@ -538,12 +562,20 @@ let emit_instr env fallthrough i =
         I.mov rsp r13;
         I.lea (mem64 QWORD stack_ofs RSP) r12;
         load_symbol_addr func rax;
+        let aligned = aligned_lbl 2 in
+        I.nop ();
         emit_call "caml_c_call_stack_args";
         record_frame env i.live (Dbg_other i.dbg);
+        test_align aligned 2;
+        I.nop ()
       end else if alloc then begin
         load_symbol_addr func rax;
+        let aligned = aligned_lbl 2 in
+        I.nop ();
         emit_call "caml_c_call";
         record_frame env i.live (Dbg_other i.dbg);
+        test_align aligned 2;
+        I.nop ()
       end else begin
         I.mov rsp rbx;
         cfi_remember_state ();
@@ -621,16 +653,33 @@ let emit_instr env fallthrough i =
             gc_return_lbl = lbl_after_alloc;
             gc_frame_lbl = lbl_frame; } :: env.call_gc_sites
       end else begin
-        begin match n with
-        | 16 -> emit_call "caml_alloc1"
-        | 24 -> emit_call "caml_alloc2"
-        | 32 -> emit_call "caml_alloc3"
+        let aligned = begin match n with
+        | 16 ->
+            let aligned = aligned_lbl 2 in
+            I.nop ();
+            emit_call "caml_alloc1";
+            aligned
+        | 24 ->
+            let aligned = aligned_lbl 2 in
+            I.nop ();
+            emit_call "caml_alloc2";
+            aligned
+        | 32 ->
+            let aligned = aligned_lbl 2 in
+            I.nop ();
+            emit_call "caml_alloc3";
+            aligned
         | _  ->
             I.sub (int n) r15;
-            emit_call "caml_allocN"
-        end;
+            let aligned = aligned_lbl 2 in
+            I.nop ();
+            emit_call "caml_allocN";
+            aligned
+        end in
         let label = record_frame_label env i.live (Dbg_alloc dbginfo) in
         def_label label;
+        test_align aligned 2;
+        I.nop ();
         I.lea (mem64 NONE 8 R15) (res i 0)
       end
   | Lop(Ipoll { return_label }) ->
@@ -858,11 +907,20 @@ let emit_instr env fallthrough i =
   | Lraise k ->
       begin match k with
       | Lambda.Raise_regular ->
+          (* Vraiment utile ? *)
+          let aligned = aligned_lbl 2 in
+          I.nop ();
           emit_call "caml_raise_exn";
-          record_frame env Reg.Set.empty (Dbg_raise i.dbg)
+          record_frame env Reg.Set.empty (Dbg_raise i.dbg);
+          test_align aligned 2;
+          I.nop ()
       | Lambda.Raise_reraise ->
+          let aligned = aligned_lbl 2 in
+          I.nop ();
           emit_call "caml_reraise_exn";
-          record_frame env Reg.Set.empty (Dbg_raise i.dbg)
+          record_frame env Reg.Set.empty (Dbg_raise i.dbg);
+          test_align aligned 2;
+          I.nop ()
       | Lambda.Raise_notrace ->
           I.mov (domain_field Domainstate.Domain_exn_handler) rsp;
           I.pop (domain_field Domainstate.Domain_exn_handler);
